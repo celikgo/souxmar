@@ -127,4 +127,33 @@ search_index(const std::vector<IndexEntry>& entries,
 [[nodiscard]] std::string_view to_string(ConformanceStatus) noexcept;
 [[nodiscard]] std::string_view to_string(LifecycleStatus)   noexcept;
 
+// -------- Validation (Sprint 10 push 3) ---------------------------------
+//
+// validate_index() runs structural checks the parser doesn't (and
+// shouldn't — `load_index_*` is for "can I read this file"; validation
+// is for "is this listing publishable"). The CI workflow
+// `.github/workflows/plugin-index.yml` runs it on every PR that
+// touches `docs/plugin-index.toml`; the CLI subcommand
+// `souxmar plugin validate-index` runs the same checks locally.
+
+enum class IndexIssueSeverity : std::uint8_t {
+  Error    = 0,   // PR can't merge; structural problem (duplicate id, bad URL).
+  Warning  = 1,   // PR can merge; reviewer judgement (empty license, no version range).
+};
+
+struct IndexValidationIssue {
+  IndexIssueSeverity  severity;
+  std::size_t         entry_index;   // 0-based position in the input vector
+  std::string         field;         // the affected field name; "" if cross-entry
+  std::string         message;       // human-readable diagnostic
+};
+
+[[nodiscard]] std::string_view to_string(IndexIssueSeverity) noexcept;
+
+// Returns the list of issues. Empty means the index is publishable as-is.
+// At least one Error means a CI gate should reject the PR. Warnings are
+// printed but don't gate.
+[[nodiscard]] std::vector<IndexValidationIssue>
+validate_index(const std::vector<IndexEntry>& entries);
+
 }  // namespace souxmar::plugin

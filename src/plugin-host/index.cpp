@@ -20,6 +20,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace souxmar::plugin {
@@ -240,6 +241,161 @@ std::string_view to_string(LifecycleStatus s) noexcept {
     case LifecycleStatus::Archived:     return "archived";
   }
   return "unknown";
+}
+
+std::string_view to_string(IndexIssueSeverity s) noexcept {
+  switch (s) {
+    case IndexIssueSeverity::Error:    return "error";
+    case IndexIssueSeverity::Warning:  return "warning";
+  }
+  return "unknown";
+}
+
+// ============================================================================
+// Validation (Sprint 10 push 3)
+// ============================================================================
+
+namespace {
+
+// http(s):// + at least one host char. Deliberately loose — we want to
+// catch obviously-wrong values (empty, "foo", a local path), not police
+// URL grammar in depth. RFC 3986 compliance is the user's browser's
+// problem when they click the link.
+bool looks_like_http_url(std::string_view s) noexcept {
+  if (s.size() < 8) return false;  // "http://x" minimum
+  const bool https = s.starts_with("https://");
+  const bool http  = s.starts_with("http://");
+  if (!https && !http) return false;
+  const std::size_t prefix_len = https ? 8 : 7;
+  if (s.size() <= prefix_len) return false;
+  // First char after the scheme must be a host character (not '/').
+  return s[prefix_len] != '/';
+}
+
+// Capability ids: dotted alphanumerics + underscores + hyphens.
+// E.g. "mesher.tetra.gmsh", "solver.cfd.openfoam.simple". Strictly
+// non-empty; no spaces. Same shape souxmar_registry_add_* enforces
+// at registration time.
+bool looks_like_capability_id(std::string_view s) noexcept {
+  if (s.empty()) return false;
+  for (char c : s) {
+    const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                    (c >= '0' && c <= '9') || c == '.' || c == '_' ||
+                    c == '-';
+    if (!ok) return false;
+  }
+  // Must contain at least one '.' — a capability id without a namespace
+  // ("mesh", "solve") would collide with the existing souxmar capability
+  // taxonomy. The publishing-plugin-marketplace skill recommends the
+  // reverse-DNS convention; we enforce only the dot-namespace shape.
+  return s.find('.') != std::string_view::npos;
+}
+
+}  // namespace
+
+std::vector<IndexValidationIssue>
+validate_index(const std::vector<IndexEntry>& entries) {
+  std::vector<IndexValidationIssue> out;
+
+  // Cross-entry: duplicate ids. Maintain a first-occurrence map so the
+  // second + later occurrences get flagged against the *later* index,
+  // matching the position a reviewer would see in a diff.
+  std::unordered_map<std::string, std::size_t> seen_ids;
+  for (std::size_t i = 0; i < entries.size(); ++i) {
+    auto it = seen_ids.find(entries[i].id);
+    if (it != seen_ids.end()) {
+      IndexValidationIssue iss;
+      iss.severity    = IndexIssueSeverity::Error;
+      iss.entry_index = i;
+      iss.field       = "id";
+      iss.message     = "duplicate id '" + entries[i].id +
+                        "' — first seen at entry #" +
+                        std::to_string(it->second);
+      out.push_back(std::move(iss));
+    } else {
+      seen_ids.emplace(entries[i].id, i);
+    }
+  }
+
+  // Per-entry checks.
+  for (std::size_t i = 0; i < entries.size(); ++i) {
+    const auto& e = entries[i];
+
+    // source URL: required by the parser to be non-empty; we additionally
+    // require it to look like an http(s) URL. This catches the common
+    // mistake of pasting a local path or a `git@...` SSH URL.
+    if (!looks_like_http_url(e.source)) {
+      IndexValidationIssue iss;
+      iss.severity    = IndexIssueSeverity::Error;
+      iss.entry_index = i;
+      iss.field       = "source";
+      iss.message     = "source URL must start with http:// or https:// "
+                        "(got: '" + e.source + "')";
+      out.push_back(std::move(iss));
+    }
+    // homepage is optional; when present it must also look URL-shaped.
+    if (!e.homepage.empty() && !looks_like_http_url(e.homepage)) {
+      IndexValidationIssue iss;
+      iss.severity    = IndexIssueSeverity::Error;
+      iss.entry_index = i;
+      iss.field       = "homepage";
+      iss.message     = "homepage URL must start with http:// or https:// "
+                        "(got: '" + e.homepage + "')";
+      out.push_back(std::move(iss));
+    }
+    // Capabilities: each must look like a capability id.
+    for (std::size_t c = 0; c < e.capabilities.size(); ++c) {
+      if (!looks_like_capability_id(e.capabilities[c])) {
+        IndexValidationIssue iss;
+        iss.severity    = IndexIssueSeverity::Error;
+        iss.entry_index = i;
+        iss.field       = "capabilities[" + std::to_string(c) + "]";
+        iss.message     = "capability id '" + e.capabilities[c] +
+                          "' is not a valid dotted reverse-DNS name "
+                          "(alphanumeric + . + _ + -)";
+        out.push_back(std::move(iss));
+      }
+    }
+    // License: warn if empty. Open index policy
+    // (docs/BUSINESS_MODEL.md § Plugin marketplace economics) says
+    // plugins must be OSI-licensed, but the field could be intentionally
+    // omitted for a paid listing's free trial. Reviewer judgement.
+    if (e.license.empty() && !e.paid) {
+      IndexValidationIssue iss;
+      iss.severity    = IndexIssueSeverity::Warning;
+      iss.entry_index = i;
+      iss.field       = "license";
+      iss.message     = "open-index entry has no license field — "
+                        "BUSINESS_MODEL.md requires OSI-licensed source "
+                        "for the open channel; reviewer should confirm";
+      out.push_back(std::move(iss));
+    }
+    // souxmar_versions: warn if empty. ABI v1 plugins should declare
+    // ">=1.0,<2.0"; absence is technically valid but indicates the
+    // author hasn't thought about forward compatibility.
+    if (e.souxmar_versions.empty()) {
+      IndexValidationIssue iss;
+      iss.severity    = IndexIssueSeverity::Warning;
+      iss.entry_index = i;
+      iss.field       = "souxmar_versions";
+      iss.message     = "missing version range — recommended: "
+                        "'>=1.0,<2.0' for any plugin built against v1 ABI";
+      out.push_back(std::move(iss));
+    }
+    // Conformance: warn on `failed`. The PR can still merge — sometimes
+    // an author needs the listing visible to drive bug reports — but
+    // reviewers should call it out.
+    if (e.conformance == ConformanceStatus::Failed) {
+      IndexValidationIssue iss;
+      iss.severity    = IndexIssueSeverity::Warning;
+      iss.entry_index = i;
+      iss.field       = "conformance";
+      iss.message     = "conformance failed — listing remains visible but "
+                        "the badge will read 'failed' until reattested";
+      out.push_back(std::move(iss));
+    }
+  }
+  return out;
 }
 
 }  // namespace souxmar::plugin

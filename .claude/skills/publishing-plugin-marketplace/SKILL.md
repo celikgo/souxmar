@@ -40,22 +40,36 @@ This skill covers both channels.
    ```
    Aim for the conformance badge but it is not required for listing.
 
-2. **Open a PR against `docs/plugin-index.md`** with an entry:
-   ```markdown
-   ### Example Tetrahedral Mesher
-   - **id:** `com.example.my-mesher`
-   - **capabilities:** `mesher.tetra.example`
-   - **license:** Apache-2.0
-   - **source:** https://github.com/example/my-mesher
-   - **author:** Example Inc. (https://example.com)
-   - **souxmar versions:** 1.0+
-   - **conformance:** ✓ (run 2026-05-11) | not yet | failed (link)
-   - **status:** active | maintained | unmaintained | archived
+2. **Open a PR against `docs/plugin-index.toml`** (Sprint 10 push 2 — TOML, not Markdown) with a new `[[plugin]]` table:
+   ```toml
+   [[plugin]]
+   id           = "com.example.my-mesher"
+   name         = "Example Tetrahedral Mesher"
+   description  = "One paragraph summary of what the plugin does."
+   capabilities = ["mesher.tetra.example"]
+   license      = "Apache-2.0"
+   source       = "https://github.com/example/my-mesher"
+   author       = "Example Inc. (https://example.com)"
+   souxmar_versions = ">=1.0,<2.0"
+   conformance      = "passed"          # or "not_run" / "failed"
+   conformance_date = "2026-05-11"      # ISO-8601; empty if not_run
+   status           = "active"          # active / maintained / unmaintained / archived
+   paid             = false             # true for paid-marketplace entries (Sprint 16+)
    ```
 
-3. **DX team reviews** for completeness. We do not vet code or behaviour. The badge is the only quality signal.
+3. **The `plugin-index` CI workflow** (Sprint 10 push 3, `.github/workflows/plugin-index.yml`) automatically runs `souxmar plugin validate-index` against the modified file. The check surfaces:
+   - **Errors** that block the merge: duplicate `id`, malformed `source` / `homepage` URL (must start with `http://` or `https://`), invalid `capabilities` entry (must be dotted reverse-DNS), or any other shape the TOML parser rejects outright.
+   - **Warnings** that don't block but reviewers should weigh: empty `license` on a free-channel entry (the open index requires OSI-licensed source per BUSINESS_MODEL.md), missing `souxmar_versions` range, `conformance = "failed"` (listing remains visible but the badge will read "failed" until reattested).
 
-4. **Merged PR** triggers a regen of the searchable index (`souxmar plugin search` queries this).
+   Run the same check locally before opening the PR:
+   ```bash
+   souxmar plugin validate-index --index docs/plugin-index.toml
+   ```
+   Exit codes: `0` for clean or warnings-only, `10` for any error-severity issue.
+
+4. **DX team reviews** for completeness. We do not vet code or behaviour. The conformance badge is the only quality signal; the validator handles the schema gate.
+
+5. **Merged PR** triggers a regen of the searchable index (`souxmar plugin search` queries the same file).
 
 ### Conformance badge
 

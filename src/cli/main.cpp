@@ -63,6 +63,7 @@ void print_usage() {
       "  souxmar run <pipeline.yaml> [--no-cache] [--cache-dir <dir>] [--plugin-path <dir>]...\n"
       "  souxmar plugin list [--plugin-path <dir>]...\n"
       "  souxmar plugin search [<query>] [--capability <prefix>] [--index <path>]\n"
+      "  souxmar plugin validate-index [--index <path>]\n"
       "  souxmar agent list\n"
       "  souxmar agent invoke <tool> [--input <yaml>] [--input-file <path>] [--yes]\n"
       "                              [--audit-log <path>] [--budget-config <path>]\n"
@@ -240,6 +241,57 @@ int cmd_plugin_search(const std::string&  query,
   }
   fmt::print("{} match(es) in {}\n", matches.size(), index_path.string());
   return kExitOk;
+}
+
+// Sprint 10 push 3 — structural validation of the plugin index. Used
+// by CI on every PR touching `docs/plugin-index.toml` and by authors
+// running locally before opening a PR. Exit codes: 0 if every check
+// passes or only warnings fired; kExitInputData (10) on any
+// error-severity issue. The split lets the CI workflow's "checks"
+// status reflect "warnings are reviewable; errors block".
+int cmd_plugin_validate(const fs::path& index_override) {
+  const fs::path index_path = resolve_index_path(index_override);
+  if (index_path.empty() || !fs::exists(index_path)) {
+    fmt::print(stderr,
+        "error: plugin index not found. Set $SOUXMAR_PLUGIN_INDEX or pass "
+        "--index <path>, or run from a souxmar checkout containing "
+        "docs/plugin-index.toml.\n");
+    return kExitUsage;
+  }
+  auto result = souxmar::plugin::load_index_file(index_path);
+  if (auto* err = std::get_if<souxmar::plugin::IndexParseError>(&result)) {
+    fmt::print(stderr, "error: failed to parse index: {}\n", err->message);
+    return kExitInputData;
+  }
+  const auto& entries = std::get<std::vector<souxmar::plugin::IndexEntry>>(result);
+  const auto issues   = souxmar::plugin::validate_index(entries);
+
+  std::size_t errors = 0, warnings = 0;
+  for (const auto& iss : issues) {
+    using S = souxmar::plugin::IndexIssueSeverity;
+    auto& out = (iss.severity == S::Error) ? errors : warnings;
+    ++out;
+    // Format: "<severity>: entry #<n> (id=<id>) <field>: <message>"
+    // — names the field + entry-id so a reviewer can grep the PR diff
+    // for the offender without consulting line numbers. Errors go to
+    // stderr so CI captures them in the failure log; warnings go to
+    // stdout so PR-comment renderers can pick them up next to the
+    // diff without escalating to the failure stream.
+    const auto& entry = entries[iss.entry_index];
+    auto* stream = (iss.severity == S::Error) ? stderr : stdout;
+    fmt::print(stream,
+        "{}: entry #{} (id={}){}{}: {}\n",
+        souxmar::plugin::to_string(iss.severity),
+        iss.entry_index,
+        entry.id,
+        iss.field.empty() ? "" : " ",
+        iss.field,
+        iss.message);
+  }
+
+  fmt::print("\nValidated {} entries: {} error(s), {} warning(s) in {}\n",
+             entries.size(), errors, warnings, index_path.string());
+  return errors == 0 ? kExitOk : kExitInputData;
 }
 
 // Print a single stage line in `souxmar run` output.
@@ -609,6 +661,9 @@ int main(int argc, char** argv) {
         query += positionals[i];
       }
       return cmd_plugin_search(query, capability_prefix, index_path_override);
+    }
+    if (positionals[0] == "validate-index") {
+      return cmd_plugin_validate(index_path_override);
     }
     fmt::print(stderr, "error: unknown plugin action '{}'\n", positionals[0]);
     return kExitUsage;

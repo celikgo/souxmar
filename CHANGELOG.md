@@ -8,6 +8,43 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
+#### Sprint 10 push 3 — plugin-index publication workflow (PR-gated, conformance surfaced)
+
+Closes the second Plugin-team named SPRINT_PLAN.md story for Sprint 10 ("Index publication workflow: PR-based, with conformance status surfaced"). Builds directly on push 2's parser + canonical index. A new validator runs every check the parser deliberately doesn't (duplicate id detection, URL format, capability shape, license / version-range completeness, conformance status surfacing) and a new CI workflow runs that validator on every PR touching `docs/plugin-index.toml`. Third-party authors get a structured "what's wrong with my entry" check before review; reviewers focus on what reviewers should focus on. **No frozen-header surface touched** — extends the push 2 surface; ABI v1.3 stands.
+
+- **`include/souxmar/plugin/index.h`** — three new types extending the push 2 schema:
+  - `enum class IndexIssueSeverity { Error, Warning }` — the two-tier policy `BUSINESS_MODEL.md` § Plugin marketplace economics implies. Errors block the merge (structural); warnings are reviewable (judgement).
+  - `struct IndexValidationIssue { severity, entry_index, field, message }` — one diagnostic. The `entry_index` points at the position the parser saw, so a reviewer can grep the PR diff by `[[plugin]]` block index.
+  - `validate_index(entries) → vector<IndexValidationIssue>` — runs the full suite over a parsed batch and returns every issue (doesn't stop at the first). Empty result means publishable as-is.
+- **`src/plugin-host/index.cpp`** — validator implementation. Six checks across two tiers:
+  - **Error: duplicate id.** Cross-entry scan via a first-occurrence map; the diagnostic points at the *second* occurrence (matching the position a reviewer sees in a diff) and names the first occurrence's index.
+  - **Error: malformed `source` URL.** Must start with `http://` or `https://` followed by at least one host character. Catches the common mistake of pasting a local path, an `git@…` SSH URL, or a bare domain.
+  - **Error: malformed `homepage` URL.** Same shape check as `source`; only fires when the field is non-empty (homepage is optional).
+  - **Error: invalid capability id.** Must be a dotted reverse-DNS-ish identifier (alphanumeric + `.` + `_` + `-`, at least one `.`). Catches the "spaces in capability name" mistake and capabilities that would collide with the souxmar top-level taxonomy (a missing-dot id like `mesh` is rejected).
+  - **Warning: empty `license` on a free-channel entry.** Open index policy commits to OSI-licensed source for the free channel; the validator flags absence so reviewers confirm. Suppressed when `paid = true` (paid-marketplace entries may legitimately omit the field — the marketplace handles license-key flow separately).
+  - **Warning: empty `souxmar_versions`.** Recommended value is `">=1.0,<2.0"` for any v1-ABI plugin; absence is technically valid but indicates the author hasn't thought about forward compatibility.
+  - **Warning: `conformance = "failed"`.** Listing remains visible (sometimes an author needs visibility to drive bug reports) but the badge surfaces "failed" until reattested.
+- **`souxmar plugin validate-index` CLI subcommand.** Three exit codes:
+  - `0` — every check passed, or warnings-only. PR mergeable from the validator's perspective.
+  - `10` (`kExitInputData`) — at least one error-severity issue. PR cannot merge until the author fixes the entry.
+  - `2` (`kExitUsage`) / others — internal failure (index file missing, parse error). Distinct exit code lets CI route validation failures separately from harness failures.
+  Output format: one line per issue (`<severity>: entry #<n> (id=<id>) <field>: <message>`) — errors to stderr (CI captures in the failure log), warnings to stdout (PR-comment renderers pick them up next to the diff). Trailing summary line gives counts + the index path. `--index <path>` reuses the push 2 resolution logic.
+- **`.github/workflows/plugin-index.yml`** — new CI workflow. Triggers on PRs touching the index file or any of the validator's source paths (`include/souxmar/plugin/index.h`, `src/plugin-host/index.cpp`, `src/cli/main.cpp`) plus the workflow file itself. Builds the CLI in release mode (no benchmarks, no tests, no examples — the validator is exercised by unit tests in the main CI job; this workflow just needs the binary), runs `souxmar plugin validate-index` against the file, and surfaces the validator's text output in the workflow's job summary (the "conformance status surfaced" piece of the SPRINT_PLAN.md story). Reviewers see the validation summary inline without digging through the full build log.
+- **`.claude/skills/publishing-plugin-marketplace/SKILL.md`** — process section updated. The "Open a PR against `docs/plugin-index.md`" Markdown form is replaced by the TOML schema from push 2. New step #3 names the `plugin-index` workflow + the local-validation command + the exit-code contract; new step #4 clarifies that the validator handles the schema gate, leaving reviewers to focus on completeness.
+- **`tests/unit/test_plugin_index.cpp`** — 11 new validator tests. Clean-entry-produces-no-issues, duplicate-id-flagged-at-second-occurrence, malformed-source-URL-error, malformed-homepage-URL-error, empty-homepage-OK, invalid-capability-id-error, empty-license-on-free-entry-warning, empty-license-on-paid-entry-OK, empty-version-range-warning, failed-conformance-warning-not-error, multiple-issues-all-reported (3 errors + 1 warning on one entry), in-tree-index-validates-clean. The last one is a regression-prevention test: if a future push 2-style edit adds an entry that fails validation, push 3's tests fail before CI even runs the workflow.
+
+Sanity check: the validator rules ran against the actual committed `docs/plugin-index.toml` (16 entries — 11 always-on + 5 opt-in) report zero issues. The in-tree listings were written to satisfy the schema from the start.
+
+What the publication flow now looks like end-to-end:
+
+1. Third-party author opens a PR adding their `[[plugin]]` entry to `docs/plugin-index.toml`.
+2. The `plugin-index` CI workflow fires automatically (paths-filtered on the index file). Builds CLI, runs validator.
+3. If the validator reports errors (the structural ones), the workflow exits non-zero and GitHub blocks the merge. The author iterates on their entry against the same `souxmar plugin validate-index` command they can run locally.
+4. If warnings only (or clean), the workflow exits zero. Job summary surfaces the validator output inline. DX reviewer pulls up the PR, sees the green check + the inline validation summary, and reviews for completeness.
+5. Merge triggers no further automation today; the next `souxmar plugin search` invocation against the merged file picks up the new entry. (The Sprint 10 push 4+ work — auto-updater + plugin-index regen — sits on top of this contract.)
+
+The Plugin-team Sprint 10 stories are now both closed (data model + search in push 2; publication workflow + conformance surfacing in push 3). The two remaining Sprint 10 themed items — Platform's auto-updater (XL) and the Apple notarisation automation (M) — are the next pushes. The `paid` flag from push 2 + the validator's paid-aware license-check carve-out keep the marketplace v0 path ready for Sprint 16.
+
 #### Sprint 10 push 2 — plugin index v0 + `souxmar plugin search`
 
 Closes the first Plugin-team named SPRINT_PLAN.md story for Sprint 10 ("Plugin index data model; `souxmar plugin search` against the static index"). The schema, the parser, the canonical static index, and the CLI surface all land together so the marketplace work in pushes 3 + later has a working data model + query path to build on. **No frozen-header surface touched** — new host-side header + impl + new CLI subcommand + new TOML doc; ABI v1.3 stands.

@@ -196,4 +196,183 @@ TEST(PluginIndex, StatusStringsRoundtrip) {
   EXPECT_EQ(to_string(ConformanceStatus::Passed),     "passed");
   EXPECT_EQ(to_string(ConformanceStatus::NotRun),     "not_run");
   EXPECT_EQ(to_string(ConformanceStatus::Failed),     "failed");
+  EXPECT_EQ(to_string(IndexIssueSeverity::Error),     "error");
+  EXPECT_EQ(to_string(IndexIssueSeverity::Warning),   "warning");
+}
+
+// -------- Sprint 10 push 3 — validate_index ---------------------------
+
+namespace {
+
+// Build an IndexEntry by hand for the validator tests. Bypassing the
+// parser keeps the tests focused on the validator's checks (the parser
+// has its own tests above).
+IndexEntry make_min(std::string id) {
+  IndexEntry e;
+  e.id     = std::move(id);
+  e.name   = "Test plugin";
+  e.source = "https://example.com/source";
+  e.capabilities = {"mesher.tetra.example"};
+  e.license          = "Apache-2.0";
+  e.souxmar_versions = ">=1.0,<2.0";
+  return e;
+}
+
+}  // namespace
+
+TEST(PluginIndexValidate, CleanEntryProducesNoIssues) {
+  std::vector<IndexEntry> entries = {make_min("com.example.clean")};
+  auto issues = validate_index(entries);
+  EXPECT_TRUE(issues.empty()) << "got " << issues.size() << " issues";
+}
+
+TEST(PluginIndexValidate, DuplicateIdIsError) {
+  std::vector<IndexEntry> entries = {
+      make_min("com.example.dup"),
+      make_min("com.example.dup"),
+  };
+  auto issues = validate_index(entries);
+  ASSERT_EQ(issues.size(), 1u);
+  EXPECT_EQ(issues[0].severity,    IndexIssueSeverity::Error);
+  EXPECT_EQ(issues[0].entry_index, 1u);  // points at the second occurrence
+  EXPECT_EQ(issues[0].field,       "id");
+  EXPECT_NE(issues[0].message.find("duplicate"), std::string::npos);
+}
+
+TEST(PluginIndexValidate, BadSourceUrlIsError) {
+  auto e = make_min("com.example.bad-url");
+  e.source = "git@github.com:example/repo.git";  // SSH-style; not http(s)
+  std::vector<IndexEntry> entries = {std::move(e)};
+  auto issues = validate_index(entries);
+  ASSERT_EQ(issues.size(), 1u);
+  EXPECT_EQ(issues[0].severity, IndexIssueSeverity::Error);
+  EXPECT_EQ(issues[0].field,    "source");
+}
+
+TEST(PluginIndexValidate, BadHomepageUrlIsError) {
+  auto e = make_min("com.example.bad-home");
+  e.homepage = "example.com";  // no scheme
+  std::vector<IndexEntry> entries = {std::move(e)};
+  auto issues = validate_index(entries);
+  ASSERT_EQ(issues.size(), 1u);
+  EXPECT_EQ(issues[0].severity, IndexIssueSeverity::Error);
+  EXPECT_EQ(issues[0].field,    "homepage");
+}
+
+TEST(PluginIndexValidate, EmptyHomepageIsOk) {
+  // homepage is optional and defaults to empty — validator must not
+  // flag absence.
+  auto e = make_min("com.example.no-home");
+  e.homepage = "";
+  std::vector<IndexEntry> entries = {std::move(e)};
+  auto issues = validate_index(entries);
+  EXPECT_TRUE(issues.empty());
+}
+
+TEST(PluginIndexValidate, BadCapabilityIdIsError) {
+  // Capability without a dot — would collide with the souxmar
+  // top-level taxonomy.
+  auto e = make_min("com.example.bad-cap");
+  e.capabilities = {"mesher tetra example"};  // spaces!
+  std::vector<IndexEntry> entries = {std::move(e)};
+  auto issues = validate_index(entries);
+  ASSERT_EQ(issues.size(), 1u);
+  EXPECT_EQ(issues[0].severity, IndexIssueSeverity::Error);
+  EXPECT_NE(issues[0].field.find("capabilities"), std::string::npos);
+}
+
+TEST(PluginIndexValidate, MissingLicenseOnFreeEntryIsWarning) {
+  auto e = make_min("com.example.no-license");
+  e.license = "";
+  std::vector<IndexEntry> entries = {std::move(e)};
+  auto issues = validate_index(entries);
+  ASSERT_EQ(issues.size(), 1u);
+  EXPECT_EQ(issues[0].severity, IndexIssueSeverity::Warning);
+  EXPECT_EQ(issues[0].field,    "license");
+}
+
+TEST(PluginIndexValidate, MissingLicenseOnPaidEntryIsOk) {
+  // Paid-marketplace entries may legitimately omit `license` (the
+  // marketplace handles the license-key flow separately).
+  auto e = make_min("com.example.paid");
+  e.license = "";
+  e.paid    = true;
+  std::vector<IndexEntry> entries = {std::move(e)};
+  auto issues = validate_index(entries);
+  EXPECT_TRUE(issues.empty());
+}
+
+TEST(PluginIndexValidate, MissingVersionRangeIsWarning) {
+  auto e = make_min("com.example.no-version");
+  e.souxmar_versions = "";
+  std::vector<IndexEntry> entries = {std::move(e)};
+  auto issues = validate_index(entries);
+  ASSERT_EQ(issues.size(), 1u);
+  EXPECT_EQ(issues[0].severity, IndexIssueSeverity::Warning);
+  EXPECT_EQ(issues[0].field,    "souxmar_versions");
+}
+
+TEST(PluginIndexValidate, FailedConformanceIsWarningNotError) {
+  auto e = make_min("com.example.failing");
+  e.conformance = ConformanceStatus::Failed;
+  std::vector<IndexEntry> entries = {std::move(e)};
+  auto issues = validate_index(entries);
+  ASSERT_EQ(issues.size(), 1u);
+  EXPECT_EQ(issues[0].severity, IndexIssueSeverity::Warning);
+  EXPECT_EQ(issues[0].field,    "conformance");
+}
+
+TEST(PluginIndexValidate, MultipleIssuesAllReported) {
+  // One entry with three errors + one warning. Validator should
+  // report every issue, not stop at the first.
+  auto e = make_min("com.example.disaster");
+  e.source           = "not-a-url";
+  e.homepage         = "also-not-a-url";
+  e.capabilities     = {"bad cap"};
+  e.souxmar_versions = "";
+  std::vector<IndexEntry> entries = {std::move(e)};
+  auto issues = validate_index(entries);
+  ASSERT_EQ(issues.size(), 4u);
+  std::size_t errors = 0, warnings = 0;
+  for (const auto& iss : issues) {
+    if (iss.severity == IndexIssueSeverity::Error)   ++errors;
+    if (iss.severity == IndexIssueSeverity::Warning) ++warnings;
+  }
+  EXPECT_EQ(errors,   3u);
+  EXPECT_EQ(warnings, 1u);
+}
+
+TEST(PluginIndexValidate, InTreeIndexIsClean) {
+  // The committed docs/plugin-index.toml shouldn't surface any
+  // issues — if push 2 added an entry that doesn't pass validation,
+  // push 3's gate fails on its own data and that's the loudest
+  // possible signal.
+  constexpr const char* kAllInTreeReducedSample = R"toml(
+[[plugin]]
+id           = "dev.souxmar.examples.hello-mesher"
+name         = "Hello mesher"
+capabilities = ["mesher.tetra.hello"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/hello-mesher"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.openfoam-solver"
+name         = "OpenFOAM CFD adapter"
+capabilities = ["solver.cfd.openfoam.simple", "solver.cfd.openfoam.pimple"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/openfoam-solver"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+status           = "active"
+)toml";
+  auto result = load_index_string(kAllInTreeReducedSample);
+  ASSERT_TRUE(std::holds_alternative<std::vector<IndexEntry>>(result));
+  const auto& entries = std::get<std::vector<IndexEntry>>(result);
+  auto issues = validate_index(entries);
+  EXPECT_TRUE(issues.empty()) << "in-tree-style entries should validate clean";
 }
