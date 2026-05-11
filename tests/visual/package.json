@@ -1,0 +1,16 @@
+{
+  "name": "souxmar-visual-tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Sprint 11 push 1 visual-regression harness for the desktop app. Closes Sprint 10 retro R-012.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "update-baselines": "playwright test --update-snapshots",
+    "show-report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.2"
+  }
+}

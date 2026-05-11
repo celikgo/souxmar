@@ -6,6 +6,10 @@ add_subdirectory(core)
 add_subdirectory(plugin-host)
 add_subdirectory(pipeline)
 add_subdirectory(ai)
+# Sprint 11 push 1 — shared crypto primitives (ed25519 verify, sha256,
+# hex). Must be processed before souxmar/updater so updater can link
+# against souxmar::crypto. See ADR-0015.
+add_subdirectory(crypto)
 # Sprint 10 push 4 — auto-updater (manifest parser + validator now;
 # verifier + state machine + rollback land in subsequent pushes).
 add_subdirectory(updater)

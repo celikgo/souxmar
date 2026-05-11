@@ -43,3 +43,10 @@ coverage/
 *.gcda
 *.gcno
 *.profraw
+
+# Sprint 11 push 1 — Playwright visual harness outputs.
+# Baselines under tests/visual/specs/**/*-snapshots/ are committed;
+# the rest of these are run artefacts.
+tests/visual/test-results/
+tests/visual/playwright-report/
+tests/visual/.cache/

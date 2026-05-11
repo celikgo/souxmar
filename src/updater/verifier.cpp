@@ -5,21 +5,18 @@
 // docs/adr/0013-signed-update-manifest.md § "Why ed25519, detached
 // signature" for the design.
 //
-// The wrapper is thin on purpose. libsodium's
-// crypto_sign_verify_detached is the load-bearing call; everything
-// else here is (a) initialise-once bookkeeping, (b) length checks
-// (so the state machine in push 6 gets a typed SignatureStatus
-// instead of having to interpret a -1 return code), and (c) the
-// hex helpers shared with trust-store loading.
+// Sprint 11 push 1 (ADR-0015) extracted the crypto primitives into
+// libsouxmar-crypto. The functions below are now thin forwarders;
+// the TrustStore type + the verify_manifest_signature() entry point
+// (which mixes crypto with key-id lookup) remain here because they
+// are auto-updater-specific policy.
 
 #include "souxmar/update/verifier.h"
 
-#include <sodium.h>
+#include "souxmar/crypto/primitives.h"
 
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <mutex>
 #include <span>
 #include <string>
 #include <string_view>
@@ -28,46 +25,14 @@
 
 namespace souxmar::update {
 
-namespace {
-
-// libsodium requires sodium_init() before any other library call. The
-// docs guarantee it is safe to call concurrently after the first
-// successful init returns, so we wrap it in std::call_once and cache
-// the success bit. A failed init (extremely rare — would mean the
-// platform CSPRNG is broken) is permanent for the process lifetime;
-// the verifier returns CryptoLibraryUnavailable to every call after
-// such a failure, which the state machine surfaces as "reinstall".
-struct SodiumInit {
-  std::once_flag       once;
-  std::atomic<bool>    ok{false};
-
-  bool ensure() {
-    std::call_once(once, [this] {
-      ok.store(sodium_init() >= 0, std::memory_order_release);
-    });
-    return ok.load(std::memory_order_acquire);
-  }
-};
-
-SodiumInit& sodium_singleton() {
-  static SodiumInit s;
-  return s;
-}
-
-// Lowercase-hex char => 0..15, or 16 on rejection. Branchless-ish
-// helper kept here rather than in core/ because nothing else in the
-// tree wants a hex decoder that rejects uppercase.
-constexpr std::uint8_t hex_nibble(char c) noexcept {
-  if (c >= '0' && c <= '9') return static_cast<std::uint8_t>(c - '0');
-  if (c >= 'a' && c <= 'f') return static_cast<std::uint8_t>(c - 'a' + 10);
-  return 16;
-}
-
-}  // namespace
-
 // ============================================================================
 // SignatureStatus stringification
 // ============================================================================
+//
+// The auto-updater carries one extra value (UnknownKeyId) that the
+// primitive doesn't surface — it's a policy concern. So this
+// to_string keeps its full switch rather than forwarding to
+// souxmar::crypto::to_string.
 
 std::string_view to_string(SignatureStatus s) noexcept {
   switch (s) {
@@ -83,34 +48,15 @@ std::string_view to_string(SignatureStatus s) noexcept {
 }
 
 // ============================================================================
-// Hex helpers
+// Hex helpers — forwarders to souxmar::crypto (ADR-0015).
 // ============================================================================
 
 bool hex_decode(std::string_view hex, std::vector<std::uint8_t>& out) {
-  out.clear();
-  if (hex.size() % 2 != 0) return false;
-  out.reserve(hex.size() / 2);
-  for (std::size_t i = 0; i < hex.size(); i += 2) {
-    const std::uint8_t hi = hex_nibble(hex[i]);
-    const std::uint8_t lo = hex_nibble(hex[i + 1]);
-    if (hi == 16 || lo == 16) {
-      out.clear();
-      return false;
-    }
-    out.push_back(static_cast<std::uint8_t>((hi << 4) | lo));
-  }
-  return true;
+  return crypto::hex_decode(hex, out);
 }
 
 std::string hex_encode(std::span<const std::uint8_t> bytes) {
-  static constexpr char kHex[] = "0123456789abcdef";
-  std::string out;
-  out.resize(bytes.size() * 2);
-  for (std::size_t i = 0; i < bytes.size(); ++i) {
-    out[2 * i + 0] = kHex[(bytes[i] >> 4) & 0x0F];
-    out[2 * i + 1] = kHex[bytes[i]        & 0x0F];
-  }
-  return out;
+  return crypto::hex_encode(bytes);
 }
 
 // ============================================================================
@@ -150,29 +96,20 @@ SignatureStatus
 verify_detached_ed25519(std::span<const std::uint8_t> message,
                         std::span<const std::uint8_t> signature,
                         std::span<const std::uint8_t> public_key) {
-  // Length gates first. These reject build-pipeline misconfigurations
-  // (wrong-curve key shipped in the trust store, truncated .sig file
-  // on the CDN) without touching the crypto path.
-  if (signature.size()  != kEd25519SignatureBytes) {
-    return SignatureStatus::MalformedSignature;
+  // Forwarder to libsouxmar-crypto. The enum value-set + ordering
+  // match the primitive's (lookup-policy values like UnknownKeyId
+  // never come up here — those only surface in
+  // verify_manifest_signature).
+  const auto s = crypto::ed25519_verify(message, signature, public_key);
+  switch (s) {
+    case crypto::SignatureStatus::Ok:                       return SignatureStatus::Ok;
+    case crypto::SignatureStatus::BadSignature:             return SignatureStatus::BadSignature;
+    case crypto::SignatureStatus::MalformedSignature:       return SignatureStatus::MalformedSignature;
+    case crypto::SignatureStatus::MalformedPublicKey:       return SignatureStatus::MalformedPublicKey;
+    case crypto::SignatureStatus::EmptyMessage:             return SignatureStatus::EmptyMessage;
+    case crypto::SignatureStatus::CryptoLibraryUnavailable: return SignatureStatus::CryptoLibraryUnavailable;
   }
-  if (public_key.size() != kEd25519PublicKeyBytes) {
-    return SignatureStatus::MalformedPublicKey;
-  }
-  if (message.empty()) {
-    return SignatureStatus::EmptyMessage;
-  }
-
-  if (!sodium_singleton().ensure()) {
-    return SignatureStatus::CryptoLibraryUnavailable;
-  }
-
-  const int rc = crypto_sign_verify_detached(
-      signature.data(),
-      message.data(),
-      static_cast<unsigned long long>(message.size()),
-      public_key.data());
-  return rc == 0 ? SignatureStatus::Ok : SignatureStatus::BadSignature;
+  return SignatureStatus::BadSignature;
 }
 
 SignatureStatus

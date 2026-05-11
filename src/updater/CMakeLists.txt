@@ -65,6 +65,13 @@ target_link_libraries(souxmar_update
   PRIVATE
     souxmar::warnings
     souxmar::sanitizers
+    # Sprint 11 push 1 (ADR-0015) — crypto primitives moved to a
+    # separate library. souxmar_update keeps its libsodium dep only
+    # because the verifier.cpp forwarder still includes <sodium.h>'s
+    # crypto_sign_VERIFYBYTES etc. via souxmar/crypto/primitives.h
+    # transitive; if a future cleanup drops that transitivity, the
+    # unofficial-sodium link can be dropped here.
+    souxmar::crypto
     tomlplusplus::tomlplusplus
     unofficial-sodium::sodium
 )

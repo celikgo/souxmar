@@ -6,7 +6,7 @@
 
 #include "souxmar/update/install_layout.h"
 
-#include <sodium.h>
+#include "souxmar/crypto/primitives.h"
 
 #include <algorithm>
 #include <array>
@@ -230,22 +230,11 @@ InstallLayout::gc_unreferenced(std::span<const std::string> protect_versions) {
 }
 
 // ============================================================================
-// sha256_hex
+// sha256_hex — forwarder to libsouxmar-crypto (ADR-0015).
 // ============================================================================
 
 std::string sha256_hex(std::span<const std::uint8_t> bytes) {
-  std::array<std::uint8_t, crypto_hash_sha256_BYTES> digest{};
-  crypto_hash_sha256(digest.data(),
-                     bytes.data(),
-                     static_cast<unsigned long long>(bytes.size()));
-  static constexpr char kHex[] = "0123456789abcdef";
-  std::string out;
-  out.resize(digest.size() * 2);
-  for (std::size_t i = 0; i < digest.size(); ++i) {
-    out[2 * i + 0] = kHex[(digest[i] >> 4) & 0x0F];
-    out[2 * i + 1] = kHex[digest[i]        & 0x0F];
-  }
-  return out;
+  return crypto::sha256_hex(bytes);
 }
 
 }  // namespace souxmar::update

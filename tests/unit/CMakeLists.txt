@@ -48,6 +48,8 @@ add_executable(souxmar_unit_tests
   test_update_embedded_trust.cpp
   # Sprint 10 push 9.
   test_ai_provider.cpp
+  # Sprint 11 push 1.
+  test_crypto_primitives.cpp
 )
 
 target_link_libraries(souxmar_unit_tests
@@ -57,6 +59,10 @@ target_link_libraries(souxmar_unit_tests
     souxmar::pipeline
     souxmar::ai
     souxmar::update
+    # Sprint 11 push 1 — link the extracted crypto primitive directly
+    # so test_crypto_primitives can reach souxmar::crypto::* without
+    # transitively depending on souxmar::update.
+    souxmar::crypto
     souxmar::warnings
     souxmar::sanitizers
     # Sprint 10 push 5 — the verifier tests generate keypairs +
