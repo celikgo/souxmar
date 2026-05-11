@@ -8,7 +8,7 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.9.0-beta4 cut below.)
+- (None this release — `[Unreleased]` reopens after the v0.9.0-beta5 cut below.)
 
 ### Changed
 
@@ -25,6 +25,40 @@ The plugin C ABI version is tracked separately and is independent of the project
 ### Security
 
 - (None this release.)
+
+---
+
+## [0.9.0-beta5] - 2026-05-11
+
+Fifth public pre-release. Sprint 11 closes here. See
+`docs/retros/sprint-11.md` for the keep/fix/one-ADR-worthy-decision
+narrative + risk-register diff + Sprint 12 capacity forecast.
+
+**Tag:** `v0.9.0-beta5`. **ABI:** v1.3 frozen (unchanged). **Tool
+contract:** v1 frozen final at 18 tools (unchanged).
+
+### Added
+
+- **Sprint 11 push 1 — libsouxmar-crypto extraction + ADR-0015 + Playwright visual harness.** Move ed25519 verify + sha256_hex + hex helpers into a new `souxmar::crypto::*` namespace + `souxmar_crypto` CMake target so plugin marketplace (S16) + cloud sync (S15) can each depend on the primitives without pulling in the auto-updater. Non-breaking — `souxmar::update::*` forwarders preserved. Plus a Playwright-based visual-regression harness for the desktop onboarding wizard (closes R-012 from the Sprint 10 retro).
+- **Sprint 11 push 2 — `souxmar update fetch` HTTPS downloader + auto-regen dev signing key.** Curl-as-subprocess (same pattern OllamaProvider validated) fetches manifests + `.sig` files from a release CDN; the trust path is unchanged. New `--manifest-url`, `--out-dir`, `--insecure` flags. Plus cmake-configure-time auto-regeneration of the in-tree dev keypair when the gitignored `dev-signing-key.local.txt` is missing — closes the placeholder-pubkey foot-gun the Sprint 10 retro flagged.
+- **Sprint 11 push 3 — agent eval suite expansion (30 → 43 tasks) + `--min-pass-rate` gate.** Six new categories (export, listing, cfd, multistep, recovery, screenshot) — 13 new YAML tasks total exercising chained tool sequences + session-state-after-error patterns that single-tool tasks don't cover. Nightly eval workflow now gates at `--min-pass-rate 0.90` (the SPRINT_PLAN.md § Sprint 11 exit criterion). 17 remaining tasks toward the 60-task target ride into Sprint 12.
+- **Sprint 11 push 4 — desktop workbench shell scaffold.** Three-panel layout under `src/desktop/src/workbench/` (viewport + chat + inspector). Viewport + inspector are honest "no project loaded" empty states with explicit "Sprint 12+" notes about the souxmar-bridge FFI dependency; chat panel is fully exercisable via a stubbed `chat_send` Tauri command. Two new Playwright baselines.
+
+### Changed
+
+- (None this release.)
+
+### Fixed
+
+- (Sprint 11 had no dedicated bug-fix bundle — the SPRINT_PLAN.md § Sprint 11 dogfood week presumed a team running real analyses, which doesn't reproduce in single-contributor mode. The reframing per `docs/retros/sprint-11.md`: Sprint 12's public alpha *is* the dogfood, with external users as the dogfooders.)
+
+### Removed
+
+- (None this release.)
+
+### Security
+
+- ADR-0015 extracts cryptographic primitives into a single audit-target module (`src/crypto/`). Security review now has one canonical place to look for verifier + hex + sha256 implementations; everything else in the tree is policy.
 
 ---
 
