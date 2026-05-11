@@ -1,0 +1,20 @@
+id: mesh-04-hello-stashes-handle
+description: After mesh, the dispatcher must have stashed a Mesh on ctx.mesh_handle (verified indirectly via a follow-on solve attempt failing with PRECONDITION_FAILED only if mesh_handle is missing).
+category: mesh
+steps:
+  - tool: mesh
+    inputs:
+      capability_id: mesher.tetra.hello
+  - tool: solve
+    inputs:
+      capability_id: solver.heat.linear
+assertions:
+  - kind: tool_outcome
+    step: 0
+    value: ok
+  # The solve step succeeds iff the mesh step actually stashed a
+  # handle; we test the side-effect via the downstream tool's
+  # precondition rather than poking at ctx directly.
+  - kind: tool_outcome
+    step: 1
+    value: ok

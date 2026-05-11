@@ -1,0 +1,11 @@
+id: query-02-field-no-field
+description: query_field without a prior solve must surface PRECONDITION_FAILED.
+category: query
+steps:
+  - tool: query_field
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    value: fail
+  - kind: tool_error_code
+    value: PRECONDITION_FAILED

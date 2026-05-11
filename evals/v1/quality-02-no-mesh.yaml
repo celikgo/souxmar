@@ -1,0 +1,11 @@
+id: quality-02-no-mesh
+description: query_mesh_quality without a prior mesh must surface PRECONDITION_FAILED.
+category: quality
+steps:
+  - tool: query_mesh_quality
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    value: fail
+  - kind: tool_error_code
+    value: PRECONDITION_FAILED

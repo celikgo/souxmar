@@ -1,0 +1,23 @@
+id: pipeline-01-propose-valid
+description: propose_pipeline round-trips a 2-stage spec through the parser cleanly.
+category: pipeline
+steps:
+  - tool: propose_pipeline
+    inputs:
+      version: 1
+      stages:
+        - id: mesh
+          plugin: mesher.tetra.hello
+        - id: write
+          plugin: writer.vtu
+          input:
+            mesh: {from: mesh}
+            path: /tmp/out.vtu
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: parsed_stages
+    value: 2
+  - kind: tool_summary_contains
+    value: 2 stages

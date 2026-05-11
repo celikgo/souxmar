@@ -1,0 +1,13 @@
+id: quality-03-source-dispatched
+description: After a fresh mesh, query_mesh_quality has no quality field on the session; its `source` field must report `dispatched` (it ran the postproc inline).
+category: quality
+steps:
+  - tool: mesh
+    inputs: {capability_id: mesher.tetra.hello}
+  - tool: query_mesh_quality
+    inputs: {}
+assertions:
+  - kind: tool_data_equals
+    step: 1
+    path: source
+    value: dispatched

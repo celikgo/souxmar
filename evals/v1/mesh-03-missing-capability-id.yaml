@@ -1,0 +1,11 @@
+id: mesh-03-missing-capability-id
+description: mesh with no `capability_id` input must surface INVALID_ARGUMENT.
+category: mesh
+steps:
+  - tool: mesh
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    value: fail
+  - kind: tool_error_code
+    value: INVALID_ARGUMENT

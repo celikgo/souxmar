@@ -1,0 +1,12 @@
+id: mesh-02-missing-capability
+description: mesh against an unregistered capability surfaces PLUGIN_NOT_FOUND, not a crash.
+category: mesh
+steps:
+  - tool: mesh
+    inputs:
+      capability_id: mesher.tetra.does-not-exist
+assertions:
+  - kind: tool_outcome
+    value: fail
+  - kind: tool_error_code
+    value: PLUGIN_NOT_FOUND

@@ -1,0 +1,23 @@
+id: diff-02-dangling-rejected
+description: apply_pipeline_diff rejects a `remove` that leaves a `{from: ...}` reference dangling.
+category: diff
+steps:
+  - tool: apply_pipeline_diff
+    inputs:
+      base:
+        version: 1
+        stages:
+          - id: mesh
+            plugin: mesher.tetra.hello
+          - id: write
+            plugin: writer.vtu
+            input:
+              mesh: {from: mesh}
+      ops:
+        - op: remove
+          id: mesh
+assertions:
+  - kind: tool_outcome
+    value: fail
+  - kind: tool_error_code
+    value: INVALID_ARGUMENT

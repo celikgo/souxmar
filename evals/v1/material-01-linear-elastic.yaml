@@ -1,0 +1,18 @@
+id: material-01-linear-elastic
+description: set_material — linear-elastic steel applied to a tagged solid.
+category: material
+steps:
+  - tool: set_material
+    inputs:
+      tag:   body
+      model: linear_elastic
+      properties:
+        E:   210e9
+        nu:  0.3
+        rho: 7850
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: count
+    value: 1

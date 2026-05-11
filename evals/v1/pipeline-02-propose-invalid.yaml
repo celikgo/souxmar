@@ -1,0 +1,17 @@
+id: pipeline-02-propose-invalid
+description: propose_pipeline rejects a spec with a duplicate stage id.
+category: pipeline
+steps:
+  - tool: propose_pipeline
+    inputs:
+      version: 1
+      stages:
+        - id: mesh
+          plugin: mesher.tetra.hello
+        - id: mesh                  # duplicate id — parser must reject
+          plugin: writer.vtu
+assertions:
+  - kind: tool_outcome
+    value: fail
+  - kind: tool_error_code
+    value: INVALID_ARGUMENT

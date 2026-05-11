@@ -1,0 +1,13 @@
+id: read-03-missing-geometry
+description: read_geometry_summary with no geometry must surface NOT_AVAILABLE, not crash.
+category: read
+setup:
+  session_state: {}
+steps:
+  - tool: read_geometry_summary
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    value: fail
+  - kind: tool_error_code
+    value: NOT_AVAILABLE

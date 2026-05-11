@@ -1,0 +1,22 @@
+id: query-03-field-after-elasticity
+description: mesh → elasticity-stub solve → query_field. Vector field aggregation; finite count must equal the displacement vector total (3 components × 4 nodes = 12).
+category: query
+steps:
+  - tool: mesh
+    inputs: {capability_id: mesher.tetra.hello}
+  - tool: solve
+    inputs: {capability_id: solver.elasticity.linear, load_magnitude: 1.0}
+  - tool: query_field
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    step: 2
+    value: ok
+  - kind: tool_data_equals
+    step: 2
+    path: kind
+    value: vector
+  - kind: tool_data_equals
+    step: 2
+    path: count
+    value: 12

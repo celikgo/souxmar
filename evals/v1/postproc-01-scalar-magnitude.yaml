@@ -1,0 +1,22 @@
+id: postproc-01-scalar-magnitude
+description: mesh → elasticity-stub solve → compute_field scalar_magnitude. Vector → scalar.
+category: postproc
+steps:
+  - tool: mesh
+    inputs: {capability_id: mesher.tetra.hello}
+  - tool: solve
+    inputs: {capability_id: solver.elasticity.linear, load_magnitude: 1.0}
+  - tool: compute_field
+    inputs: {capability_id: postproc.scalar_magnitude}
+assertions:
+  - kind: tool_outcome
+    step: 2
+    value: ok
+  - kind: tool_data_equals
+    step: 2
+    path: kind
+    value: scalar
+  - kind: tool_data_equals
+    step: 2
+    path: num_components
+    value: 1

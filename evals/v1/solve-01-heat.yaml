@@ -1,0 +1,24 @@
+id: solve-01-heat
+description: mesh → solve heat. Field returned with the expected shape.
+category: solve
+steps:
+  - tool: mesh
+    inputs: {capability_id: mesher.tetra.hello}
+  - tool: solve
+    inputs: {capability_id: solver.heat.linear, num_time_steps: 3, dt: 0.5}
+assertions:
+  - kind: tool_outcome
+    step: 1
+    value: ok
+  - kind: tool_data_equals
+    step: 1
+    path: capability_id
+    value: solver.heat.linear
+  - kind: tool_data_equals
+    step: 1
+    path: location
+    value: nodal
+  - kind: tool_data_equals
+    step: 1
+    path: kind
+    value: scalar

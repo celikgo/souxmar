@@ -1,0 +1,11 @@
+id: solve-03-no-mesh
+description: solve without a prior mesh must surface PRECONDITION_FAILED, not crash.
+category: solve
+steps:
+  - tool: solve
+    inputs: {capability_id: solver.heat.linear}
+assertions:
+  - kind: tool_outcome
+    value: fail
+  - kind: tool_error_code
+    value: PRECONDITION_FAILED

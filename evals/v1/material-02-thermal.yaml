@@ -1,0 +1,18 @@
+id: material-02-thermal
+description: set_material — thermal conductivity assignment.
+category: material
+steps:
+  - tool: set_material
+    inputs:
+      tag:   slab
+      model: thermal
+      properties:
+        k:   45.0
+        cp:  450.0
+        rho: 7850
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: count
+    value: 1

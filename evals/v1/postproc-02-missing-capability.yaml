@@ -1,0 +1,17 @@
+id: postproc-02-missing-capability
+description: compute_field against an unregistered postproc surfaces PLUGIN_NOT_FOUND.
+category: postproc
+steps:
+  - tool: mesh
+    inputs: {capability_id: mesher.tetra.hello}
+  - tool: solve
+    inputs: {capability_id: solver.heat.linear}
+  - tool: compute_field
+    inputs: {capability_id: postproc.does-not-exist}
+assertions:
+  - kind: tool_outcome
+    step: 2
+    value: fail
+  - kind: tool_error_code
+    step: 2
+    value: PLUGIN_NOT_FOUND

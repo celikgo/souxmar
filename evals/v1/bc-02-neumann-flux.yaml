@@ -1,0 +1,16 @@
+id: bc-02-neumann-flux
+description: set_bc — Neumann flux as a vector value.
+category: bc
+steps:
+  - tool: set_bc
+    inputs:
+      tag:   wall_right
+      type:  neumann
+      value: [1.0, 0.0, 0.0]
+      field: heat_flux
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: count
+    value: 1

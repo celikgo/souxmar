@@ -480,6 +480,34 @@ This closes Sprint 6 cleanly. Six pushes landed:
 - **Benchmark** (`benchmarks/bench_mmap_buffer.cpp`): heap-roundtrip vs mmap-create-write vs mmap-reopen-readonly across 1 / 16 / 64 / 256 MiB sizes. The CI baseline carries the expected ratio (≤ 1.2× heap path at 64 MiB+); the perf-nightly workflow tracks it.
 - **No load-bearing v1 surface changed.** Every v1 function signature is byte-identical; every v1 struct layout is byte-identical (the `reserved → kind` rename is a comment-level change with identical semantics for zero-init). The ratchet marker the commit carries is the additive-minor variant, which the CI gate accepts as exactly the case it was designed to permit.
 
+#### Sprint 7 push 4 — agent eval suite v1 (30 canonical tasks + `souxmar-eval` runner)
+
+Closes the Sprint 7 plan's "Agent eval suite v1: 30 canonical engineering tasks with pass/fail criteria" deliverable.
+
+- **`souxmar-eval` runner** (`tools/eval/main.cpp`, `tools/eval/CMakeLists.txt`) — new operator binary, pair-built with the existing `souxmar` and `souxmar-conformance` under the `SOUXMAR_BUILD_CLI` gate. Walks an evals directory, parses each `.yaml` task via yaml-cpp, instantiates a `Registry + RegistryDispatcher + ToolContext`, loads every discoverable plugin, and runs each task's steps through `ai::dispatch_tool`. Per-task `[PASS]` / `[FAIL]` lines + a per-category summary go to stdout; exit 0 iff every task passes.
+- **Eval YAML schema** — small, tagged-union assertion language designed for the agent surface specifically:
+  - `tool_outcome` — `value: ok | fail`. The pass-vs-fail discriminator for any tool call.
+  - `tool_error_code` — when a tool fails, assert on the structured code (`NOT_AVAILABLE` / `INVALID_ARGUMENT` / `PLUGIN_NOT_FOUND` / `PRECONDITION_FAILED` / …). The dispatcher's structured-error surface is the contract being pinned.
+  - `tool_data_equals` — dotted-path lookup into `result.data` with scalar equality.
+  - `tool_data_gte` — same path, numeric `≥`.
+  - `tool_data_present` — non-null entry at a path.
+  - `tool_summary_contains` — substring search on the human-readable summary.
+  - Each assertion defaults to checking the **last** step's result; `step: N` targets earlier steps. `setup.session_state` pre-populates `ctx.session_state` for read-tier tasks. `auto_confirm: true` (default) installs an always-yes prompter so `ConfirmOnce` / `ConfirmAlways` tools run without bailing at `NOT_CONFIRMED`.
+- **`evals/v1/` catalogue — 30 tasks**, covering every v1 tool, grouped:
+  - **read** (4): `read_geometry_summary` against pre-staged geometry / inline input / missing-geometry NOT_AVAILABLE path.
+  - **mesh** (4): hello-mesher success path; unknown-capability `PLUGIN_NOT_FOUND`; missing `capability_id` `INVALID_ARGUMENT`; mesh-stashes-handle proved via a follow-on solve.
+  - **bc** (3): Dirichlet clamp; Neumann flux as a vector; chained Dirichlet + Neumann + Robin with counter monotonicity.
+  - **material** (3): linear-elastic steel; thermal conductivity; missing-`properties` `INVALID_ARGUMENT`.
+  - **solve** (3): `solver.heat.linear` over hello-mesher; `solver.elasticity.linear` (Sprint 7 push 2 stub) with closed-form load/E/ν inputs; no-prior-mesh `PRECONDITION_FAILED`.
+  - **query** (3): `query_field` after heat solve; without a field; after elasticity solve (vector field, 12 doubles total).
+  - **quality** (3): `query_mesh_quality` on hello-mesher's tet (zero inverted / zero unsupported); no-mesh `PRECONDITION_FAILED`; `source: dispatched` when no quality field is on the session.
+  - **postproc** (3): `compute_field` via `postproc.scalar_magnitude` (vector → scalar); unknown postproc `PLUGIN_NOT_FOUND`; no-prior-solve `PRECONDITION_FAILED`.
+  - **pipeline** (2): `propose_pipeline` valid 2-stage spec; duplicate-stage-id rejected.
+  - **diff** (2): `apply_pipeline_diff` add-stage-after-mesh; remove-leaving-dangling-`{from:}` rejected by the parser round-trip.
+- **`evals/v1/README.md`** — schema reference, the category table, how to author a new task. The catalogue is documented as a ratchet: it grows by PR, never shrinks, and pass criteria never loosen.
+- **`.github/workflows/eval-nightly.yml`** — nightly + PR-gated (on `tools/eval/**`, `evals/v1/**`, `src/ai/**`, `include/souxmar/ai/**`) workflow. Builds the runner + every example plugin, walks `build/.../examples/plugins/*/` to assemble `--plugin-path` args, runs the suite, uploads the report as an artifact. Fails the workflow on any task failure.
+- **No frozen-header surface touched.** This is pure new tooling under `tools/eval/` + a YAML catalogue under `evals/`. No commit-message ratchet marker needed.
+
 ### Changed
 
 - (None this release.)

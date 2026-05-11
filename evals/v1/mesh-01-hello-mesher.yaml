@@ -1,0 +1,19 @@
+id: mesh-01-hello-mesher
+description: Dispatch hello-mesher; expect 4 nodes + 1 tet.
+category: mesh
+steps:
+  - tool: mesh
+    inputs:
+      capability_id: mesher.tetra.hello
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: capability_id
+    value: mesher.tetra.hello
+  - kind: tool_data_equals
+    path: num_nodes
+    value: 4
+  - kind: tool_data_equals
+    path: num_cells
+    value: 1

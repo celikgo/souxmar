@@ -1,0 +1,24 @@
+id: quality-01-hello-mesh
+description: mesh → query_mesh_quality. Inspect the single Tet4 produced by hello-mesher.
+category: quality
+steps:
+  - tool: mesh
+    inputs: {capability_id: mesher.tetra.hello}
+  - tool: query_mesh_quality
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    step: 1
+    value: ok
+  - kind: tool_data_equals
+    step: 1
+    path: num_cells
+    value: 1
+  - kind: tool_data_equals
+    step: 1
+    path: flags.cells_inverted
+    value: 0
+  - kind: tool_data_equals
+    step: 1
+    path: flags.cells_unsupported
+    value: 0

@@ -61,6 +61,8 @@ add_subdirectory(src)
 # the main `souxmar` binary.
 if(SOUXMAR_BUILD_CLI)
   add_subdirectory(tools/conformance)
+  # Sprint 7 push 4 — agent eval runner.
+  add_subdirectory(tools/eval)
 endif()
 
 # Examples must be added BEFORE tests: the integration test_config.h

@@ -1,0 +1,89 @@
+# Sprint 7 push 4 — agent eval suite nightly.
+#
+# Runs souxmar-eval against evals/v1/ on a nightly schedule and on
+# every PR that touches the eval surface (the runner, the catalogue,
+# any v1 agent tool). The job fails — and so blocks the merge — when
+# any task fails.
+#
+# Sprint 8+ extends this to a per-PR gate on a percentage pass bar
+# (start: 95% of v1 must pass on every PR; 100% nightly). For now
+# we run nightly + on the directly-affected paths.
+
+name: eval-nightly
+
+on:
+  schedule:
+    - cron: '0 7 * * *'   # 07:00 UTC daily
+  pull_request:
+    paths:
+      - 'tools/eval/**'
+      - 'evals/v1/**'
+      - 'src/ai/**'
+      - 'include/souxmar/ai/**'
+      - '.github/workflows/eval-nightly.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: eval-nightly-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite"
+  CMAKE_GENERATOR: Ninja
+
+jobs:
+  eval:
+    name: agent eval suite v1
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang-17 lld-17
+
+      - name: Set up vcpkg
+        run: |
+          if [ -z "$VCPKG_ROOT" ]; then
+            git clone --depth 1 https://github.com/microsoft/vcpkg "$HOME/vcpkg"
+            "$HOME/vcpkg/bootstrap-vcpkg.sh"
+            echo "VCPKG_ROOT=$HOME/vcpkg" >> "$GITHUB_ENV"
+          fi
+
+      - name: Cache vcpkg binary archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-cache
+          key: eval-nightly-vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            eval-nightly-vcpkg-
+
+      - name: Configure
+        run: |
+          cmake --preset ci-linux-clang \
+            -DSOUXMAR_BUILD_EXAMPLES=ON \
+            -DSOUXMAR_BUILD_CLI=ON
+
+      - name: Build core + plugins + souxmar-eval
+        run: cmake --build --preset ci-linux-clang --target souxmar_eval
+
+      - name: Run the agent eval suite
+        run: |
+          # Build a --plugin-path list from every plugin directory under
+          # the example tree. The eval runner needs the plugins on its
+          # search path or the catalogue tasks that dispatch capabilities
+          # will fail at find_mesher / find_solver / find_postproc.
+          PLUGIN_ARGS=()
+          for d in build/ci-linux-clang/examples/plugins/*/; do
+            PLUGIN_ARGS+=(--plugin-path "$d")
+          done
+          build/ci-linux-clang/tools/eval/souxmar-eval evals/v1 "${PLUGIN_ARGS[@]}" \
+            | tee eval-report.txt
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: eval-report.txt

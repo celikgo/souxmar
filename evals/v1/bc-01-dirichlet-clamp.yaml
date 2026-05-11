@@ -1,0 +1,16 @@
+id: bc-01-dirichlet-clamp
+description: set_bc — Dirichlet clamp on a tagged surface, single call.
+category: bc
+steps:
+  - tool: set_bc
+    inputs:
+      tag:   wall_left
+      type:  dirichlet
+      value: 0.0
+      field: temperature
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: count
+    value: 1

@@ -1,0 +1,23 @@
+id: read-01-cube-geometry
+description: read_geometry_summary against a pre-staged unit-cube geometry.
+category: read
+setup:
+  session_state:
+    geometry:
+      num_vertices: 8
+      num_edges:    12
+      num_faces:    6
+      num_solids:   1
+      bbox:         [0, 0, 0, 1, 1, 1]
+steps:
+  - tool: read_geometry_summary
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: num_vertices
+    value: 8
+  - kind: tool_data_equals
+    path: num_solids
+    value: 1

@@ -1,0 +1,23 @@
+id: bc-03-robin-accepted-multiple
+description: set_bc — chain three BCs (Dirichlet + Neumann + Robin); the registry counter must grow monotonically.
+category: bc
+steps:
+  - tool: set_bc
+    inputs: {tag: a, type: dirichlet, value: 0.0}
+  - tool: set_bc
+    inputs: {tag: b, type: neumann,   value: 1.0}
+  - tool: set_bc
+    inputs: {tag: c, type: robin,     value: 2.0}
+assertions:
+  - kind: tool_data_equals
+    step: 0
+    path: count
+    value: 1
+  - kind: tool_data_equals
+    step: 1
+    path: count
+    value: 2
+  - kind: tool_data_equals
+    step: 2
+    path: count
+    value: 3

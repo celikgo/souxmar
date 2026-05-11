@@ -1,0 +1,15 @@
+id: postproc-03-no-field
+description: compute_field without a prior solve must surface PRECONDITION_FAILED.
+category: postproc
+steps:
+  - tool: mesh
+    inputs: {capability_id: mesher.tetra.hello}
+  - tool: compute_field
+    inputs: {capability_id: postproc.scalar_magnitude}
+assertions:
+  - kind: tool_outcome
+    step: 1
+    value: fail
+  - kind: tool_error_code
+    step: 1
+    value: PRECONDITION_FAILED

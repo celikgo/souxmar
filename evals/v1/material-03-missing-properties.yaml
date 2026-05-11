@@ -1,0 +1,13 @@
+id: material-03-missing-properties
+description: set_material — omit `properties`; expect INVALID_ARGUMENT (the agent must learn to provide them).
+category: material
+steps:
+  - tool: set_material
+    inputs:
+      tag:   body
+      model: linear_elastic
+assertions:
+  - kind: tool_outcome
+    value: fail
+  - kind: tool_error_code
+    value: INVALID_ARGUMENT

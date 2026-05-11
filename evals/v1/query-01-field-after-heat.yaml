@@ -1,0 +1,22 @@
+id: query-01-field-after-heat
+description: mesh → solve heat → query_field. Aggregates min/max/mean.
+category: query
+steps:
+  - tool: mesh
+    inputs: {capability_id: mesher.tetra.hello}
+  - tool: solve
+    inputs: {capability_id: solver.heat.linear, num_time_steps: 1}
+  - tool: query_field
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    step: 2
+    value: ok
+  - kind: tool_data_equals
+    step: 2
+    path: location
+    value: nodal
+  - kind: tool_data_gte
+    step: 2
+    path: count
+    value: 1

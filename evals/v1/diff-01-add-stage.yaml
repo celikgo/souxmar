@@ -1,0 +1,29 @@
+id: diff-01-add-stage
+description: apply_pipeline_diff adds a writer stage after `mesh` and re-validates the result.
+category: diff
+steps:
+  - tool: apply_pipeline_diff
+    inputs:
+      base:
+        version: 1
+        stages:
+          - id: mesh
+            plugin: mesher.tetra.hello
+      ops:
+        - op: add
+          after: mesh
+          stage:
+            id: write
+            plugin: writer.vtu
+            input:
+              mesh: {from: mesh}
+              path: /tmp/out.vtu
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: parsed_stages
+    value: 2
+  - kind: tool_data_equals
+    path: ops_applied
+    value: 1

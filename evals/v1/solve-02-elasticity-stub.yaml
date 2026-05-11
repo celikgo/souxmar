@@ -1,0 +1,24 @@
+id: solve-02-elasticity-stub
+description: mesh → solve elasticity-stub. Closed-form uniaxial tension produces a vector field.
+category: solve
+steps:
+  - tool: mesh
+    inputs: {capability_id: mesher.tetra.hello}
+  - tool: solve
+    inputs:
+      capability_id:  solver.elasticity.linear
+      load_magnitude: 2.1e6
+      youngs_modulus: 210e9
+      poisson_ratio:  0.3
+assertions:
+  - kind: tool_outcome
+    step: 1
+    value: ok
+  - kind: tool_data_equals
+    step: 1
+    path: kind
+    value: vector
+  - kind: tool_data_equals
+    step: 1
+    path: num_components
+    value: 3

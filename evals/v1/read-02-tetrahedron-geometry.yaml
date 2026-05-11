@@ -1,0 +1,23 @@
+id: read-02-tetrahedron-geometry
+description: read_geometry_summary against a 4-vertex tet geometry.
+category: read
+setup:
+  session_state:
+    geometry:
+      num_vertices: 4
+      num_edges:    6
+      num_faces:    4
+      num_solids:   1
+      bbox:         [0, 0, 0, 1, 1, 1]
+steps:
+  - tool: read_geometry_summary
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: num_vertices
+    value: 4
+  - kind: tool_data_equals
+    path: num_faces
+    value: 4

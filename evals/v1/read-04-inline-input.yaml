@@ -1,0 +1,21 @@
+id: read-04-inline-input
+description: read_geometry_summary accepts an inline `geometry` input, bypassing session_state.
+category: read
+steps:
+  - tool: read_geometry_summary
+    inputs:
+      geometry:
+        num_vertices: 16
+        num_edges:    24
+        num_faces:    10
+        num_solids:   2
+        bbox: [-1, -1, -1, 1, 1, 1]
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: num_vertices
+    value: 16
+  - kind: tool_data_equals
+    path: num_solids
+    value: 2
