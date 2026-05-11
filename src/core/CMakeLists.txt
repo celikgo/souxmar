@@ -8,6 +8,11 @@ add_library(souxmar_core
   topology.cpp
   mesh.cpp
   field.cpp
+  # C ABI bridges (souxmar_mesh_*, souxmar_geometry_*, souxmar_field_*).
+  # Live in core because that's where the implementation types are defined.
+  c_abi_mesh.cpp
+  c_abi_geometry.cpp
+  c_abi_field.cpp
 )
 add_library(souxmar::core ALIAS souxmar_core)
 

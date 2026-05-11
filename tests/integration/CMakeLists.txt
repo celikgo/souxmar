@@ -13,6 +13,7 @@ configure_file(
 
 add_executable(souxmar_integration_tests
   test_load_hello_mesher.cpp
+  test_pipeline_end_to_end.cpp
 )
 
 target_include_directories(souxmar_integration_tests
@@ -24,14 +25,15 @@ target_link_libraries(souxmar_integration_tests
   PRIVATE
     souxmar::core
     souxmar::plugin
+    souxmar::pipeline
     souxmar::warnings
     souxmar::sanitizers
     GTest::gtest
     GTest::gtest_main
 )
 
-# The integration suite depends on the hello-mesher plugin being built first.
-add_dependencies(souxmar_integration_tests hello_mesher)
+# The integration suite depends on the example plugins being built first.
+add_dependencies(souxmar_integration_tests hello_mesher hello_writer)
 
 set_target_properties(souxmar_integration_tests PROPERTIES
   FOLDER "tests/integration"

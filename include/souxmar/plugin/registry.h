@@ -20,17 +20,31 @@
 #include <vector>
 
 #include "souxmar-c/mesher.h"
+#include "souxmar-c/solver.h"
 #include "souxmar-c/status.h"
+#include "souxmar-c/writer.h"
 
 namespace souxmar::plugin {
 
 enum class CapabilityKind : std::uint8_t {
   Mesher = 0,
-  // Sprint 3+: Solver, Element, Reader, Writer, Postproc.
+  Solver = 1,
+  Writer = 2,
+  // Sprint 4+: Reader, Element, Postproc.
 };
 
 struct MesherEntry {
   const souxmar_mesher_vtable_t* vtable;
+  void*                          user_data;
+};
+
+struct SolverEntry {
+  const souxmar_solver_vtable_t* vtable;
+  void*                          user_data;
+};
+
+struct WriterEntry {
+  const souxmar_writer_vtable_t* vtable;
   void*                          user_data;
 };
 
@@ -41,7 +55,7 @@ struct CapabilityEntry {
   std::int32_t    abi_version; // taken from the vtable
 
   // Capability-specific payload, discriminated by `kind`.
-  std::variant<MesherEntry> payload;
+  std::variant<MesherEntry, SolverEntry, WriterEntry> payload;
 };
 
 struct RegistryError {
@@ -69,6 +83,18 @@ class Registry {
              const souxmar_mesher_vtable_t*  vtable,
              void*                           user_data);
 
+  std::variant<std::monostate, RegistryError>
+  add_solver(std::string                     capability_id,
+             std::string                     plugin_id,
+             const souxmar_solver_vtable_t*  vtable,
+             void*                           user_data);
+
+  std::variant<std::monostate, RegistryError>
+  add_writer(std::string                     capability_id,
+             std::string                     plugin_id,
+             const souxmar_writer_vtable_t*  vtable,
+             void*                           user_data);
+
   // -------- Read access --------
 
   [[nodiscard]] std::size_t size() const noexcept;
@@ -78,8 +104,10 @@ class Registry {
 
   [[nodiscard]] const CapabilityEntry* find(std::string_view capability_id) const;
 
-  // Convenience: typed lookup. Returns nullptr if not found OR not a mesher.
+  // Convenience: typed lookups. Return nullptr if not found OR wrong kind.
   [[nodiscard]] const MesherEntry* find_mesher(std::string_view capability_id) const;
+  [[nodiscard]] const SolverEntry* find_solver(std::string_view capability_id) const;
+  [[nodiscard]] const WriterEntry* find_writer(std::string_view capability_id) const;
 
   // Drop every capability owned by `plugin_id`. Used at plugin unload.
   void remove_plugin(std::string_view plugin_id);
@@ -92,6 +120,16 @@ class Registry {
   souxmar_status_t add_mesher_c(std::string_view                plugin_id,
                                 const char*                     capability_id,
                                 const souxmar_mesher_vtable_t*  vtable,
+                                void*                           user_data) noexcept;
+
+  souxmar_status_t add_solver_c(std::string_view                plugin_id,
+                                const char*                     capability_id,
+                                const souxmar_solver_vtable_t*  vtable,
+                                void*                           user_data) noexcept;
+
+  souxmar_status_t add_writer_c(std::string_view                plugin_id,
+                                const char*                     capability_id,
+                                const souxmar_writer_vtable_t*  vtable,
                                 void*                           user_data) noexcept;
 
  private:

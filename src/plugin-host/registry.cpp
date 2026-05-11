@@ -95,6 +95,80 @@ const MesherEntry* Registry::find_mesher(std::string_view capability_id) const {
   return std::get_if<MesherEntry>(&entry->payload);
 }
 
+const SolverEntry* Registry::find_solver(std::string_view capability_id) const {
+  const auto* entry = find(capability_id);
+  if (!entry || entry->kind != CapabilityKind::Solver) return nullptr;
+  return std::get_if<SolverEntry>(&entry->payload);
+}
+
+const WriterEntry* Registry::find_writer(std::string_view capability_id) const {
+  const auto* entry = find(capability_id);
+  if (!entry || entry->kind != CapabilityKind::Writer) return nullptr;
+  return std::get_if<WriterEntry>(&entry->payload);
+}
+
+std::variant<std::monostate, RegistryError>
+Registry::add_solver(std::string                     capability_id,
+                     std::string                     plugin_id,
+                     const souxmar_solver_vtable_t*  vtable,
+                     void*                           user_data) {
+  if (capability_id.empty()) return RegistryError{"capability_id must not be empty"};
+  if (vtable == nullptr) {
+    return RegistryError{fmt::format("'{}': vtable pointer is null", capability_id)};
+  }
+  if (vtable->abi_version != SOUXMAR_ABI_VERSION_MAJOR) {
+    return RegistryError{fmt::format(
+        "'{}': vtable.abi_version = {}, host expects {}",
+        capability_id, vtable->abi_version, SOUXMAR_ABI_VERSION_MAJOR)};
+  }
+  if (vtable->solve_fn == nullptr) {
+    return RegistryError{fmt::format("'{}': vtable.solve_fn is null", capability_id)};
+  }
+
+  std::unique_lock lock(mu_);
+  if (entries_.contains(capability_id)) {
+    return RegistryError{fmt::format("'{}': capability already registered", capability_id)};
+  }
+  CapabilityEntry entry{
+      capability_id, std::move(plugin_id),
+      CapabilityKind::Solver, vtable->abi_version,
+      SolverEntry{vtable, user_data},
+  };
+  entries_.emplace(std::move(capability_id), std::move(entry));
+  return std::monostate{};
+}
+
+std::variant<std::monostate, RegistryError>
+Registry::add_writer(std::string                     capability_id,
+                     std::string                     plugin_id,
+                     const souxmar_writer_vtable_t*  vtable,
+                     void*                           user_data) {
+  if (capability_id.empty()) return RegistryError{"capability_id must not be empty"};
+  if (vtable == nullptr) {
+    return RegistryError{fmt::format("'{}': vtable pointer is null", capability_id)};
+  }
+  if (vtable->abi_version != SOUXMAR_ABI_VERSION_MAJOR) {
+    return RegistryError{fmt::format(
+        "'{}': vtable.abi_version = {}, host expects {}",
+        capability_id, vtable->abi_version, SOUXMAR_ABI_VERSION_MAJOR)};
+  }
+  if (vtable->write_fn == nullptr) {
+    return RegistryError{fmt::format("'{}': vtable.write_fn is null", capability_id)};
+  }
+
+  std::unique_lock lock(mu_);
+  if (entries_.contains(capability_id)) {
+    return RegistryError{fmt::format("'{}': capability already registered", capability_id)};
+  }
+  CapabilityEntry entry{
+      capability_id, std::move(plugin_id),
+      CapabilityKind::Writer, vtable->abi_version,
+      WriterEntry{vtable, user_data},
+  };
+  entries_.emplace(std::move(capability_id), std::move(entry));
+  return std::monostate{};
+}
+
 void Registry::remove_plugin(std::string_view plugin_id) {
   std::unique_lock lock(mu_);
   for (auto it = entries_.begin(); it != entries_.end();) {
@@ -106,35 +180,57 @@ void Registry::remove_plugin(std::string_view plugin_id) {
   }
 }
 
-souxmar_status_t Registry::add_mesher_c(std::string_view                plugin_id,
-                                        const char*                     capability_id,
-                                        const souxmar_mesher_vtable_t*  vtable,
-                                        void*                           user_data) noexcept {
+// Generic C-ABI bridge helper for the three add_*_c methods. F is a callable
+// that performs the C++-side registration and returns the variant.
+namespace {
+template <typename F>
+souxmar_status_t add_c_impl(const char* capability_id,
+                            const char* function_name,
+                            F&&         registration) noexcept {
   if (capability_id == nullptr) {
-    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT,
-                                "souxmar_registry_add_mesher: capability_id is NULL");
+    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT, function_name);
   }
-  // We catch any allocation failure that bubbles out of the C++ implementation
-  // and translate it to a status code, since this function is noexcept and
-  // crosses the C ABI boundary.
   try {
-    auto result = add_mesher(capability_id, std::string(plugin_id), vtable, user_data);
+    auto result = registration();
     if (std::holds_alternative<RegistryError>(result)) {
-      // Use a static thread-local for the message; the C-side contract says
-      // the pointer is valid until the next call into the same plugin/host
-      // function from the same thread.
       thread_local std::string last_error;
       last_error = std::get<RegistryError>(result).message;
       return souxmar_status_error(SOUXMAR_E_PLUGIN_REJECTED, last_error.c_str());
     }
     return souxmar_status_ok();
   } catch (const std::bad_alloc&) {
-    return souxmar_status_error(SOUXMAR_E_OUT_OF_MEMORY,
-                                "souxmar_registry_add_mesher: out of memory");
+    return souxmar_status_error(SOUXMAR_E_OUT_OF_MEMORY, function_name);
   } catch (...) {
-    return souxmar_status_error(SOUXMAR_E_INTERNAL,
-                                "souxmar_registry_add_mesher: unknown C++ exception");
+    return souxmar_status_error(SOUXMAR_E_INTERNAL, function_name);
   }
+}
+}  // namespace
+
+souxmar_status_t Registry::add_mesher_c(std::string_view                plugin_id,
+                                        const char*                     capability_id,
+                                        const souxmar_mesher_vtable_t*  vtable,
+                                        void*                           user_data) noexcept {
+  return add_c_impl(capability_id, "souxmar_registry_add_mesher", [&] {
+    return add_mesher(capability_id, std::string(plugin_id), vtable, user_data);
+  });
+}
+
+souxmar_status_t Registry::add_solver_c(std::string_view                plugin_id,
+                                        const char*                     capability_id,
+                                        const souxmar_solver_vtable_t*  vtable,
+                                        void*                           user_data) noexcept {
+  return add_c_impl(capability_id, "souxmar_registry_add_solver", [&] {
+    return add_solver(capability_id, std::string(plugin_id), vtable, user_data);
+  });
+}
+
+souxmar_status_t Registry::add_writer_c(std::string_view                plugin_id,
+                                        const char*                     capability_id,
+                                        const souxmar_writer_vtable_t*  vtable,
+                                        void*                           user_data) noexcept {
+  return add_c_impl(capability_id, "souxmar_registry_add_writer", [&] {
+    return add_writer(capability_id, std::string(plugin_id), vtable, user_data);
+  });
 }
 
 }  // namespace souxmar::plugin
@@ -159,6 +255,32 @@ souxmar_registry_add_mesher(souxmar_registry_t*             registry,
   }
   auto* reg = reinterpret_cast<souxmar::plugin::Registry*>(registry);
   return reg->add_mesher_c(reg->current_plugin_id_, capability_id, vtable, user_data);
+}
+
+souxmar_status_t
+souxmar_registry_add_solver(souxmar_registry_t*             registry,
+                            const char*                     capability_id,
+                            const souxmar_solver_vtable_t*  vtable,
+                            void*                           user_data) {
+  if (registry == nullptr) {
+    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT,
+                                "souxmar_registry_add_solver: registry is NULL");
+  }
+  auto* reg = reinterpret_cast<souxmar::plugin::Registry*>(registry);
+  return reg->add_solver_c(reg->current_plugin_id_, capability_id, vtable, user_data);
+}
+
+souxmar_status_t
+souxmar_registry_add_writer(souxmar_registry_t*             registry,
+                            const char*                     capability_id,
+                            const souxmar_writer_vtable_t*  vtable,
+                            void*                           user_data) {
+  if (registry == nullptr) {
+    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT,
+                                "souxmar_registry_add_writer: registry is NULL");
+  }
+  auto* reg = reinterpret_cast<souxmar::plugin::Registry*>(registry);
+  return reg->add_writer_c(reg->current_plugin_id_, capability_id, vtable, user_data);
 }
 
 }  // extern "C"

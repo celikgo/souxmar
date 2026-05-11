@@ -23,6 +23,8 @@ SOUXMAR_C_BEGIN
 /* Forward-declared so registration functions can take a vtable pointer
  * without pulling in the capability header. */
 struct souxmar_mesher_vtable;
+struct souxmar_solver_vtable;
+struct souxmar_writer_vtable;
 
 /* Register a mesher capability, identified by `capability_id`
  * (e.g. "mesher.tetra.example"). The vtable's ABI version is checked
@@ -37,6 +39,18 @@ souxmar_status_t souxmar_registry_add_mesher(
     souxmar_registry_t*                  registry,
     const char*                          capability_id,
     const struct souxmar_mesher_vtable*  vtable,
+    void*                                user_data);
+
+souxmar_status_t souxmar_registry_add_solver(
+    souxmar_registry_t*                  registry,
+    const char*                          capability_id,
+    const struct souxmar_solver_vtable*  vtable,
+    void*                                user_data);
+
+souxmar_status_t souxmar_registry_add_writer(
+    souxmar_registry_t*                  registry,
+    const char*                          capability_id,
+    const struct souxmar_writer_vtable*  vtable,
     void*                                user_data);
 
 SOUXMAR_C_END

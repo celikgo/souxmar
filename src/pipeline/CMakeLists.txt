@@ -1,5 +1,7 @@
 # libsouxmar-pipeline — DAG orchestrator + parser + cache + runner.
-# Wire-up to real plugin dispatch (RegistryDispatcher) lands in Sprint 3 push 2.
+# Sprint 3 push 2 adds RegistryDispatcher (the bridge from the runner's
+# IDispatcher to real plugin vtables in the Registry) and the C ABI value
+# accessors used by solver / writer plugin inputs.
 
 find_package(fmt        CONFIG REQUIRED)
 find_package(yaml-cpp   CONFIG REQUIRED)
@@ -10,6 +12,8 @@ add_library(souxmar_pipeline
   dag.cpp
   cache.cpp
   runner.cpp
+  c_abi_value.cpp
+  registry_dispatcher.cpp
 )
 add_library(souxmar::pipeline ALIAS souxmar_pipeline)
 
@@ -23,6 +27,8 @@ set_target_properties(souxmar_pipeline PROPERTIES
 target_link_libraries(souxmar_pipeline
   PUBLIC
     souxmar::public_headers
+    souxmar::core
+    souxmar::plugin
   PRIVATE
     souxmar::warnings
     souxmar::sanitizers

@@ -78,6 +78,34 @@ The plugin C ABI version is tracked separately and is independent of the project
   - `test_pipeline_cache` — context distinguishes, upstream change propagates, map-key ordering doesn't matter, hex format, put/get/overwrite/clear.
   - `test_pipeline_runner` — validation skip, topological dispatch order, output threading, fail-fast skip-downstream, full cache hit, input-change invalidation, plugin-version invalidation, upstream-change invalidation, cache-disabled mode.
 
+#### Sprint 3 (in progress, push 2) — C ABI handles + RegistryDispatcher + end-to-end
+
+- **[ABI v1]** Public C ABI handle accessors:
+  - `include/souxmar-c/mesh.h` + `src/core/c_abi_mesh.cpp` — `souxmar_mesh_new`/`free`/`add_node`/`add_cell`/`reserve_*`/`num_*`/`node`/`cell_type`/`cell_node_count`/`cell_nodes`/`cell_tag`/`nodes_flat` plus `SOUXMAR_ET_*` numerically-stable element-type constants.
+  - `include/souxmar-c/geometry.h` + `src/core/c_abi_geometry.cpp` — `souxmar_geometry_new`/`free`/`add_vertex`/`add_edge`/`add_face`/`add_solid`/`set_tag`/`set_name`/read accessors/`bounding_box`. `SOUXMAR_GK_*` entity-kind constants.
+  - `include/souxmar-c/field.h` + `src/core/c_abi_field.cpp` — `souxmar_field_new`/`free` + read accessors. `SOUXMAR_FL_*` and `SOUXMAR_FK_*` enums.
+  - `include/souxmar-c/value.h` + `src/pipeline/c_abi_value.cpp` — `souxmar_value_kind` + per-kind accessors (`as_bool`/`as_number`/`as_string`/`as_stage`) + list/map navigation. `SOUXMAR_VK_*` enums. Value handles are read-only across the ABI.
+- **[ABI v1]** New capability vtable headers:
+  - `include/souxmar-c/solver.h` — `souxmar_solver_vtable_t` + options struct. Solver inputs reach the plugin as a `souxmar_value_t` bag; the host extracts the `mesh: {from: ...}` upstream by convention.
+  - `include/souxmar-c/writer.h` — `souxmar_writer_vtable_t`. Writer takes mesh + optional field + value bag; output is side-effect (typically a file at `path`).
+- Registry extensions (`include/souxmar/plugin/registry.h`, `src/plugin-host/registry.cpp`):
+  - `CapabilityKind` extended to {Mesher, Solver, Writer}.
+  - `add_solver` / `add_writer` (C++) and `add_solver_c` / `add_writer_c` (C ABI bridges) with the same validation pattern as `add_mesher`.
+  - `extern "C" souxmar_registry_add_solver` / `add_writer` extern wrappers.
+  - `find_solver` / `find_writer` typed lookup.
+- `RegistryDispatcher : IDispatcher` (`include/souxmar/pipeline/registry_dispatcher.h`, `src/pipeline/registry_dispatcher.cpp`):
+  - Routes by namespace prefix (`mesher.*` / `solver.*` / `writer.*`).
+  - Convention-based handle extraction: mesher reads optional `geometry: {from: ...}`; solver requires `mesh: {from: ...}`; writer requires `mesh: {from: ...}` + optional `field: {from: ...}`.
+  - All plugin calls go through `plugin::guard_call` so a plugin throw cannot unwind into the host.
+  - `StageOutput` typed wrapper (Mesh / Geometry / Field / Path) is the universal payload threaded through the runner's `shared_ptr<void>`.
+  - Custom `shared_ptr` deleters call `souxmar_mesh_free` / `souxmar_field_free` so plugin-allocated handles round-trip the C ABI ownership rules.
+- Reference plugins:
+  - `examples/plugins/hello-mesher/hello_mesher.cpp` upgraded — `mesh_fn` now produces a real 1-tet mesh through the C ABI (`souxmar_mesh_new` → `souxmar_mesh_add_node` × 4 → `souxmar_mesh_add_cell` SOUXMAR_ET_TET4).
+  - `examples/plugins/hello-writer/` — minimal writer plugin reading the mesh through C ABI accessors and writing a 2-line summary to the path supplied via the `souxmar_value_t` input bag. Built with `souxmar_add_plugin`; manifest declares `writer.text-summary`.
+- Tests:
+  - `tests/unit/test_c_abi_handles` — full coverage of the C ABI accessors for mesh, geometry, field, and value handles. Round-trip, error paths, NULL-pointer safety, capacity checks.
+  - `tests/integration/test_pipeline_end_to_end` — the **canary** for the whole stack: discover hello-mesher + hello-writer, load both into a Registry, parse a 2-stage YAML pipeline, run through `RegistryDispatcher` + `Cache`, verify the output file exists with the expected content. Plus: cache-hit-on-rerun verification, missing-mesh-reference rejection.
+
 ### Changed
 
 - (None this release.)
