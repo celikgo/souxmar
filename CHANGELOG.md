@@ -106,6 +106,29 @@ The plugin C ABI version is tracked separately and is independent of the project
   - `tests/unit/test_c_abi_handles` — full coverage of the C ABI accessors for mesh, geometry, field, and value handles. Round-trip, error paths, NULL-pointer safety, capacity checks.
   - `tests/integration/test_pipeline_end_to_end` — the **canary** for the whole stack: discover hello-mesher + hello-writer, load both into a Registry, parse a 2-stage YAML pipeline, run through `RegistryDispatcher` + `Cache`, verify the output file exists with the expected content. Plus: cache-hit-on-rerun verification, missing-mesh-reference rejection.
 
+#### Sprint 3 push 3 — CLI, VTU writer, on-disk cache, runnable example
+
+- `souxmar` CLI binary (`src/cli/main.cpp`, `src/cli/CMakeLists.txt`):
+  - `souxmar run <pipeline.yaml>` — parses the pipeline, discovers + loads every available plugin, dispatches stages through `RegistryDispatcher`, prints per-stage status (`[OK]` / `[CACHED]` / `[FAILED]` / `[SKIPPED]`) with content-hash hex.
+  - `souxmar plugin list` — pretty-prints discovered plugins, manifest paths, ABI versions, and announced capabilities.
+  - `souxmar version` — version + ABI string.
+  - Flags: `--plugin-path <dir>` (repeatable, prepends to discovery path), `--no-cache`, `--cache-dir <dir>`.
+  - Exit codes follow sysexits.h (0 / 64 / 65 / 70).
+  - Built only when `SOUXMAR_BUILD_CLI=ON` (default).
+- **[pipeline-format v1]** `examples/plugins/vtu-writer/` — in-tree writer plugin emitting ParaView-readable VTK XML UnstructuredGrid (`.vtu`) without linking VTK. Hand-emits the ASCII format; covers all 17 `SOUXMAR_ET_*` element types via a stable souxmar→VTK cell-type map. Capability: `writer.vtu`. The full VTK-backed adapter (binary + appended data + parallel pieces) lands in Sprint 6.
+- `examples/cantilever-beam/` — runnable end-to-end example with `pipeline.yaml` + README walking the user from a fresh `cmake --build` to a `cantilever.vtu` opened in ParaView. Today the mesh stage is the placeholder hello-mesher (single tet); Sprint 6 swaps in the OpenCASCADE-loaded geometry + native tetra mesher with the same YAML structure.
+- **SHA-256 content hash** (`src/pipeline/cache.cpp`) — `ContentHash` is now backed by a 32-byte SHA-256 digest (in-tree FIPS 180-4 implementation, no external dep). Public surface unchanged; `hex()` returns 64 lowercase chars. Replaces the FNV-1a Sprint 3 push 1 hash, which was good enough for in-process buckets but not durable enough to be the key for the on-disk cache and (in Sprint 7+) the distributed artifact store.
+- **On-disk cache** (`include/souxmar/pipeline/cache.h`, `src/pipeline/cache.cpp`):
+  - New `DiskCache` class — directory-backed byte-blob KV (`<dir>/<hex>` per key), atomic per-key writes via temp+rename, no cross-process locking yet (Sprint 5 adds advisory locks alongside the parallel runner).
+  - `DiskCache::default_dir()` — resolves `$SOUXMAR_CACHE_DIR` → `$XDG_CACHE_HOME/souxmar` (Linux) / `~/Library/Caches/souxmar` (macOS) / `%LOCALAPPDATA%\souxmar\cache` (Windows) → `<tmp>/souxmar-cache`.
+  - `RunOptions::disk_backing` — opt-in `DiskBacking` struct carrying a `DiskCache` plus `serialize` / `deserialize` callbacks. The runner consults disk on in-memory miss and writes through after a successful dispatch. Both callbacks owned by the caller — keeps the runner unaware of `StageOutput`.
+- StageOutput round-trip:
+  - `serialize_stage_output` / `deserialize_stage_output` (`include/souxmar/pipeline/registry_dispatcher.h`) — wire format for `Path`-kind outputs (the v0.0.1 case writers cover). `Mesh`/`Geometry`/`Field` return `nullopt` on serialize until plugin-side serializers land in Sprint 5.
+  - Deserialize verifies the referenced file still exists; a vanished artifact is treated as a cache miss so the writer re-runs.
+- Tests:
+  - `tests/unit/test_pipeline_cache` extended — SHA-256 stability check (digest fills all 32 bytes, identical inputs produce identical digests), `DiskCache` round-trip / missing-key / empty-blob / `default_dir` honors override.
+  - `tests/integration/test_cli_smoke` — invokes the real CLI binary via `std::system` against the cantilever-beam example. Asserts: `plugin list` enumerates in-tree plugins, `run` produces a well-formed VTU on disk, second `run` with the same `--cache-dir` marks the writer stage `[CACHED]`.
+
 ### Changed
 
 - (None this release.)

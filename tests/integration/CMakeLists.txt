@@ -5,15 +5,25 @@
 # resolved paths to in-tree plugin builds, so the test does not have to
 # guess where the binary lives.
 
+# Two-pass generation: configure_file substitutes @CACHE_VAR@ tokens but does
+# not evaluate $<TARGET_FILE:...> generator expressions; file(GENERATE) does
+# the opposite. The cache vars (SOUXMAR_*_DIR, SOUXMAR_CLI_BINARY) themselves
+# hold generator expressions, so we need both passes to land a fully-resolved
+# header at build time.
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/test_config.h.in
-  ${CMAKE_CURRENT_BINARY_DIR}/test_config.h
+  ${CMAKE_CURRENT_BINARY_DIR}/test_config.h.tmp
   @ONLY
+)
+file(GENERATE
+  OUTPUT  ${CMAKE_CURRENT_BINARY_DIR}/test_config.h
+  INPUT   ${CMAKE_CURRENT_BINARY_DIR}/test_config.h.tmp
 )
 
 add_executable(souxmar_integration_tests
   test_load_hello_mesher.cpp
   test_pipeline_end_to_end.cpp
+  test_cli_smoke.cpp
 )
 
 target_include_directories(souxmar_integration_tests
@@ -32,8 +42,11 @@ target_link_libraries(souxmar_integration_tests
     GTest::gtest_main
 )
 
-# The integration suite depends on the example plugins being built first.
-add_dependencies(souxmar_integration_tests hello_mesher hello_writer)
+# The integration suite depends on the example plugins + CLI being built first.
+add_dependencies(souxmar_integration_tests hello_mesher hello_writer vtu_writer)
+if(SOUXMAR_BUILD_CLI AND TARGET souxmar_cli)
+  add_dependencies(souxmar_integration_tests souxmar_cli)
+endif()
 
 set_target_properties(souxmar_integration_tests PROPERTIES
   FOLDER "tests/integration"

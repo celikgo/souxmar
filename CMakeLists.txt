@@ -55,21 +55,23 @@ configure_file(
 
 add_subdirectory(src)
 
-if(BUILD_TESTING AND SOUXMAR_BUILD_TESTS)
-  add_subdirectory(tests)
+# Examples must be added BEFORE tests: the integration test_config.h
+# substitutes cache variables (SOUXMAR_HELLO_MESHER_DIR,
+# SOUXMAR_VTU_WRITER_DIR, SOUXMAR_CLI_BINARY) that the example plugin and
+# CLI subdirectories set. configure_file evaluates the @VAR@ tokens at the
+# time it runs — if examples haven't been processed yet the variables are
+# empty and the generated header points nowhere.
+if(SOUXMAR_BUILD_TESTS AND NOT SOUXMAR_BUILD_EXAMPLES)
+  message(STATUS "souxmar: SOUXMAR_BUILD_TESTS=ON; auto-enabling examples for integration tests")
+  set(SOUXMAR_BUILD_EXAMPLES ON CACHE BOOL "Build example pipelines" FORCE)
 endif()
 
 if(SOUXMAR_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
 
-# When building tests, the integration suite needs examples to exist (it
-# loads the hello-mesher plugin). Auto-enable examples in that case so
-# `cmake --preset dev` is enough.
-if(SOUXMAR_BUILD_TESTS AND NOT SOUXMAR_BUILD_EXAMPLES)
-  message(STATUS "souxmar: SOUXMAR_BUILD_TESTS=ON; auto-enabling examples for integration tests")
-  set(SOUXMAR_BUILD_EXAMPLES ON CACHE BOOL "Build example pipelines" FORCE)
-  add_subdirectory(examples)
+if(BUILD_TESTING AND SOUXMAR_BUILD_TESTS)
+  add_subdirectory(tests)
 endif()
 
 if(SOUXMAR_BUILD_BENCHMARKS)

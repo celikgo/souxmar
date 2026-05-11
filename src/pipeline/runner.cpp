@@ -55,7 +55,7 @@ RunResult run_pipeline(const Pipeline&    pipeline,
 
     sr.content_hash = hash_inputs(context, stage.input, upstream_hashes);
 
-    // Cache lookup.
+    // Cache lookup — in-memory first, then opt-in disk cache.
     if (options.use_cache) {
       if (auto cached = cache.get(sr.content_hash)) {
         sr.status = StageRunResult::Status::Cached;
@@ -63,6 +63,21 @@ RunResult run_pipeline(const Pipeline&    pipeline,
         upstream_hashes.emplace_back(stage.id, sr.content_hash);
         result.stage_results.push_back(std::move(sr));
         continue;
+      }
+      if (options.disk_backing && options.disk_backing->cache &&
+          options.disk_backing->deserialize) {
+        if (auto blob = options.disk_backing->cache->get_bytes(sr.content_hash)) {
+          if (auto rehydrated = options.disk_backing->deserialize(*blob); rehydrated) {
+            // Re-warm the in-memory cache so subsequent stages and reruns
+            // pay the disk-read cost only once per process.
+            cache.put(sr.content_hash, rehydrated);
+            sr.status = StageRunResult::Status::Cached;
+            result.outputs.emplace(stage.id, std::move(rehydrated));
+            upstream_hashes.emplace_back(stage.id, sr.content_hash);
+            result.stage_results.push_back(std::move(sr));
+            continue;
+          }
+        }
       }
     }
 
@@ -75,9 +90,17 @@ RunResult run_pipeline(const Pipeline&    pipeline,
       encountered_failure = true;
     } else {
       auto payload = std::move(std::get<DispatchSuccess>(dr));
-      // Cache the successful output.
       if (options.use_cache && payload) {
         cache.put(sr.content_hash, payload);
+        // Best-effort persist: if the dispatcher knows how to serialize this
+        // payload type, write it through. A failed put is non-fatal — the
+        // in-memory cache still holds the value for this run.
+        if (options.disk_backing && options.disk_backing->cache &&
+            options.disk_backing->serialize) {
+          if (auto blob = options.disk_backing->serialize(payload); blob) {
+            (void)options.disk_backing->cache->put_bytes(sr.content_hash, *blob);
+          }
+        }
       }
       result.outputs.emplace(stage.id, std::move(payload));
     }

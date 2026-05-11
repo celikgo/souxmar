@@ -18,9 +18,13 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "souxmar/core/field.h"
 #include "souxmar/core/geometry.h"
@@ -64,5 +68,26 @@ class RegistryDispatcher : public IDispatcher {
  private:
   plugin::Registry& registry_;
 };
+
+// ---- StageOutput on-disk serialization -----------------------------------
+//
+// In Sprint 3 push 3 only Path-kind StageOutputs are persistable — Mesh,
+// Geometry, and Field handles need plugin-side serialization (Sprint 5+).
+// serialize_stage_output returns std::nullopt for non-persistable kinds;
+// the runner treats that as "do not write to disk" and the cache simply
+// stays in-memory for that stage.
+//
+// Wire format (Path):
+//   uint8  kind      (4)
+//   uint64 length    (path string length, little-endian)
+//   bytes  path      (length bytes)
+//
+// Plug these into RunOptions::disk_backing.{serialize,deserialize}.
+
+[[nodiscard]] std::optional<std::vector<std::uint8_t>>
+serialize_stage_output(const std::shared_ptr<void>& payload);
+
+[[nodiscard]] std::shared_ptr<void>
+deserialize_stage_output(std::span<const std::uint8_t> blob);
 
 }  // namespace souxmar::pipeline

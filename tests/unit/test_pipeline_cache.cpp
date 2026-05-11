@@ -4,10 +4,15 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
+#include <filesystem>
 #include <memory>
+#include <random>
 #include <string>
+#include <vector>
 
 using namespace souxmar::pipeline;
+namespace fs = std::filesystem;
 
 namespace {
 
@@ -45,10 +50,33 @@ TEST(ContentHash, MapKeyOrderingDoesNotMatter) {
   EXPECT_EQ(hash_inputs("c", v1, {}), hash_inputs("c", v2, {}));
 }
 
-TEST(ContentHash, HexFormatIs16Chars) {
+TEST(ContentHash, HexFormatIs64Chars) {
+  // Sprint 3 push 3: ContentHash now backs a 256-bit (32-byte) digest.
+  // The seed constructor packs the uint64 into the first 8 bytes (big
+  // endian) and zero-fills the remaining 24 — gives unit tests deterministic
+  // hex output without computing a real SHA-256.
   ContentHash h{0xDEADBEEFCAFEBABE};
-  EXPECT_EQ(h.hex(), "deadbeefcafebabe");
-  EXPECT_EQ(h.hex().size(), 16u);
+  EXPECT_EQ(h.hex().size(), 64u);
+  EXPECT_EQ(h.hex().substr(0, 16), "deadbeefcafebabe");
+  EXPECT_EQ(h.hex().substr(16), std::string(48, '0'));
+}
+
+// Stability: two calls with identical inputs return the same digest, and
+// the digest covers all 32 bytes (i.e. the SHA-256 finalize step is wired
+// through, not just leaving zeros). This catches accidental encoding drift
+// without pinning a specific digest value (we'd want a separate, dedicated
+// SHA-256 KAT suite for that — Sprint 5 hardening territory).
+TEST(ContentHash, DigestIsStableAndUses32Bytes) {
+  const auto h = hash_inputs("ctx", Value::number(3.14), {});
+  const auto h2 = hash_inputs("ctx", Value::number(3.14), {});
+  EXPECT_EQ(h, h2);
+  // At least one byte beyond the legacy 8-byte prefix must be non-zero,
+  // proving the digest is the real SHA-256 output and not a uint64 seed.
+  bool tail_nonzero = false;
+  for (std::size_t i = 8; i < 32; ++i) {
+    if (h.bytes()[i] != 0) { tail_nonzero = true; break; }
+  }
+  EXPECT_TRUE(tail_nonzero);
 }
 
 TEST(Cache, EmptyOnConstruction) {
@@ -86,6 +114,54 @@ TEST(Cache, ClearEmpties) {
   EXPECT_EQ(c.size(), 2u);
   c.clear();
   EXPECT_EQ(c.size(), 0u);
+}
+
+// ---- DiskCache ----------------------------------------------------------
+
+class DiskCacheTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    std::random_device rd;
+    dir_ = fs::temp_directory_path() /
+           ("souxmar-diskcache-test-" + std::to_string(rd()));
+  }
+  void TearDown() override {
+    std::error_code ec;
+    fs::remove_all(dir_, ec);
+  }
+  fs::path dir_;
+};
+
+TEST_F(DiskCacheTest, RoundtripsBytesUnderHash) {
+  DiskCache d(dir_);
+  const ContentHash key{0x1122334455667788ULL};
+  const std::vector<std::uint8_t> blob{0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0xFF};
+  ASSERT_TRUE(d.put_bytes(key, blob));
+  ASSERT_TRUE(d.contains(key));
+
+  auto got = d.get_bytes(key);
+  ASSERT_TRUE(got.has_value());
+  EXPECT_EQ(*got, blob);
+}
+
+TEST_F(DiskCacheTest, MissingKeyReturnsNullopt) {
+  DiskCache d(dir_);
+  EXPECT_FALSE(d.contains(ContentHash{0xDEAD}));
+  EXPECT_FALSE(d.get_bytes(ContentHash{0xDEAD}).has_value());
+}
+
+TEST_F(DiskCacheTest, DefaultDirHonorsOverride) {
+  const auto chosen = DiskCache::default_dir(dir_);
+  EXPECT_EQ(chosen, dir_);
+}
+
+TEST_F(DiskCacheTest, EmptyBlobIsValid) {
+  DiskCache d(dir_);
+  const ContentHash key{0x42};
+  ASSERT_TRUE(d.put_bytes(key, {}));
+  auto got = d.get_bytes(key);
+  ASSERT_TRUE(got.has_value());
+  EXPECT_TRUE(got->empty());
 }
 
 }  // namespace

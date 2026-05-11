@@ -10,10 +10,12 @@
 
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <variant>
 #include <vector>
@@ -74,10 +76,31 @@ struct RunResult {
   std::map<std::string, std::shared_ptr<void>>    outputs;            // by stage id (executed and cached stages)
 };
 
+// Optional disk-cache wiring. When set on RunOptions, the runner will:
+//   * On cache miss in memory, attempt DiskCache::get_bytes(hash) and call
+//     deserialize() on the result. A non-null payload counts as a cache hit
+//     (the runner also re-inserts it into the in-memory cache).
+//   * After a successful dispatch, call serialize(payload). If it returns a
+//     blob, write it to DiskCache::put_bytes(hash, blob).
+//
+// Both callbacks are owned by whoever assembles the RunOptions — in v0.0.1
+// the CLI plugs in StageOutput-aware (de)serializers from the pipeline
+// dispatcher. Plugins never see this layer.
+struct DiskBacking {
+  std::shared_ptr<DiskCache>                                                       cache;
+  std::function<std::optional<std::vector<std::uint8_t>>(const std::shared_ptr<void>&)>
+                                                                                   serialize;
+  std::function<std::shared_ptr<void>(std::span<const std::uint8_t>)>              deserialize;
+};
+
 // Run options.
 struct RunOptions {
-  bool   use_cache    = true;
-  bool   stop_on_first_failure = true;
+  bool                          use_cache    = true;
+  bool                          stop_on_first_failure = true;
+
+  // When std::nullopt the runner stays purely in-memory (the Sprint 3
+  // push 1/push 2 behaviour, preserved for tests and library callers).
+  std::optional<DiskBacking>    disk_backing{};
 };
 
 // Sequential runner. Walks pipeline.stages in topological order, dispatching

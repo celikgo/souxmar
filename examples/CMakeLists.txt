@@ -5,3 +5,4 @@ include(SouxmarPlugin)
 
 add_subdirectory(plugins/hello-mesher)
 add_subdirectory(plugins/hello-writer)
+add_subdirectory(plugins/vtu-writer)

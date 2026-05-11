@@ -4,6 +4,8 @@
 
 #include <fmt/core.h>
 
+#include <filesystem>
+#include <system_error>
 #include <utility>
 
 #include "souxmar-c/mesher.h"
@@ -254,6 +256,55 @@ DispatchResult RegistryDispatcher::dispatch(const DispatchContext& ctx) {
       "unsupported capability namespace for '{}' "
       "(known namespaces: mesher.*, solver.*, writer.*)",
       ctx.capability_id)};
+}
+
+// ---- StageOutput on-disk serialization -----------------------------------
+
+std::optional<std::vector<std::uint8_t>>
+serialize_stage_output(const std::shared_ptr<void>& payload) {
+  if (!payload) return std::nullopt;
+  const auto* so = static_cast<const StageOutput*>(payload.get());
+  if (so->kind != StageOutput::Kind::Path) {
+    // Mesh/Geometry/Field need plugin-side serializers — defer to Sprint 5.
+    return std::nullopt;
+  }
+
+  const auto& path = so->path;
+  std::vector<std::uint8_t> out;
+  out.reserve(1 + 8 + path.size());
+  out.push_back(static_cast<std::uint8_t>(StageOutput::Kind::Path));
+  const std::uint64_t len = path.size();
+  for (int i = 0; i < 8; ++i) {
+    out.push_back(static_cast<std::uint8_t>(len >> (8 * i)));
+  }
+  out.insert(out.end(), path.begin(), path.end());
+  return out;
+}
+
+std::shared_ptr<void>
+deserialize_stage_output(std::span<const std::uint8_t> blob) {
+  if (blob.size() < 9) return nullptr;
+  if (blob[0] != static_cast<std::uint8_t>(StageOutput::Kind::Path)) return nullptr;
+
+  std::uint64_t len = 0;
+  for (int i = 0; i < 8; ++i) {
+    len |= static_cast<std::uint64_t>(blob[1 + i]) << (8 * i);
+  }
+  if (blob.size() != 9 + len) return nullptr;
+
+  // The on-disk artifact this Path output points at must still exist;
+  // otherwise a "cached" hit would resolve to a missing file and confuse
+  // downstream consumers.
+  std::string path(reinterpret_cast<const char*>(blob.data() + 9), static_cast<std::size_t>(len));
+  std::error_code ec;
+  if (!std::filesystem::exists(path, ec)) {
+    return nullptr;
+  }
+
+  auto out = std::make_shared<StageOutput>();
+  out->kind = StageOutput::Kind::Path;
+  out->path = std::move(path);
+  return std::static_pointer_cast<void>(out);
 }
 
 }  // namespace souxmar::pipeline

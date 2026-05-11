@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Cantilever beam — the canonical end-to-end demo for souxmar.
+#
+# Sprint 3 push 3 wires this against the in-tree hello-mesher (placeholder
+# producing a unit tet) and vtu-writer plugins, so it runs without any
+# heavy dependencies. Sprint 6 swaps the mesher for the real OpenCASCADE +
+# native tetrahedral mesher path; the YAML structure below is the same.
+#
+# Run:
+#   souxmar run examples/cantilever-beam/pipeline.yaml \
+#     --plugin-path build/dev/examples/plugins/hello-mesher \
+#     --plugin-path build/dev/examples/plugins/vtu-writer
+#
+# Output: cantilever.vtu in $PWD, openable in ParaView.
+
+version: 1
+
+stages:
+  - id: mesh
+    plugin: mesher.tetra.hello
+    input:
+      # In Sprint 6 this becomes the OpenCASCADE-loaded geometry stage's
+      # output; the hello mesher ignores its input today.
+      target_size: 0.05
+      element_order: 1
+
+  - id: write
+    plugin: writer.vtu
+    input:
+      mesh: { from: mesh }
+      path: cantilever.vtu
