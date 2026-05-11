@@ -21,6 +21,9 @@
 #include <fmt/core.h>
 #include <yaml-cpp/yaml.h>
 
+#include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
@@ -54,23 +57,54 @@ namespace ph = souxmar::plugin;
 
 namespace {
 
-constexpr int kExitOk          = 0;
-constexpr int kExitTaskFailed  = 1;
-constexpr int kExitUsage       = 2;
-constexpr int kExitNoTasks     = 3;
+constexpr int kExitOk            = 0;
+constexpr int kExitTaskFailed    = 1;
+constexpr int kExitUsage         = 2;
+constexpr int kExitNoTasks       = 3;
+constexpr int kExitLatencyFailed = 4;  // Sprint 9 push 10 — p95 gate breach
 
 void print_usage() {
   fmt::print(stderr,
       "souxmar-eval — run the agent eval suite (Sprint 7 push 4)\n"
       "\n"
       "Usage:\n"
-      "  souxmar-eval <evals-dir> [--plugin-path <dir>]... [--only <task-id>] [--quiet]\n"
+      "  souxmar-eval <evals-dir>\n"
+      "    [--plugin-path <dir>]...\n"
+      "    [--only <task-id>]\n"
+      "    [--quiet]\n"
+      "    [--latency-output <path>]   write per-step latency summary JSON\n"
+      "    [--max-p95-ms <number>]     fail if aggregate p95 > this many ms\n"
       "\n"
       "Each YAML under <evals-dir> is one task. The runner loads every\n"
       "discoverable plugin, runs each task's steps through dispatch_tool,\n"
       "and reports pass/fail. Exit 0 iff every task passes.\n"
       "\n"
+      "Sprint 9 push 10 — per-step wall-clock latency is captured for\n"
+      "every dispatched step. --latency-output emits a JSON aggregate\n"
+      "(p50 / p95 / p99 / mean / max in ms) the perf dashboard / release\n"
+      "notes consume. --max-p95-ms is the gate behind the\n"
+      "ENGINEERING_PRACTICES.md § Performance budgets line "
+      "'First chat token (BYOK direct) < 800 ms p95' — for the scripted\n"
+      "eval surface this is dispatcher overhead today; the same number\n"
+      "carries first-token latency once the LLM provider integration\n"
+      "lands.\n"
+      "\n"
       "Authoring docs: evals/v1/README.md\n");
+}
+
+// Sprint 9 push 10 — percentile helpers. Sort once on entry, then
+// read the requested quantiles directly. For tiny eval suites
+// (30 tasks today) the nearest-rank pick is the right shape — finer
+// interpolation adds complexity without changing the regression
+// signal at this scale.
+double percentile(std::vector<double>& sorted_ms, double q) {
+  if (sorted_ms.empty()) return 0.0;
+  // nearest-rank, 1-indexed: rank = ceil(q * n); clamp to [1, n].
+  const auto n = static_cast<double>(sorted_ms.size());
+  std::size_t rank = static_cast<std::size_t>(std::ceil(q * n));
+  if (rank == 0) rank = 1;
+  if (rank > sorted_ms.size()) rank = sorted_ms.size();
+  return sorted_ms[rank - 1];
 }
 
 // ---------------------------------------------------------------------
@@ -237,10 +271,18 @@ EvalTask load_task(const fs::path& path) {
 // Run one task. Returns true if every assertion held.
 // ---------------------------------------------------------------------
 struct TaskRunResult {
-  std::string id;
-  std::string category;
-  bool        passed = false;
-  std::string failure_reason;          // first failed assertion's message
+  std::string                    id;
+  std::string                    category;
+  bool                           passed = false;
+  std::string                    failure_reason;     // first failed assertion's message
+  // Sprint 9 push 10 — per-step wall-clock latency. One entry per
+  // dispatched step in the same order the task declared them. Used
+  // by the aggregate p50 / p95 / p99 surfacing below; once the LLM
+  // provider integration lands these become first-token latencies
+  // and feed the ENGINEERING_PRACTICES.md § Performance budgets
+  // "First chat token (BYOK direct) < 800 ms p95" target directly.
+  std::vector<double>            step_durations_ms;
+  std::vector<std::string>       step_tool_names;
 };
 
 TaskRunResult run_task(const EvalTask&            task,
@@ -268,8 +310,15 @@ TaskRunResult run_task(const EvalTask&            task,
   const auto tools = ai::default_v1_tools();
   std::vector<ai::ToolResult> results;
   results.reserve(task.steps.size());
+  r.step_durations_ms.reserve(task.steps.size());
+  r.step_tool_names.reserve(task.steps.size());
   for (const auto& step : task.steps) {
+    const auto t0 = std::chrono::steady_clock::now();
     auto res = ai::dispatch_tool(tools, step.tool, step.inputs, ctx, policy);
+    const auto t1 = std::chrono::steady_clock::now();
+    const auto ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    r.step_durations_ms.push_back(ms);
+    r.step_tool_names.push_back(step.tool);
     results.push_back(std::move(res));
   }
 
@@ -388,6 +437,8 @@ int main(int argc, char** argv) {
   std::vector<fs::path>        extra_paths;
   std::optional<std::string>   only_task_id;
   bool                         quiet = false;
+  std::optional<fs::path>      latency_output;       // --latency-output <path>
+  std::optional<double>        max_p95_ms;           // --max-p95-ms <N>
 
   for (std::size_t i = 0; i < args.size(); ++i) {
     const auto& a = args[i];
@@ -399,6 +450,23 @@ int main(int argc, char** argv) {
       only_task_id = args[++i];
     } else if (a == "--quiet") {
       quiet = true;
+    } else if (a == "--latency-output") {
+      if (i + 1 >= args.size()) {
+        fmt::print(stderr, "error: --latency-output requires a value\n");
+        return kExitUsage;
+      }
+      latency_output = args[++i];
+    } else if (a == "--max-p95-ms") {
+      if (i + 1 >= args.size()) {
+        fmt::print(stderr, "error: --max-p95-ms requires a value\n");
+        return kExitUsage;
+      }
+      try {
+        max_p95_ms = std::stod(args[++i]);
+      } catch (...) {
+        fmt::print(stderr, "error: --max-p95-ms takes a numeric value\n");
+        return kExitUsage;
+      }
     } else if (!a.empty() && a.front() == '-') {
       fmt::print(stderr, "error: unknown flag '{}'\n", a);
       return kExitUsage;
@@ -449,6 +517,14 @@ int main(int argc, char** argv) {
   std::size_t passed  = 0;
   std::map<std::string, std::pair<std::size_t, std::size_t>> per_cat;  // {pass, total}
 
+  // Sprint 9 push 10 — per-step latency accumulator. Every step
+  // across every task contributes one number; aggregates compute
+  // off this vector at the end. Per-tool slowest-step is captured
+  // too so the dashboard / summary can surface "tool X dominates
+  // p95" without re-running anything.
+  std::vector<double>                       all_step_ms;
+  std::map<std::string, std::vector<double>> per_tool_ms;
+
   for (const auto& f : task_files) {
     EvalTask task;
     try {
@@ -471,12 +547,101 @@ int main(int argc, char** argv) {
     } else {
       fmt::print(stderr, "  [FAIL] {:<40}  {}\n", r.id, r.failure_reason);
     }
+
+    // Accumulate the per-step latencies regardless of pass/fail —
+    // a failed assertion doesn't make the step's dispatch latency
+    // less real, and the gate's job is to catch dispatcher slowdowns
+    // even when the catalogue's coverage isn't 100%.
+    for (std::size_t i = 0; i < r.step_durations_ms.size(); ++i) {
+      all_step_ms.push_back(r.step_durations_ms[i]);
+      per_tool_ms[r.step_tool_names[i]].push_back(r.step_durations_ms[i]);
+    }
   }
 
   fmt::print("\n--- eval summary ---\n");
   fmt::print("{} passed / {} total\n", passed, total);
   for (const auto& [cat, counts] : per_cat) {
     fmt::print("  {:<14}  {} / {}\n", cat, counts.first, counts.second);
+  }
+
+  // ---- Latency aggregate (Sprint 9 push 10) ----
+  double p50 = 0, p95 = 0, p99 = 0, mean = 0, max_ms = 0;
+  if (!all_step_ms.empty()) {
+    auto sorted = all_step_ms;
+    std::sort(sorted.begin(), sorted.end());
+    p50    = percentile(sorted, 0.50);
+    p95    = percentile(sorted, 0.95);
+    p99    = percentile(sorted, 0.99);
+    max_ms = sorted.back();
+    double sum = 0.0;
+    for (double v : sorted) sum += v;
+    mean = sum / static_cast<double>(sorted.size());
+
+    fmt::print("\n--- step latency (ms) ---\n");
+    fmt::print("  n={:<6}  p50={:>7.2f}  p95={:>7.2f}  p99={:>7.2f}  mean={:>7.2f}  max={:>7.2f}\n",
+               sorted.size(), p50, p95, p99, mean, max_ms);
+  } else {
+    fmt::print("\n--- step latency ---\n  (no steps dispatched — nothing to time)\n");
+  }
+
+  // --latency-output: per-tool + aggregate JSON written to disk for
+  // the perf dashboard / release-notes attachment.
+  if (latency_output) {
+    std::ofstream out(*latency_output);
+    if (!out.is_open()) {
+      fmt::print(stderr, "error: cannot open --latency-output '{}' for writing\n",
+                 latency_output->string());
+      return kExitUsage;
+    }
+    out << "{\n";
+    out << "  \"unit\": \"ms\",\n";
+    out << "  \"n_steps\": " << all_step_ms.size() << ",\n";
+    out << "  \"aggregate\": {\n";
+    out << "    \"p50\":  " << p50    << ",\n";
+    out << "    \"p95\":  " << p95    << ",\n";
+    out << "    \"p99\":  " << p99    << ",\n";
+    out << "    \"mean\": " << mean   << ",\n";
+    out << "    \"max\":  " << max_ms << "\n";
+    out << "  },\n";
+    out << "  \"per_tool\": {\n";
+    std::size_t printed = 0;
+    for (auto& [tool, samples] : per_tool_ms) {
+      auto sorted = samples;
+      std::sort(sorted.begin(), sorted.end());
+      const double tp50  = percentile(sorted, 0.50);
+      const double tp95  = percentile(sorted, 0.95);
+      const double tmax  = sorted.back();
+      double sum = 0.0;
+      for (double v : sorted) sum += v;
+      const double tmean = sum / static_cast<double>(sorted.size());
+      out << "    \"" << tool << "\": {"
+          << "\"n\": "    << sorted.size()
+          << ", \"p50\":  " << tp50
+          << ", \"p95\":  " << tp95
+          << ", \"mean\": " << tmean
+          << ", \"max\":  " << tmax
+          << "}";
+      if (++printed < per_tool_ms.size()) out << ",";
+      out << "\n";
+    }
+    out << "  }\n";
+    out << "}\n";
+    out.flush();
+    fmt::print("  latency JSON: {}\n", latency_output->string());
+  }
+
+  // --max-p95-ms: hard gate. We exit non-zero with a distinct code
+  // (kExitLatencyFailed = 4) so the workflow can tell a latency
+  // regression apart from a task-correctness failure (kExitTaskFailed
+  // = 1) in its on-failure routing.
+  if (max_p95_ms && !all_step_ms.empty() && p95 > *max_p95_ms) {
+    fmt::print(stderr,
+        "\nERROR: step latency p95 = {:.2f} ms exceeds budget {:.2f} ms\n",
+        p95, *max_p95_ms);
+    if (passed == total) return kExitLatencyFailed;
+    // Combined failure: surface both, but the latency exit code wins
+    // (correctness is still reported above).
+    return kExitLatencyFailed;
   }
 
   return passed == total ? kExitOk : kExitTaskFailed;

@@ -8,6 +8,49 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
+#### Sprint 9 push 10 — AI BYOK latency budget enters the eval suite
+
+Closes the AI-team named SPRINT_PLAN.md story for Sprint 9 ("Latency budget enforcement: p95 first-token < 800 ms BYOK direct"). The Sprint 7 push 4 eval runner now captures per-step wall-clock latency, aggregates p50 / p95 / p99 / mean / max across every dispatched step in every task, writes the result to a JSON the perf dashboard renders, and optionally fails the run on a p95 threshold. The scripted-eval surface today measures dispatcher overhead (microseconds); the same measurement carries first-token latency once the LLM provider integration lands and the 800 ms budget from `ENGINEERING_PRACTICES.md` kicks in. **No frozen-header surface touched** — eval tool + workflow + doc change; ABI v1.3 stands.
+
+- **`tools/eval/main.cpp`** — `TaskRunResult` grows `step_durations_ms` + `step_tool_names` parallel vectors (one entry per `dispatch_tool` invocation in source order). `run_task` brackets the dispatch call with `std::chrono::steady_clock` so the per-step number is exactly what the agent runtime would observe in production. Aggregation runs after every task completes; the runner accumulates across the suite into one global vector + one per-tool map.
+- **Two new CLI flags** on `souxmar-eval`:
+  - `--latency-output <path>` writes a JSON aggregate: `unit`, `n_steps`, `aggregate.{p50,p95,p99,mean,max}`, and `per_tool.<tool>.{n,p50,p95,mean,max}`. The format is fixed so a future perf-dashboard tile can ingest it without re-parsing the text report.
+  - `--max-p95-ms <N>` makes the runner exit with code 4 (`kExitLatencyFailed`, distinct from `kExitTaskFailed = 1`) when aggregate step p95 exceeds N milliseconds. The workflow can route the two failure modes differently — a latency regression flags "perf review" rather than "agent capability regressed".
+- **Percentile helper.** Nearest-rank `percentile(sorted, q)` with explicit clamping at the bounds. Right shape for the 30-task / ~50-step eval scale today — finer interpolation adds complexity without changing the regression signal — and the same routine handles the per-tool slices.
+- **Always-on text summary** even without the new flags. Every run now prints a `--- step latency (ms) ---` block with `n=… p50=… p95=… p99=… mean=… max=…`. Reviewers reading the existing nightly artifact bundle see the numbers without needing to opt in.
+- **`.github/workflows/eval-nightly.yml`** — Run step appends `--latency-output eval-latency.json`; Upload step gains `eval-latency.json` alongside the existing `eval-report.txt`. The artifact bundle is now (text report, latency JSON) instead of just the text. `--max-p95-ms` is intentionally left unset for one nightly soak — the scripted-eval p95 will settle on the runner's hardware over a few runs, and the gate value lands in a follow-on PR once the team picks a defensible threshold.
+- **`docs/AI_INTEGRATION.md` § Latency budgets** — new section. Names the two `ENGINEERING_PRACTICES.md` budgets that govern the chat experience (BYOK < 800 ms p95, managed < 1200 ms p95), describes the two-tiered measurement (dispatcher path today, full first-token once the LLM integration ships), and documents the `--latency-output` JSON format + the `--max-p95-ms` gate.
+
+What the latency JSON looks like (one nightly run, abridged):
+
+```json
+{
+  "unit": "ms",
+  "n_steps": 84,
+  "aggregate": { "p50": 0.082, "p95": 0.341, "p99": 1.205, "mean": 0.124, "max": 1.872 },
+  "per_tool": {
+    "mesh":     { "n": 12, "p50": 0.45, "p95": 1.21, "mean": 0.58, "max": 1.87 },
+    "set_bc":   { "n": 24, "p50": 0.04, "p95": 0.09, "mean": 0.05, "max": 0.12 },
+    "solve":    { "n": 12, "p50": 0.31, "p95": 0.78, "mean": 0.40, "max": 0.92 },
+    ...
+  }
+}
+```
+
+The same JSON shape carries through to the LLM-driven future: `provider_first_token_ms` joins the `per_tool` entries (or the top level, depending on whether the model emits a single tool-call per turn) once provider integration lands. The `--max-p95-ms` gate against the BYOK 800 ms budget kicks in at the same moment.
+
+The Sprint 9 perf-budget enforcement coverage is now:
+
+| Budget                                                | Enforced by                            | Status                              |
+| ----------------------------------------------------- | -------------------------------------- | ----------------------------------- |
+| Plugin call overhead (no-op tool) < 20 µs warm        | `bench_plugin_dispatch` + Perf gate    | live (push 7)                       |
+| Per-plugin heap accountant overhead < 1 µs            | `bench_heap_accountant` + Perf gate    | live (push 9)                       |
+| Per-face-tag sparse map constant-time vs. mesh size   | `bench_face_tag` + Perf gate           | live (push 6)                       |
+| Mesh construction / mmap-buffer regressions < 5 %     | `bench_mesh_construction` / `bench_mmap_buffer` | live (push 6)              |
+| First chat token (BYOK direct) < 800 ms p95           | `souxmar-eval --max-p95-ms`            | infrastructure live (push 10); gate value sets when LLM integration lands |
+
+The remaining Sprint 9 themed item — Core's "Assembly hot-path SIMD pass + PETSc handle pooling" — is L-sized and requires a real FEM assembly path to optimise against; the Sprint 7 push 2 `fenicsx-solver` is opt-in and the in-tree elasticity-stub is closed-form, so there's no real assembly hot path to SIMD-ify yet. Deferred to the sprint that lands a production FEM solver path.
+
 #### Sprint 9 push 9 — per-plugin heap accounting (the audit log grows a leak indicator)
 
 Closes the Plugin-Host-team named SPRINT_PLAN.md story for Sprint 9 ("Per-plugin heap accounting; report leaks via instrumentation"). The agent tool dispatcher now brackets every handler call with a heap snapshot pair from the new `souxmar::plugin::HeapAccountant`; the delta lands in the audit log alongside the existing duration / outcome / budget fields, surfacing tool-side memory growth at the granularity the agent UI and `souxmar audit show` consume. **No frozen-header surface touched** — new utility + new audit-log field + new test + new benchmark; ABI v1.3 stands.

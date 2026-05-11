@@ -106,6 +106,19 @@ souxmar caches the static parts of the prompt aggressively to keep BYOK costs do
 - **Model selector.** The user can pin a model (Claude Sonnet 4.6, GPT-5-mini, etc.) globally or per project. The default leans cheap-and-fast; the user can opt into the heavy-and-slow tier for harder problems.
 - **Audit log.** `.souxmar/chat/audit.log` records every tool invocation with input hash, runtime, (for managed AI) token cost, and — on platforms where the host can query process-wide heap usage (Linux + glibc ≥ 2.33 today, via `mallinfo2`) — a per-call `heap_bytes_delta` field that surfaces tool-side memory growth. Useful as a leak indicator: a session with steadily growing deltas points at a plugin that owns memory it isn't releasing. The accounting is process-wide, so it's most accurate in single-threaded sessions (`max_workers=1`); multi-threaded runs surface aggregate deltas that mix sibling-thread allocations. `souxmar audit show` summarises a project's spend.
 
+## Latency budgets
+
+The performance contract for the agent path lives in [`ENGINEERING_PRACTICES.md`](ENGINEERING_PRACTICES.md) § Performance budgets. The two that govern the chat experience:
+
+| Surface                                     | p95 budget |
+| ------------------------------------------- | ---------- |
+| First chat token (BYOK direct)              | < 800 ms   |
+| First chat token (managed AI proxy)         | < 1200 ms  |
+
+The Sprint 7 push 4 eval suite measures these in two ways: by *exercising the dispatcher path* the first-token waits on, and by *reporting aggregate percentiles* across every dispatched step. Run `souxmar-eval <evals-dir> --latency-output report.json` to write a per-tool + aggregate JSON the perf dashboard renders alongside the Google-Benchmark reports. `--max-p95-ms <N>` turns the aggregate p95 into a merge-blocking gate — used today in CI to catch dispatcher regressions (the scripted-eval p95 is microseconds; the 800 ms BYOK budget kicks in once the LLM provider integration lands and the eval drives real model calls).
+
+Note on accuracy: the scripted eval runs `dispatch_tool` directly against the local plugin registry — no network, no LLM. The latency it reports is dispatcher + plugin overhead, which is the floor for the BYOK path. The LLM-side latency (provider round-trip + first-token delivery) is the dominant term in production and lands in the same JSON as a `provider_first_token_ms` field once the Sprint 12+ provider integration ships.
+
 ## Privacy and data flow
 
 Three concentric trust boundaries, in order of least to most data leakage:

@@ -69,6 +69,16 @@ jobs:
         run: cmake --build --preset ci-linux-clang --target souxmar_eval
 
       - name: Run the agent eval suite
+        # Sprint 9 push 10 — `--latency-output` emits a JSON aggregate
+        # alongside the pass/fail text report. The dashboard /
+        # release-notes link to that JSON; reviewers compare p95
+        # across runs to spot dispatcher slowdowns even when every
+        # task still passes. `--max-p95-ms` would gate against an
+        # absolute number; we leave it unset on this workflow until a
+        # baseline soaks for a few nightly runs and the team picks a
+        # defensible threshold (the ENGINEERING_PRACTICES.md 800 ms
+        # number is the future-LLM-driven gate; the scripted-eval p95
+        # today is microseconds).
         run: |
           # Build a --plugin-path list from every plugin directory under
           # the example tree. The eval runner needs the plugins on its
@@ -79,11 +89,14 @@ jobs:
             PLUGIN_ARGS+=(--plugin-path "$d")
           done
           build/ci-linux-clang/tools/eval/souxmar-eval evals/v1 "${PLUGIN_ARGS[@]}" \
+            --latency-output eval-latency.json \
             | tee eval-report.txt
 
-      - name: Upload eval report
+      - name: Upload eval report + latency JSON
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: eval-report
-          path: eval-report.txt
+          path: |
+            eval-report.txt
+            eval-latency.json
