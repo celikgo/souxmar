@@ -115,6 +115,47 @@ The project adopts the Contributor Covenant 2.1 verbatim. CoC reports go to a de
 - **Backports:** security and severe correctness fixes are backported to the previous minor release. Older releases are best-effort.
 - **Deprecation:** anything user-facing that gets removed is deprecated for at least one full minor cycle (eight weeks) with a migration note in the changelog.
 
+## ABI freeze process
+
+The plugin C ABI is the contract that lets out-of-tree binaries built today keep loading against souxmar releases years from now. We treat freezing it as a discrete, auditable event with three named states.
+
+### State 1 — pre-freeze
+
+The ABI version macro is set, the headers under `include/souxmar-c/` exist, but the contract is *not yet* binding. Any header in the v1 surface may change in any way until the candidacy is declared. This is the state up to and including Sprint 5 push 5.
+
+### State 2 — frozen-candidate
+
+A maintainer opens a PR that:
+
+1. Defines `SOUXMAR_ABI_FREEZE_CANDIDATE 1` in `include/souxmar-c/abi.h`.
+2. Lists every header file under freeze in the candidacy ADR (see ADR-0007 for the v1 instance).
+3. Lands a status block in `docs/PLUGIN_SDK.md` and `include/souxmar-c/abi.h` naming the formal-freeze target date (two sprints out).
+4. Opens a tracking issue for the soak period.
+
+During soak the **ratchet rules** are absolute:
+
+- **Additive minor surfaces are allowed.** A new function, a new struct, a new error code — provided unknown fields are zero-initialised by the host and unknown struct tail bytes are ignored by older plugins. Each such addition bumps `SOUXMAR_ABI_VERSION_MINOR`.
+- **Breaking changes cancel the candidacy.** Renaming a function, changing a parameter type, reordering struct fields, or changing the numeric value of any `SOUXMAR_E_*` / `SOUXMAR_ET_*` / `SOUXMAR_VK_*` constant resets the soak to zero — a *new* candidacy PR is required.
+- **Conformance suite v1 stays green** every night across all in-tree example plugins. Two consecutive nightly failures attributable to the soak surface cancel the candidacy.
+- **Perf-nightly stays within threshold** on the bulk-buffer hot paths. A confirmed regression that is not a measurement artifact cancels the candidacy.
+
+The maintainer who opens a candidacy PR is on the hook for the cancellation/exit decision. They do not freeze unilaterally — they propose, the soak runs, the gates clear (or don't), and the merge that flips State 2 → State 3 carries the same two-maintainer-approval bar as any Tier 3 change.
+
+### State 3 — formally frozen
+
+When the soak completes cleanly, a follow-on PR:
+
+1. Removes the `SOUXMAR_ABI_FREEZE_CANDIDATE` macro.
+2. Tags the repository with `abi-v1-frozen` (annotated tag, signed by a release maintainer).
+3. Updates `docs/PLUGIN_SDK.md` and the candidacy ADR with the freeze date.
+4. Locks the listed v1 headers via CI: subsequent PRs touching them require two maintainer approvals AND a justification block referencing the deprecation / minor-surface / major-bump path being taken.
+
+From this point on, ABI v1 is the contract. Breaking it requires a major bump (souxmar 2.0) and the one-major-overlap deprecation cycle described in [`PLUGIN_SDK.md`](PLUGIN_SDK.md) § Versioning.
+
+### Why the soak
+
+Two sprints is short enough that we keep momentum and long enough that the conformance + perf nightlies have ~15 independent runs to surface a regression. We considered both a one-sprint and a four-sprint soak; one sprint felt too narrow against shared-runner noise floors, and four sprints would have pushed Sprint 7's planned freeze gate into Sprint 9 without buying meaningful additional confidence.
+
 ## Decision-making philosophy
 
 Two principles guide every governance call:

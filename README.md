@@ -27,7 +27,24 @@ The free tier is the full product. You bring your own Anthropic / OpenAI / local
 
 ## Status
 
-Pre-alpha. Sprint 0 scaffolding in place: top-level `CMakeLists.txt`, `vcpkg.json` manifest, CI matrix (Linux/macOS/Windows), `libsouxmar-core` skeleton, GoogleTest harness, governance metadata. Phase 1 (data model) starts at Sprint 1.
+Pre-alpha — Sprint 5 closed (2026-05-11). **Plugin C ABI v1 is in frozen-candidate state** with formal freeze targeted for 2026-06-08; see [ADR-0007](docs/adr/0007-abi-v1-freeze-candidate.md) for the soak rules. Plugin authors can build against the candidate now — additive minor surfaces are forward-compatible by construction.
+
+Runnable today:
+
+- **CLI**: `souxmar run <pipeline.yaml>`, `souxmar plugin list`, `souxmar agent {list,invoke}`, `souxmar-conformance <dir>`.
+- **Python**: `pip install ./bindings/python` → `pysouxmar` (parser, registry, loader, runner, cache, agent tools, audit log).
+- **Plugin SDK**: stable C ABI v1 across five capability namespaces (`mesher.*`, `solver.*`, `writer.*`, `postproc.*`, plus the bulk-buffer ingest path); CMake `souxmar_add_plugin` macro; conformance suite gating the index.
+- **Five in-tree reference plugins**: hello-mesher, hello-writer, vtu-writer (ParaView-readable), heat-solver (time-series Field), scalar-magnitude (postproc).
+- **Two runnable examples**: `examples/cantilever-beam/`, `examples/thermal-fin/`.
+- **Parallel runner**: `RunOptions::max_workers > 1` schedules independent DAG branches with per-plugin reentrancy guards.
+- **Agent tool surface v1**: 8 tools, structured audit log, session budget plumbing.
+- **Perf-nightly CI** + bulk-vs-incremental mesh-construction benchmark.
+
+Not yet done — deliberately scoped out of Phase 0:
+
+- No Tauri desktop app yet (Sprint 8+); CLI and Python only.
+- No production-grade adapters yet: the in-tree mesher / solver / writer are reference plugins, not OpenCASCADE / Gmsh / FEniCSx. The OCCT geometry import + native tetrahedral mesher land in Sprint 6.
+- The agent tool surface runs offline; the BYOK provider client + token-counting `SessionBudget` first-class callbacks land alongside the desktop app.
 
 ## Building
 

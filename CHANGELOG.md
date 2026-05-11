@@ -311,6 +311,16 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 This closes the Sprint 5 DX + Platform items called out in `docs/SPRINT_PLAN.md`. The baseline file itself is intentionally NOT committed in this push — the "baseline established" exit criterion is the first follow-on PR that lands a `benchmarks/baselines/main.json` generated on the CI hardware tier.
 
+#### Sprint 5 push 6 — ABI v1 frozen-candidate declared
+
+- **[ABI v1]** **`SOUXMAR_ABI_FREEZE_CANDIDATE` macro** set in `include/souxmar-c/abi.h`, declaring the start of the two-sprint soak. Formal-freeze target: **2026-06-08**. Status block in the header names the soak rules inline so plugin authors hitting the header see the contract immediately.
+- **[ABI v1]** [ADR-0007 — ABI v1 freeze-candidate](docs/adr/0007-abi-v1-freeze-candidate.md) lands the full mechanics: the 14 frozen headers (abi / status / types / plugin / registry / mesher / solver / writer / postproc / mesh / geometry / field / value / buffer), the ratchet rules during soak (additive minor surfaces only — zero-init forward-compat by construction), the cancellation triggers (any breaking change, two consecutive conformance failures, confirmed perf regression), and the exit criteria for State 2 → State 3 (clean conformance + ASAN/TSAN nightly + perf-nightly within threshold).
+- **`docs/PLUGIN_SDK.md` § Versioning** gains a "Current freeze status: **frozen-candidate v1** (since 2026-05-11)" callout pointing at the ADR and the governance mechanics.
+- **`docs/GOVERNANCE.md` § ABI freeze process** documents the three-state model (pre-freeze → frozen-candidate → formally frozen) the project commits to use for every future ABI version. The State 2 → State 3 merge carries the same two-maintainer-approval bar as any Tier 3 change.
+- **`README.md` § Status** refreshed: replaces the stale "Sprint 0 scaffolding" snapshot with the current runnable surface (CLI / Python / plugin SDK / 5 in-tree plugins / 2 runnable examples / parallel runner / agent tool v1 / perf-nightly CI) and an honest list of what's still scoped out of Phase 0 (no Tauri yet, no OCCT / Gmsh / FEniCSx adapters yet, agent tool surface still offline).
+
+This push lands no code under `src/` — it is the contractual moment Sprint 5 has been building toward across pushes 1–5. The first follow-on PR opens the soak tracking issue; PRs landing during soak that touch any frozen header must inspect the ratchet rules in ADR-0007.
+
 ### Changed
 
 - (None this release.)

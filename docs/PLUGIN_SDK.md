@@ -102,6 +102,18 @@ souxmar follows semantic versioning **for the ABI**, decoupled from the release 
 - New capabilities added in 1.x are additive: a 1.0 plugin still works on 1.5; a 1.5 plugin running on 1.0 may have some capabilities silently disabled (it inspects `host->capabilities`).
 - A breaking ABI change requires major bump (souxmar 2.0). Plugins targeting `abi = 1` continue to load on souxmar 2.x via a built-in compatibility shim, marked deprecated, removed in 3.0. We commit to one full major of overlap.
 
+### Current freeze status: **frozen-candidate v1** (since 2026-05-11)
+
+The v1 ABI is in its **two-sprint soak period**. Formal freeze target: **2026-06-08**.
+
+During soak:
+
+- The `SOUXMAR_ABI_FREEZE_CANDIDATE` macro is defined in `souxmar-c/abi.h`. It will be removed at formal freeze.
+- Plugin authors **can build against the candidate now** — additive minor surfaces are forward-compatible by construction; breaking changes cancel the candidacy and reset the soak rather than ship a broken contract.
+- The full list of headers under freeze + the cancellation rules live in [ADR-0007](adr/0007-abi-v1-freeze-candidate.md).
+
+A formal `abi-v1-frozen` release tag lands when soak completes cleanly. See [`docs/GOVERNANCE.md`](GOVERNANCE.md) § ABI freeze process for the mechanics.
+
 ## Plugin discovery
 
 At startup the host walks, in order:
