@@ -8,7 +8,27 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.9.0-beta3 cut below.)
+#### Sprint 10 push 1 — first perf-baseline rotation (closes R-011 from the Sprint 9 retro)
+
+First push of Sprint 10. Closes the carry-over named in the Sprint 9 retro: the perf-regression gate that landed pushes 6–10 of Sprint 9 was running on every relevant PR but with empty baselines, so each binary reported "(new — no baseline yet; skipping)" and the gate didn't actually fire. The Sprint 9 retro filed this as risk **R-011** with a one-push close-out plan. This push lands that plan. **No frozen-header surface touched** — committed JSON files only; ABI v1.3 stands.
+
+- **`benchmarks/baselines/*.json`** — five new baseline files, one per benchmark binary, captured from the first nightly soak run on the reference hardware (`souxmar-perf-runner-01`, Ryzen 7 7700X / 16 threads / 5.4 GHz, scaling disabled, release build per `ENGINEERING_PRACTICES.md` § Performance budgets convention). Each file carries the standard Google-Benchmark `context` block + per-workload `iteration` entries with `real_time` / `cpu_time` / `time_unit` so both `compare.py` and `dashboard.py` ingest cleanly without code change.
+  - `bench_mesh_construction.json` — 8 entries (BM_PerElement × 4 arg sizes + BM_Bulk × 4 arg sizes). The bulk path is ~4–5× faster than per-element across the scale range; pins the ADR-0006 v1 promise.
+  - `bench_mmap_buffer.json` — 12 entries (3 workloads × 4 buffer sizes). The mmap-reopen path is ~50× faster than the heap roundtrip on the cold-read case — exactly the ADR-0006 v2 result we built the buffer for.
+  - `bench_face_tag.json` — 12 entries (4 workloads × 3 cell counts). **Crucially: `BM_FaceTag_GetMiss` reads 32.1 / 32.3 / 32.5 ns across 1K / 10K / 100K cells.** Constant-time within noise floor — the ADR-0012 sparse-storage promise ("untagged faces cost zero time regardless of mesh size") is captured in the baseline. A future regression that ever makes the empty-map lookup grow with mesh size shows up as ratio-vs-baseline divergence across the three args, not as an absolute number, so the gate will catch it.
+  - `bench_plugin_dispatch.json` — 3 entries. `BM_PluginDispatch_Warm` at **6.42 µs warm**, comfortably under the `ENGINEERING_PRACTICES.md` 20 µs target — the gate's 5 % threshold gives a hard regression bound of ~6.74 µs warm, and any change that ever crosses the absolute 20 µs line would have to first regress past the relative gate. Two layers of protection on the dispatcher hot path.
+  - `bench_heap_accountant.json` — 3 entries. `BM_HeapAccountant_DeltaPair` at **587 ns**, comfortably under the < 1 µs target the audit-log accountant needs to stay safe always-on. `BM_HeapAccountant_IsSupported` at **1.84 ns** confirms the inlined-constant return path.
+- **`benchmarks/baselines/README.md`** unchanged — its existing "file layout" / "update workflow" / "regression threshold" sections already document the rotation. The numbers in the JSON files match what the regenerate-locally loop in that README produces.
+
+What changes operationally:
+
+- Every PR touching a perf-gated path now runs against real numbers. The `compare.py` directory-mode comparison fires for all five binaries; a regression > 5 % on any workload fails the comparison step (push 6 wired the "fail if regressions" outcome routing); the dashboard renders the matching red badge.
+- Improvements > 5 % show as green badges on the dashboard — celebrated, not gated. Reviewers should still call out deliberate improvements in the PR title so the next rotation doesn't lock in an accidental win.
+- The Sprint 5 "baseline established" exit criterion finally closes (~4 sprints after it was first written). The Sprint 9 exit criterion "Perf regression gate live; the team has dealt with 1+ regression block in CI" is one regression-block-in-anger away from closing.
+
+Risk register diff:
+
+- **R-011 (perf gate has empty baselines)** — **closed.** Closes the open window flagged in the Sprint 9 retro between push 10 of Sprint 9 and this push.
 
 ### Changed
 

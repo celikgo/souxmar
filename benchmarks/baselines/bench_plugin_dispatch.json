@@ -1,0 +1,16 @@
+{
+  "context": {
+    "date": "2026-05-11T05:47:00+00:00",
+    "host_name": "souxmar-perf-runner-01",
+    "executable": "./build/perf/benchmarks/bench_plugin_dispatch",
+    "num_cpus": 16,
+    "mhz_per_cpu": 5400,
+    "cpu_scaling_enabled": false,
+    "library_build_type": "release"
+  },
+  "benchmarks": [
+    {"name": "BM_PluginDispatch_Warm",       "run_type": "iteration", "iterations": 75000,  "real_time": 6.42,  "cpu_time": 6.38,  "time_unit": "us"},
+    {"name": "BM_PluginDispatch_BatchOf32",  "run_type": "iteration", "iterations": 2400,   "real_time": 204.8, "cpu_time": 203.5, "time_unit": "us"},
+    {"name": "BM_PluginDispatch_NotFound",   "run_type": "iteration", "iterations": 400000, "real_time": 1.18,  "cpu_time": 1.16,  "time_unit": "us"}
+  ]
+}

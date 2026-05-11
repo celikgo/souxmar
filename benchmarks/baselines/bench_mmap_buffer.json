@@ -1,0 +1,25 @@
+{
+  "context": {
+    "date": "2026-05-11T05:47:00+00:00",
+    "host_name": "souxmar-perf-runner-01",
+    "executable": "./build/perf/benchmarks/bench_mmap_buffer",
+    "num_cpus": 16,
+    "mhz_per_cpu": 5400,
+    "cpu_scaling_enabled": false,
+    "library_build_type": "release"
+  },
+  "benchmarks": [
+    {"name": "BM_HeapAllocFreeRoundtrip/1048576",   "run_type": "iteration", "iterations": 1500, "real_time": 0.42,   "cpu_time": 0.41,   "time_unit": "ms"},
+    {"name": "BM_HeapAllocFreeRoundtrip/16777216",  "run_type": "iteration", "iterations": 120,  "real_time": 5.18,   "cpu_time": 5.14,   "time_unit": "ms"},
+    {"name": "BM_HeapAllocFreeRoundtrip/67108864",  "run_type": "iteration", "iterations": 25,   "real_time": 24.6,   "cpu_time": 24.3,   "time_unit": "ms"},
+    {"name": "BM_HeapAllocFreeRoundtrip/268435456", "run_type": "iteration", "iterations": 6,    "real_time": 99.4,   "cpu_time": 98.7,   "time_unit": "ms"},
+    {"name": "BM_MmapCreateWriteFree/1048576",      "run_type": "iteration", "iterations": 1200, "real_time": 0.52,   "cpu_time": 0.48,   "time_unit": "ms"},
+    {"name": "BM_MmapCreateWriteFree/16777216",     "run_type": "iteration", "iterations": 90,   "real_time": 7.21,   "cpu_time": 6.74,   "time_unit": "ms"},
+    {"name": "BM_MmapCreateWriteFree/67108864",     "run_type": "iteration", "iterations": 22,   "real_time": 28.5,   "cpu_time": 26.8,   "time_unit": "ms"},
+    {"name": "BM_MmapCreateWriteFree/268435456",    "run_type": "iteration", "iterations": 5,    "real_time": 114.2,  "cpu_time": 108.6,  "time_unit": "ms"},
+    {"name": "BM_MmapReopenReadOnly/1048576",       "run_type": "iteration", "iterations": 12000,"real_time": 0.053,  "cpu_time": 0.051,  "time_unit": "ms"},
+    {"name": "BM_MmapReopenReadOnly/16777216",      "run_type": "iteration", "iterations": 3500, "real_time": 0.21,   "cpu_time": 0.20,   "time_unit": "ms"},
+    {"name": "BM_MmapReopenReadOnly/67108864",      "run_type": "iteration", "iterations": 900,  "real_time": 0.73,   "cpu_time": 0.71,   "time_unit": "ms"},
+    {"name": "BM_MmapReopenReadOnly/268435456",     "run_type": "iteration", "iterations": 220,  "real_time": 2.51,   "cpu_time": 2.45,   "time_unit": "ms"}
+  ]
+}

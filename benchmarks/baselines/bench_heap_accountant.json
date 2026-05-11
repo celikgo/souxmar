@@ -1,0 +1,16 @@
+{
+  "context": {
+    "date": "2026-05-11T05:47:00+00:00",
+    "host_name": "souxmar-perf-runner-01",
+    "executable": "./build/perf/benchmarks/bench_heap_accountant",
+    "num_cpus": 16,
+    "mhz_per_cpu": 5400,
+    "cpu_scaling_enabled": false,
+    "library_build_type": "release"
+  },
+  "benchmarks": [
+    {"name": "BM_HeapAccountant_Snapshot",     "run_type": "iteration", "iterations": 1800000, "real_time": 284.6, "cpu_time": 283.1, "time_unit": "ns"},
+    {"name": "BM_HeapAccountant_DeltaPair",    "run_type": "iteration", "iterations": 900000,  "real_time": 587.2, "cpu_time": 584.8, "time_unit": "ns"},
+    {"name": "BM_HeapAccountant_IsSupported",  "run_type": "iteration", "iterations": 280000000,"real_time": 1.84,  "cpu_time": 1.83,  "time_unit": "ns"}
+  ]
+}

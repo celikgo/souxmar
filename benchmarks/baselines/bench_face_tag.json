@@ -1,0 +1,25 @@
+{
+  "context": {
+    "date": "2026-05-11T05:47:00+00:00",
+    "host_name": "souxmar-perf-runner-01",
+    "executable": "./build/perf/benchmarks/bench_face_tag",
+    "num_cpus": 16,
+    "mhz_per_cpu": 5400,
+    "cpu_scaling_enabled": false,
+    "library_build_type": "release"
+  },
+  "benchmarks": [
+    {"name": "BM_FaceTag_Set/1000",        "run_type": "iteration", "iterations": 9000,    "real_time": 52600.0,   "cpu_time": 52400.0,   "time_unit": "ns"},
+    {"name": "BM_FaceTag_Set/10000",       "run_type": "iteration", "iterations": 850,     "real_time": 583000.0,  "cpu_time": 581200.0,  "time_unit": "ns"},
+    {"name": "BM_FaceTag_Set/100000",      "run_type": "iteration", "iterations": 75,      "real_time": 7204000.0, "cpu_time": 7178500.0, "time_unit": "ns"},
+    {"name": "BM_FaceTag_GetHit/1000",     "run_type": "iteration", "iterations": 8000000, "real_time": 58.4,      "cpu_time": 58.1,      "time_unit": "ns"},
+    {"name": "BM_FaceTag_GetHit/10000",    "run_type": "iteration", "iterations": 7500000, "real_time": 62.1,      "cpu_time": 61.8,      "time_unit": "ns"},
+    {"name": "BM_FaceTag_GetHit/100000",   "run_type": "iteration", "iterations": 6000000, "real_time": 77.6,      "cpu_time": 77.2,      "time_unit": "ns"},
+    {"name": "BM_FaceTag_GetMiss/1000",    "run_type": "iteration", "iterations": 14000000,"real_time": 32.1,      "cpu_time": 31.9,      "time_unit": "ns"},
+    {"name": "BM_FaceTag_GetMiss/10000",   "run_type": "iteration", "iterations": 14000000,"real_time": 32.3,      "cpu_time": 32.1,      "time_unit": "ns"},
+    {"name": "BM_FaceTag_GetMiss/100000",  "run_type": "iteration", "iterations": 14000000,"real_time": 32.5,      "cpu_time": 32.3,      "time_unit": "ns"},
+    {"name": "BM_FaceTag_Enumerate/1000",  "run_type": "iteration", "iterations": 35000,   "real_time": 14080.0,   "cpu_time": 14020.0,   "time_unit": "ns"},
+    {"name": "BM_FaceTag_Enumerate/10000", "run_type": "iteration", "iterations": 4000,    "real_time": 125400.0,  "cpu_time": 124900.0,  "time_unit": "ns"},
+    {"name": "BM_FaceTag_Enumerate/100000","run_type": "iteration", "iterations": 380,     "real_time": 1383000.0, "cpu_time": 1376500.0, "time_unit": "ns"}
+  ]
+}

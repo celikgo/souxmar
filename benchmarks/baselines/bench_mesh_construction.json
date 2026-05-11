@@ -1,0 +1,21 @@
+{
+  "context": {
+    "date": "2026-05-11T05:47:00+00:00",
+    "host_name": "souxmar-perf-runner-01",
+    "executable": "./build/perf/benchmarks/bench_mesh_construction",
+    "num_cpus": 16,
+    "mhz_per_cpu": 5400,
+    "cpu_scaling_enabled": false,
+    "library_build_type": "release"
+  },
+  "benchmarks": [
+    {"name": "BM_PerElement/8",  "run_type": "iteration", "iterations": 200, "real_time": 3.05,    "cpu_time": 3.02,    "time_unit": "ms"},
+    {"name": "BM_PerElement/16", "run_type": "iteration", "iterations": 80,  "real_time": 25.4,    "cpu_time": 25.1,    "time_unit": "ms"},
+    {"name": "BM_PerElement/32", "run_type": "iteration", "iterations": 10,  "real_time": 213.6,   "cpu_time": 212.8,   "time_unit": "ms"},
+    {"name": "BM_PerElement/64", "run_type": "iteration", "iterations": 3,   "real_time": 1712.4,  "cpu_time": 1706.9,  "time_unit": "ms"},
+    {"name": "BM_Bulk/8",        "run_type": "iteration", "iterations": 800, "real_time": 0.83,    "cpu_time": 0.82,    "time_unit": "ms"},
+    {"name": "BM_Bulk/16",       "run_type": "iteration", "iterations": 300, "real_time": 5.21,    "cpu_time": 5.17,    "time_unit": "ms"},
+    {"name": "BM_Bulk/32",       "run_type": "iteration", "iterations": 40,  "real_time": 41.7,    "cpu_time": 41.4,    "time_unit": "ms"},
+    {"name": "BM_Bulk/64",       "run_type": "iteration", "iterations": 5,   "real_time": 332.8,   "cpu_time": 330.9,   "time_unit": "ms"}
+  ]
+}
