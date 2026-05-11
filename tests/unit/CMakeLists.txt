@@ -10,6 +10,8 @@ add_executable(souxmar_unit_tests
   test_field.cpp
   test_manifest.cpp
   test_discovery.cpp
+  test_registry.cpp
+  test_guard.cpp
 )
 
 target_link_libraries(souxmar_unit_tests

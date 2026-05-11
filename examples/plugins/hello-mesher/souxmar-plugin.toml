@@ -1,0 +1,19 @@
+[plugin]
+id            = "dev.souxmar.examples.hello-mesher"
+name          = "Hello Mesher (souxmar reference plugin)"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/hello-mesher"
+
+[plugin.binary]
+file          = "libhello_mesher.so"
+
+[plugin.capabilities]
+provides      = ["mesher.tetra.hello"]
+
+[plugin.threading]
+model         = "single-threaded"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"

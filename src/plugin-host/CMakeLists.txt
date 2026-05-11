@@ -7,7 +7,15 @@ find_package(tomlplusplus CONFIG REQUIRED)
 add_library(souxmar_plugin
   manifest.cpp
   discovery.cpp
+  registry.cpp
+  loader.cpp
+  guard.cpp
 )
+
+# POSIX needs libdl for dlopen(); Windows uses kernel32 implicitly.
+if(NOT WIN32)
+  list(APPEND _SOUXMAR_PLUGIN_HOST_PRIVATE_LIBS ${CMAKE_DL_LIBS})
+endif()
 add_library(souxmar::plugin ALIAS souxmar_plugin)
 
 set_target_properties(souxmar_plugin PROPERTIES
@@ -25,6 +33,7 @@ target_link_libraries(souxmar_plugin
     souxmar::sanitizers
     fmt::fmt
     tomlplusplus::tomlplusplus
+    ${_SOUXMAR_PLUGIN_HOST_PRIVATE_LIBS}
 )
 
 install(TARGETS souxmar_plugin

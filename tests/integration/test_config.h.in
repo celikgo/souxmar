@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// Generated at configure time. Carries paths the integration tests need
+// to find in-tree plugin builds without guessing.
+
+#pragma once
+
+#define SOUXMAR_TEST_HELLO_MESHER_DIR "@SOUXMAR_HELLO_MESHER_DIR@"

@@ -63,6 +63,15 @@ if(SOUXMAR_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
 
+# When building tests, the integration suite needs examples to exist (it
+# loads the hello-mesher plugin). Auto-enable examples in that case so
+# `cmake --preset dev` is enough.
+if(SOUXMAR_BUILD_TESTS AND NOT SOUXMAR_BUILD_EXAMPLES)
+  message(STATUS "souxmar: SOUXMAR_BUILD_TESTS=ON; auto-enabling examples for integration tests")
+  set(SOUXMAR_BUILD_EXAMPLES ON CACHE BOOL "Build example pipelines" FORCE)
+  add_subdirectory(examples)
+endif()
+
 if(SOUXMAR_BUILD_BENCHMARKS)
   add_subdirectory(benchmarks)
 endif()
