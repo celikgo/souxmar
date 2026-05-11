@@ -2,13 +2,26 @@
 
 All notable changes to souxmar are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The plugin C ABI version is tracked separately and is independent of the project version. **ABI v1 is frozen final at v1.1**; see [ADR-0008](docs/adr/0008-abi-v1-final-freeze.md). The release-stamping ritual is described in [`docs/RELEASE_NOTES_TEMPLATE.md`](docs/RELEASE_NOTES_TEMPLATE.md).
+The plugin C ABI version is tracked separately and is independent of the project version. **ABI v1 is frozen final at v1.2**; see [ADR-0008](docs/adr/0008-abi-v1-final-freeze.md). The **agent tool contract v1 is frozen final at 18 tools**; see [ADR-0011](docs/adr/0011-tool-contract-v1-final-freeze.md). The release-stamping ritual is described in [`docs/RELEASE_NOTES_TEMPLATE.md`](docs/RELEASE_NOTES_TEMPLATE.md).
 
 ## [Unreleased]
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.9.0-beta2 cut below.)
+#### Sprint 9 push 1 — tool-contract v1 frozen FINAL (soak complete, gate flipped to blocking)
+
+Mirrors the ABI v1 final-freeze pattern from Sprint 7 push 1 (ADR-0007 → ADR-0008) for the agent tool surface. The ADR-0010 freeze-candidate period that began Sprint 8 push 5 ran across the remainder of Sprint 8 (push 6: real Tet4 → polyMesh translator + `examples/pipe-bend/` + v0.9.0-beta2 release) with **zero ratchet events** — no new tools, no new `ToolContext` fields, no schema-doc edits beyond commentary, and no breaking change requests opened against the catalogue. The candidate has cleared every gate ADR-0010 named.
+
+- **ADR-0011** (`docs/adr/0011-tool-contract-v1-final-freeze.md`) — declares the agent tool contract **frozen final at v1**. Catalogue locks at **18 tools** across categories Read / Mesh / BC / CFD / Material / Solve / Field / Pipeline / Discovery / Export / UI. The framework surface in `include/souxmar/ai/tool.h` (Confirmation enum, ToolError / ToolResult / ToolContext / Tool / ToolRegistry / ConfirmationPolicy field shapes + method signatures; `dispatch_tool`'s five-step contract) is immutable for the entire 1.x release series. The ratchet vocabulary is preserved verbatim from ADR-0010 (`Ratchet: additive tool (ADR-0010)` and `Ratchet: additive context field (ADR-0010)`) so reviewer muscle memory carries through the freeze-final transition unchanged. Supersedes ADR-0010.
+- **ADR-0010 marked Superseded** with a one-line pointer to ADR-0011 at the top, mirroring how ADR-0007 was retired by ADR-0008. The History block carries the 2026-05-11 Sprint 9 push 1 transition entry.
+- **`scripts/check-tool-contract.sh`** flipped **blocking-by-default**. The candidate-period escape hatch is inverted: the script blocks unless `SOUXMAR_TOOL_CONTRACT_BLOCKING=0` is set in the environment (the only legitimate use is local dry-run inspection by a developer iterating on a ratchet PR; the CI job never sets it). Diagnostic messaging is updated to name ADR-0011 as the binding source and the "REJECTED" rhetoric matches `check-frozen-headers.sh` exactly.
+- **`.github/workflows/ci.yml`** gains the `tool-contract-v1-lockdown` job, mirroring the `abi-v1-lockdown` job from Sprint 7 push 1. Runs on every pull_request event, checks out with `fetch-depth: 0`, invokes `scripts/check-tool-contract.sh` against the PR's base + head refs. A PR that quietly drops a tool from `default_v1_tools()`, reorders `ToolContext` fields, or renames a tool now fails CI at the gate rather than at review.
+- **`include/souxmar/ai/tool.h`** — the comment over `default_v1_tools()` is updated: the old "More tools join the catalogue with future RFCs" sentence (written before the freeze candidate landed) is replaced by an authoritative pointer to ADR-0011, the locked 18-tool catalogue, and the `scripts/check-tool-contract.sh` enforcement. No type / signature / struct-field change — comment-only, on the freeze commit itself.
+- **`src/ai/tools/default_registry.cpp`** — file-header doc + Sprint 8 push 5 trailing comment now point at ADR-0011 (freeze final) instead of ADR-0010 (candidate). The factory list + registration order are unchanged.
+- **README** — Status banner updated. "Agent tool contract is a **freeze candidate**" → "Agent tool contract is **frozen FINAL at v1**" with the ADR-0011 link replacing the ADR-0010 link. Companion line about the `check-tool-contract.sh` gate is updated to drop the "flips to blocking when the final freeze ADR lands" hedge and instead names ADR-0011 as the binding source.
+- **CHANGELOG header** — the standing note now reads "**ABI v1 is frozen final at v1.2**" (corrected from a stale v1.1 — the v1.1 → v1.2 ratchet landed Sprint 7 push 3 with the mmap-backed buffer protocol but the header never caught up) and appends "**agent tool contract v1 is frozen final at 18 tools**" with the ADR-0011 link.
+
+The ABI v1 surface (15 frozen headers under `include/souxmar-c/`) and the agent tool contract v1 surface (`include/souxmar/ai/tool.h` + the 18-tool catalogue in `src/ai/tools/`) are now both under CI-enforced lockdown. Both ratchets are in place, both are tested by the same shape of script + workflow job, and both will hold for the entire 1.x release series.
 
 ### Changed
 

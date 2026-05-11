@@ -149,3 +149,24 @@ jobs:
           scripts/check-frozen-headers.sh \
             "origin/${{ github.base_ref }}" \
             "${{ github.event.pull_request.head.sha }}"
+
+  # Sprint 9 push 1 — tool-contract v1 lockdown gate. Per ADR-0011 (which
+  # supersedes the freeze-candidate ADR-0010) the agent tool contract is
+  # frozen final at v1: 18 tools + the framework surface in
+  # include/souxmar/ai/tool.h. Edits land via the ratchet (additive tool
+  # / additive context field) markers or a Tier-3 ADR; everything else
+  # is rejected here. Mirrors the abi-v1-lockdown job above.
+  tool-contract-v1-lockdown:
+    name: tool-contract-v1-lockdown
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check tool-contract diff against ratchet rules
+        run: |
+          scripts/check-tool-contract.sh \
+            "origin/${{ github.base_ref }}" \
+            "${{ github.event.pull_request.head.sha }}"

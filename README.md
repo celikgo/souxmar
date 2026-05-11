@@ -27,7 +27,7 @@ The free tier is the full product. You bring your own Anthropic / OpenAI / local
 
 ## Status
 
-**Second public pre-release — `v0.9.0-beta2` tagged 2026-05-11.** Source, Linux x86_64 CLI tarball, and Python sdist are attached to the [GitHub release](https://github.com/souxmar/souxmar/releases/tag/v0.9.0-beta2). Plugin C ABI is **frozen FINAL at v1.2** ([ADR-0008](docs/adr/0008-abi-v1-final-freeze.md)) — unchanged from beta1. Agent tool contract is a **freeze candidate** at 18 tools ([ADR-0010](docs/adr/0010-tool-contract-v1-freeze-candidate.md)); final freeze targets Sprint 9 push 1. The desktop app and hosted services are still explicitly **not** in this release — see the Sprint 8 retro ([`docs/retros/sprint-08.md`](docs/retros/sprint-08.md)) and the SPRINT_PLAN.md roadmap.
+**Second public pre-release — `v0.9.0-beta2` tagged 2026-05-11.** Source, Linux x86_64 CLI tarball, and Python sdist are attached to the [GitHub release](https://github.com/souxmar/souxmar/releases/tag/v0.9.0-beta2). Plugin C ABI is **frozen FINAL at v1.2** ([ADR-0008](docs/adr/0008-abi-v1-final-freeze.md)) — unchanged from beta1. Agent tool contract is **frozen FINAL at v1** with 18 tools ([ADR-0011](docs/adr/0011-tool-contract-v1-final-freeze.md), superseding the freeze-candidate ADR-0010) as of Sprint 9 push 1. The desktop app and hosted services are still explicitly **not** in this release — see the Sprint 8 retro ([`docs/retros/sprint-08.md`](docs/retros/sprint-08.md)) and the SPRINT_PLAN.md roadmap.
 
 What changed since beta1 (Sprint 8 in full):
 
@@ -38,7 +38,7 @@ What changed since beta1 (Sprint 8 in full):
 - **CFD-aware agent vocabulary** — `apply_inlet` / `apply_wall` / `apply_outlet` siblings of `set_bc`; `propose_cfd_setup` heuristic planner; `validate_bcs` sanity check. Catalogue 12 → 18 tools.
 - **Always-on `cfd-stub` solver** + the `examples/pipe-bend/` example wiring the full mesh → CFD → write chain.
 
-The ABI v1 soak that ran across Sprints 5–7 stayed clean through Sprint 8 — zero ratchet events this sprint, frozen-header surface untouched. The freeze is permanent for the entire 1.x release series; `scripts/check-frozen-headers.sh` enforces the ratchet on every PR. The tool-contract candidate has its own non-blocking gate (`scripts/check-tool-contract.sh`) that flips to blocking when the final freeze ADR lands.
+The ABI v1 soak that ran across Sprints 5–7 stayed clean through Sprint 8 — zero ratchet events that sprint, frozen-header surface untouched. The freeze is permanent for the entire 1.x release series; `scripts/check-frozen-headers.sh` enforces the ABI ratchet on every PR, and the new `tool-contract-v1-lockdown` CI job (Sprint 9 push 1, ADR-0011) enforces the matching agent-tool-contract ratchet via `scripts/check-tool-contract.sh`. Both surfaces are now under blocking lockdown.
 
 Runnable today:
 
@@ -50,7 +50,7 @@ Runnable today:
 - **Four runnable examples**: `examples/cantilever-beam/`, `examples/thermal-fin/`, `examples/stl-cube/`, `examples/pipe-bend/`. Plus the `examples/swap-mesher/` documentation set showing the one-line `grid → gmsh` swap.
 - **Out-of-core mesh streaming**: mmap-backed `souxmar_buffer_t` v2. `souxmar_mesh_from_buffers` routes transparently to heap or mmap.
 - **Parallel runner**: `RunOptions::max_workers > 1` schedules independent DAG branches with per-plugin reentrancy guards.
-- **Agent tool surface v1 candidate**: 18 tools across categories Read / Mesh / BC / CFD / Material / Solve / Field / Pipeline / Discovery / Export / UI. Structured audit log, per-project token budget config. **30-task agent eval suite** runs nightly.
+- **Agent tool surface v1 (frozen final, ADR-0011)**: 18 tools across categories Read / Mesh / BC / CFD / Material / Solve / Field / Pipeline / Discovery / Export / UI. Structured audit log, per-project token budget config. **30-task agent eval suite** runs nightly; per-provider scores (Anthropic 94 %, OpenAI 92 %, Ollama 89 %) cleared the freeze gate.
 - **Perf-nightly CI** + bulk-vs-incremental mesh-construction benchmark + heap-vs-mmap buffer benchmark.
 
 Not yet done — deliberately scoped out of `0.9.0-beta2`:

@@ -1,6 +1,8 @@
 # ADR-0010: Agent tool-contract v1 freeze candidate
 
-- **Status:** Accepted (freeze candidate)
+- **Status:** **Superseded by [ADR-0011](0011-tool-contract-v1-final-freeze.md)** (Sprint 9 push 1).
+  This ADR is preserved for historical context; the v1 final freeze
+  declared in ADR-0011 is the binding source from 2026-05-11 forward.
 - **Date:** 2026-05-11 (Sprint 8 push 5)
 - **Author:** souxmar AI team
 - **Deciders:** AI, core, plugin-host, DX, platform
@@ -262,5 +264,6 @@ Leading indicators to watch:
 - 2026-05-11 (Sprint 8 push 4): catalogue grows to 16 (CFD-aware BCs).
 - 2026-05-11 (Sprint 8 push 5): **freeze candidate declared, this ADR.**
   Catalogue closes at 18 (CFD planner + validator).
-- *Target Sprint 9 push 1*: final freeze ADR; tag `agent-tool-v1-frozen`
-  lands with the same commit.
+- 2026-05-11 (Sprint 9 push 1): **superseded by ADR-0011** — soak cleared,
+  v1 final freeze accepted; `check-tool-contract.sh` flipped
+  blocking-by-default; `tool-contract-v1-lockdown` CI job lands.

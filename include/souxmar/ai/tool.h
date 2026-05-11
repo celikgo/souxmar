@@ -192,9 +192,12 @@ dispatch_tool(const ToolRegistry&     registry,
               ToolContext&            context,
               ConfirmationPolicy&     policy);
 
-// Build the default v1 tool registry per docs/AI_INTEGRATION.md:
-//   read_geometry_summary, mesh, set_bc, solve, screenshot_viewport.
-// More tools join the catalogue with future RFCs.
+// Build the default v1 tool registry. The v1 catalogue is frozen final
+// at 18 tools per ADR-0011 (which supersedes the freeze-candidate
+// ADR-0010); see docs/adr/0011-tool-contract-v1-final-freeze.md for
+// the locked catalogue and the additive ratchet rules. Adding a tool
+// requires the "Ratchet: additive tool (ADR-0010)" commit marker and
+// is enforced by scripts/check-tool-contract.sh.
 [[nodiscard]] ToolRegistry default_v1_tools();
 
 }  // namespace souxmar::ai

@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// default_v1_tools() — assembles the five v1 agent tools per
-// docs/AI_INTEGRATION.md. Each tool's factory lives in a sibling .cpp
-// to keep the per-tool code reviewable in isolation.
+// default_v1_tools() — assembles the frozen 18-tool v1 agent catalogue
+// per docs/AI_INTEGRATION.md. Each tool's factory lives in a sibling
+// .cpp to keep the per-tool code reviewable in isolation. The catalogue
+// is frozen final at v1 (ADR-0011, superseding the freeze-candidate
+// ADR-0010); additions land via the "Ratchet: additive tool (ADR-0010)"
+// marker and are enforced by scripts/check-tool-contract.sh.
 
 #include "souxmar/ai/tool.h"
 
@@ -30,7 +33,8 @@ Tool make_apply_inlet_tool();
 Tool make_apply_wall_tool();
 Tool make_apply_outlet_tool();
 // Sprint 8 push 5 — CFD planner + BC validator. Catalogue 16 → 18.
-// Tool-contract v1 freeze candidate lands at this catalogue (ADR-0010).
+// Tool-contract v1 frozen final at this catalogue (ADR-0011, which
+// closes the freeze-candidate ADR-0010).
 Tool make_propose_cfd_setup_tool();
 Tool make_validate_bcs_tool();
 
@@ -58,7 +62,7 @@ ToolRegistry default_v1_tools() {
   r.add(make_apply_wall_tool());
   r.add(make_apply_outlet_tool());
   // Sprint 8 push 5 — CFD planner + BC validator (catalogue closes at
-  // 18 for the ADR-0010 tool-contract v1 freeze candidate).
+  // 18 for the v1 final freeze; ADR-0011 superseded ADR-0010).
   r.add(make_propose_cfd_setup_tool());
   r.add(make_validate_bcs_tool());
   return r;
