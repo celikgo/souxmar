@@ -8,7 +8,7 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.9.0-beta5 cut below.)
+- (None this release — `[Unreleased]` reopens after the v0.9.0 cut below.)
 
 ### Changed
 
@@ -25,6 +25,43 @@ The plugin C ABI version is tracked separately and is independent of the project
 ### Security
 
 - (None this release.)
+
+---
+
+## [0.9.0] - 2026-05-11
+
+**First public alpha.** The first non-`-beta`-suffixed tag in the
+project's history. Sprint 12 closes here. See
+`docs/retros/sprint-12.md` for the keep/fix/one-ADR-worthy-decision
+narrative + risk-register diff + Sprint 13 capacity forecast.
+
+**Tag:** `v0.9.0`. **ABI:** v1.3 frozen (unchanged). **Tool
+contract:** v1 frozen final at 18 tools (unchanged). **Docs site:**
+docs.souxmar.dev (DNS CNAME pending; published at the default
+GitHub Pages URL until then). **Bug-triage SLA:** P0 24h / P1 48h /
+P2 5bd / P3 2w per `docs/COMMUNITY.md`.
+
+### Added
+
+- **Sprint 12 push 1 — Bug-triage workflow + COMMUNITY.md.** New `docs/COMMUNITY.md` is the public contract for where to file bugs / features / RFCs / questions / Discord chat / security disclosures, with per-class response SLAs. `.github/workflows/triage.yml` auto-acknowledges each new issue with the matching SLA + auto-labels by surface (desktop / cli / pysouxmar / plugin / agent / abi / docs / build). Closes R-014.
+- **Sprint 12 push 2 — souxmar-bridge FFI skeleton + BridgeFeatureSet contract (ADR-0016).** New Rust crate `src/desktop/src-tauri/souxmar-bridge/` exposes a 6-field `BridgeFeatureSet` struct naming which workbench surfaces are wired vs. scaffolding. React-side `useBridgeFeatures()` hook + TypeScript mirror + fallback for `vite preview` / Playwright. Workbench panels (viewport / inspector / chat) now branch their rendering on the matching flag. Closes R-013. ADR-0016 ratifies the contract's stability rules (additive Tier-0, rename Tier-2).
+- **Sprint 12 push 3 — Vitepress docs site scaffold at docs.souxmar.dev.** New `docs-site/` directory with Vitepress 1.5 config + landing page + install guide + first-pipeline tutorial + agent reference + plugin authoring + business-model page. `.github/workflows/docs-site.yml` builds + publishes to GitHub Pages on every master push touching `docs-site/`.
+
+### Changed
+
+- (None this release.)
+
+### Fixed
+
+- (No dedicated bug-fix bundle — Sprint 12 is the public-alpha cut; bug-discovery flow inverts in Sprint 13+ as external users start filing.)
+
+### Removed
+
+- (None this release.)
+
+### Security
+
+- BridgeFeatureSet's release-CI gate (ADR-0016) asserts `provider_call && pipeline_introspection` are true for stable release builds. Until Sprint 13+ flips those flags on, the gate doesn't fire — but the rail is in place for the first stable release.
 
 ---
 
