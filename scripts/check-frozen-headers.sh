@@ -57,16 +57,22 @@ FROZEN_HEADERS=(
 ADDITIVE_MARKER="Ratchet: additive minor surface (ADR-0008)"
 BUGFIX_MARKER_PREFIX="Ratchet: bug-fix (ADR-0008)"
 
-# Build the diff path list.
-mapfile -t CHANGED < <(git diff --name-only "$BASE_REF" "$HEAD_REF" -- "${FROZEN_HEADERS[@]}")
+# Build the diff path list. `mapfile` would be more idiomatic but
+# requires bash 4+, and macOS still ships 3.2 in /bin/bash; the
+# while-read pattern below works on every bash + dash + zsh the CI
+# matrix uses.
+CHANGED=""
+while IFS= read -r line; do
+  [ -n "$line" ] && CHANGED="$CHANGED $line"
+done < <(git diff --name-only "$BASE_REF" "$HEAD_REF" -- "${FROZEN_HEADERS[@]}")
 
-if [ "${#CHANGED[@]}" -eq 0 ]; then
+if [ -z "$CHANGED" ]; then
   echo "frozen-headers: no v1 ABI surface touched. OK."
   exit 0
 fi
 
 echo "frozen-headers: PR touches the v1 ABI surface:"
-for h in "${CHANGED[@]}"; do echo "  - $h"; done
+for h in $CHANGED; do echo "  - $h"; done
 
 # Inspect commit messages on the range for the ratchet token.
 COMMIT_MSGS=$(git log --format=%B "$BASE_REF..$HEAD_REF")
