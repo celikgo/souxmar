@@ -21,6 +21,11 @@ add_library(souxmar_update
   verifier.cpp
   state_machine.cpp
   update_state.cpp
+  # Sprint 10 push 7 — install layout, rollback log, apply / rollback
+  # orchestrators.
+  install_layout.cpp
+  rollback_log.cpp
+  apply.cpp
 )
 
 add_library(souxmar::update ALIAS souxmar_update)

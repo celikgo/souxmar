@@ -45,7 +45,11 @@
 #include "souxmar/plugin/loader.h"
 #include "souxmar/plugin/registry.h"
 // Sprint 10 push 6 — `souxmar update check` / `apply` subcommands.
+// Push 7 adds install_layout / rollback_log / apply / rollback.
+#include "souxmar/update/apply.h"
+#include "souxmar/update/install_layout.h"
 #include "souxmar/update/manifest.h"
+#include "souxmar/update/rollback_log.h"
 #include "souxmar/update/state_machine.h"
 #include "souxmar/update/update_state.h"
 #include "souxmar/update/verifier.h"
@@ -83,7 +87,9 @@ void print_usage() {
       "                             --trusted-key <id>=<hex> [--trusted-key <id>=<hex>]...\n"
       "                             [--current-version <ver>] [--state <path>]\n"
       "                             [--platform <os>/<arch>] [--as-of <rfc3339>] [--json]\n"
-      "  souxmar update apply --dry-run  (same flags as `check`)\n"
+      "  souxmar update apply       (same flags as `check`)\n"
+      "                             --artifact <path> --target-root <dir> [--dry-run]\n"
+      "  souxmar update rollback    --target-root <dir> [--state <path>] [--json]\n"
       "  souxmar version\n"
       "  souxmar help\n"
       "\n"
@@ -598,6 +604,9 @@ struct UpdateFlags {
   std::string                                as_of_override;
   bool                                       json    = false;
   bool                                       dry_run = false;
+  // Sprint 10 push 7 — apply / rollback specific.
+  fs::path                                   artifact_path;
+  fs::path                                   target_root;
 };
 
 std::string read_file_to_string(const fs::path& p, std::string& err) {
@@ -638,64 +647,68 @@ bool parse_trusted_key_flag(std::string_view              raw,
   return !out.first.empty() && !out.second.empty();
 }
 
-// Run the verify + apply-gate pre-flight. Returns the gate's decision
-// plus a SignatureStatus that the caller folds into the exit code.
-// Diagnostic strings flow through `out_diagnostics` so --json mode can
-// suppress them.
-struct UpdatePreflightResult {
-  bool                                  valid = false;  // got far enough to call the gate
-  souxmar::update::SignatureStatus      sig_status =
-      souxmar::update::SignatureStatus::Ok;
-  std::optional<souxmar::update::UpdateDecision> decision;
+// Shared pre-flight for `check`, `apply`, and `apply --dry-run`: read
+// the manifest + signature off disk, parse + validate, build the
+// trust store, verify the signature, load the per-user state file,
+// resolve the host platform, build a time source. Returns either an
+// exit code (on failure) or a populated UpdatePreflight that the
+// caller turns into a gate decision / apply call.
+struct UpdatePreflight {
+  // Inputs preserved so the caller can also pass them to apply_update.
+  std::string                        manifest_text;
+  std::vector<std::uint8_t>          signature_bytes;
+  souxmar::update::Manifest          manifest;
+  souxmar::update::TrustStore        trust;
+  // Resolved state.
+  souxmar::update::UpdateState       state;        // loaded; "" fields on fresh install
+  fs::path                           state_path;
+  std::string                        current_version;
+  souxmar::update::HostPlatform      host{};
+  std::unique_ptr<souxmar::update::TimeSource> clock;
 };
 
-int cmd_update_check(const UpdateFlags& f) {
+// Returns 0 on success and writes into *out; returns a non-zero exit
+// code on failure (already-logged-via-stderr).
+int update_preflight(const UpdateFlags& f, UpdatePreflight* out) {
   using namespace souxmar::update;
 
-  // 1. Mandatory flags.
   if (f.manifest_path.empty() || f.signature_path.empty() ||
       f.trusted_keys.empty()) {
     fmt::print(stderr,
-        "error: `souxmar update check` requires --manifest, --signature, "
-        "and at least one --trusted-key <id>=<hex>\n");
+        "error: this `souxmar update` subcommand requires --manifest, "
+        "--signature, and at least one --trusted-key <id>=<hex>\n");
     return kExitUsage;
   }
 
-  // 2. Read the manifest + signature off disk. The verifier hashes the
-  //    manifest bytes verbatim — no canonicalisation, no preprocessing.
   std::string err;
-  const std::string manifest_text = read_file_to_string(f.manifest_path, err);
+  out->manifest_text = read_file_to_string(f.manifest_path, err);
   if (!err.empty()) {
     fmt::print(stderr, "error: {}\n", err);
     return kExitInputData;
   }
-  const std::string signature_text = read_file_to_string(f.signature_path, err);
+  const std::string signature_text =
+      read_file_to_string(f.signature_path, err);
   if (!err.empty()) {
     fmt::print(stderr, "error: {}\n", err);
     return kExitInputData;
   }
   const std::string sig_hex = strip_ascii_ws(signature_text);
-  std::vector<std::uint8_t> signature_bytes;
-  if (!hex_decode(sig_hex, signature_bytes)) {
+  if (!hex_decode(sig_hex, out->signature_bytes)) {
     fmt::print(stderr,
         "error: signature file '{}' is not valid lowercase hex\n",
         f.signature_path.string());
     return kExitInputData;
   }
 
-  // 3. Parse manifest.
-  auto parse_result = parse_manifest_string(manifest_text);
+  auto parse_result = parse_manifest_string(out->manifest_text);
   if (auto* perr = std::get_if<ManifestParseError>(&parse_result)) {
     fmt::print(stderr, "error: manifest parse failed: {}\n", perr->message);
     return kExitInputData;
   }
-  const auto& manifest = std::get<Manifest>(parse_result);
+  out->manifest = std::get<Manifest>(std::move(parse_result));
 
-  // 4. Structural validate. Errors hard-fail; warnings print to stderr
-  //    so a reviewer can see them but the gate still runs.
-  const auto issues = validate_manifest(manifest);
   bool any_error = false;
-  for (const auto& i : issues) {
+  for (const auto& i : validate_manifest(out->manifest)) {
     if (i.severity == ManifestIssueSeverity::Error) {
       any_error = true;
       fmt::print(stderr, "manifest error: {}: {}\n", i.field, i.message);
@@ -705,10 +718,8 @@ int cmd_update_check(const UpdateFlags& f) {
   }
   if (any_error) return kExitInputData;
 
-  // 5. Build trust store from CLI flags.
-  TrustStore trust;
   for (const auto& [id, hex] : f.trusted_keys) {
-    if (!trust.add_hex(id, hex)) {
+    if (!out->trust.add_hex(id, hex)) {
       fmt::print(stderr,
           "error: --trusted-key {}=... rejected (id empty or hex pubkey "
           "is not 32 bytes / not lowercase hex)\n", id);
@@ -716,12 +727,12 @@ int cmd_update_check(const UpdateFlags& f) {
     }
   }
 
-  // 6. Verify.
   const std::span<const std::uint8_t> message_span{
-      reinterpret_cast<const std::uint8_t*>(manifest_text.data()),
-      manifest_text.size()};
+      reinterpret_cast<const std::uint8_t*>(out->manifest_text.data()),
+      out->manifest_text.size()};
   const auto sig_status = verify_manifest_signature(
-      message_span, signature_bytes, manifest.signing.public_key_id, trust);
+      message_span, out->signature_bytes,
+      out->manifest.signing.public_key_id, out->trust);
   if (sig_status != SignatureStatus::Ok) {
     if (f.json) {
       fmt::print("{{\"status\":\"signature-failed\",\"reason\":\"{}\"}}\n",
@@ -730,40 +741,36 @@ int cmd_update_check(const UpdateFlags& f) {
       fmt::print(stderr,
           "signature verification failed: {} (manifest signed by "
           "public_key_id={})\n",
-          to_string(sig_status), manifest.signing.public_key_id);
+          to_string(sig_status), out->manifest.signing.public_key_id);
     }
     return kExitSignatureBad;
   }
 
-  // 7. Build the CurrentInstall snapshot. Order of precedence for
-  //    `current_version`: --current-version flag > state file >
-  //    running CLI's version.
-  std::string current_version =
-      !f.current_version_override.empty()
-          ? f.current_version_override
-          : std::string(souxmar::version_string());
-  std::string max_seen;
-  const fs::path state_path = f.state_path_override.empty()
+  // State + current_version. Precedence: --current-version flag > state
+  // file > running CLI's version.
+  out->current_version = !f.current_version_override.empty()
+      ? f.current_version_override
+      : std::string(souxmar::version_string());
+  out->state_path = f.state_path_override.empty()
       ? default_update_state_path()
       : f.state_path_override;
   {
-    auto loaded = load_update_state(state_path);
+    auto loaded = load_update_state(out->state_path);
     if (auto* lerr = std::get_if<UpdateStateLoadError>(&loaded)) {
       fmt::print(stderr,
           "warning: update-state file '{}' could not be read ({}); "
           "treating as fresh install\n",
-          state_path.string(), lerr->message);
+          out->state_path.string(), lerr->message);
     } else {
-      const auto& s = std::get<UpdateState>(loaded);
-      if (!s.current_installed_version.empty() &&
+      out->state = std::get<UpdateState>(std::move(loaded));
+      if (!out->state.current_installed_version.empty() &&
           f.current_version_override.empty()) {
-        current_version = s.current_installed_version;
+        out->current_version = out->state.current_installed_version;
       }
-      max_seen = s.max_version_ever_seen;
     }
   }
 
-  HostPlatform host = detect_host_platform();
+  out->host = detect_host_platform();
   if (!f.platform_override.empty()) {
     auto p = parse_host_platform(f.platform_override);
     if (!p) {
@@ -773,11 +780,9 @@ int cmd_update_check(const UpdateFlags& f) {
           f.platform_override);
       return kExitUsage;
     }
-    host = *p;
+    out->host = *p;
   }
 
-  // 8. Build the time source.
-  std::unique_ptr<TimeSource> clock;
   if (!f.as_of_override.empty()) {
     auto tp = parse_rfc3339_utc(f.as_of_override);
     if (!tp) {
@@ -786,16 +791,47 @@ int cmd_update_check(const UpdateFlags& f) {
           "(YYYY-MM-DDTHH:MM:SSZ)\n", f.as_of_override);
       return kExitUsage;
     }
-    clock = std::make_unique<FixedTimeSource>(*tp);
+    out->clock = std::make_unique<FixedTimeSource>(*tp);
   } else {
-    clock = std::make_unique<SystemTimeSource>();
+    out->clock = std::make_unique<SystemTimeSource>();
+  }
+  return 0;
+}
+
+int cmd_update_check(const UpdateFlags& f) {
+  using namespace souxmar::update;
+
+  UpdatePreflight pf;
+  if (const int rc = update_preflight(f, &pf); rc != 0) return rc;
+
+  CurrentInstall install{pf.current_version,
+                         pf.state.max_version_ever_seen,
+                         pf.host};
+  const auto decision = apply_gate(pf.manifest, install, *pf.clock);
+
+  // Push 7 closes the replay-defence gap noted in push 6's commit: on
+  // every successful verification + gate-Apply decision, bump
+  // max_version_ever_seen so a subsequent replay of an older signed
+  // manifest is refused. last_check_at is recorded unconditionally.
+  pf.state.last_check_at = format_rfc3339_utc(pf.clock->now());
+  if (auto* apply = std::get_if<UpdateApply>(&decision)) {
+    if (pf.state.max_version_ever_seen.empty()) {
+      pf.state.max_version_ever_seen = apply->version;
+    } else {
+      const auto cmp = compare_versions(apply->version,
+                                        pf.state.max_version_ever_seen);
+      if (cmp && *cmp > 0) {
+        pf.state.max_version_ever_seen = apply->version;
+      }
+    }
+  }
+  if (!save_update_state(pf.state_path, pf.state)) {
+    fmt::print(stderr,
+        "warning: failed to persist update-state to '{}' — replay "
+        "defence is degraded until the next successful write\n",
+        pf.state_path.string());
   }
 
-  // 9. Run the gate.
-  CurrentInstall install{current_version, max_seen, host};
-  const auto decision = apply_gate(manifest, install, *clock);
-
-  // 10. Render.
   if (auto* apply = std::get_if<UpdateApply>(&decision)) {
     if (f.json) {
       fmt::print(
@@ -808,7 +844,8 @@ int cmd_update_check(const UpdateFlags& f) {
           apply->mandatory ? "true" : "false");
     } else {
       fmt::print("update available: {} -> {}\n",
-                 current_version.empty() ? "(fresh install)" : current_version,
+                 pf.current_version.empty() ? "(fresh install)"
+                                            : pf.current_version,
                  apply->version);
       fmt::print("  url:       {}\n", apply->artifact.url);
       fmt::print("  sha256:    {}\n", apply->artifact.sha256);
@@ -825,7 +862,7 @@ int cmd_update_check(const UpdateFlags& f) {
   if (refusal.reason == RefusalReason::AlreadyOnOrAheadOfOffered) {
     if (f.json) {
       fmt::print("{{\"status\":\"up-to-date\",\"version\":\"{}\"}}\n",
-                 current_version);
+                 pf.current_version);
     } else {
       fmt::print("already up-to-date ({})\n", refusal.detail);
     }
@@ -841,20 +878,191 @@ int cmd_update_check(const UpdateFlags& f) {
   return kExitUpdateRefused;
 }
 
+// Read a file into bytes. Returns empty vector + sets err on failure.
+std::vector<std::uint8_t> read_file_bytes(const fs::path& p,
+                                          std::string&    err) {
+  std::ifstream src(p, std::ios::binary);
+  if (!src.is_open()) {
+    err = "cannot open '" + p.string() + "'";
+    return {};
+  }
+  std::ostringstream buf;
+  buf << src.rdbuf();
+  const auto s = buf.str();
+  return {reinterpret_cast<const std::uint8_t*>(s.data()),
+          reinterpret_cast<const std::uint8_t*>(s.data() + s.size())};
+}
+
 int cmd_update_apply(const UpdateFlags& f) {
-  if (!f.dry_run) {
+  using namespace souxmar::update;
+
+  // --dry-run path: same as check.
+  if (f.dry_run) return cmd_update_check(f);
+
+  if (f.target_root.empty() || f.artifact_path.empty()) {
     fmt::print(stderr,
-        "error: `souxmar update apply` requires --dry-run in this "
-        "build. The download + atomic-swap path lands in Sprint 10 "
-        "push 7 alongside the rollback log; until then, --dry-run "
-        "runs the same pre-flight as `update check`.\n");
+        "error: `souxmar update apply` (without --dry-run) requires "
+        "--target-root <dir> and --artifact <path>; the artifact bytes "
+        "are read from --artifact, verified against the manifest's "
+        "sha256, staged under <target-root>/versions/<version>/, and "
+        "the swap is recorded in <target-root>/rollback.log.\n");
     return kExitUsage;
   }
-  // The dry-run path is identical to check today. Once push 7 lands,
-  // this branch grows the download + stage + swap + audit log calls;
-  // the dry-run flag keeps the current behaviour as the verifiable
-  // "what *would* happen?" diagnostic.
-  return cmd_update_check(f);
+
+  UpdatePreflight pf;
+  if (const int rc = update_preflight(f, &pf); rc != 0) return rc;
+
+  std::string err;
+  const auto artifact_bytes = read_file_bytes(f.artifact_path, err);
+  if (!err.empty()) {
+    fmt::print(stderr, "error: {}\n", err);
+    return kExitInputData;
+  }
+
+  InstallLayout layout(f.target_root);
+  ApplyContext  actx;
+  actx.manifest       = &pf.manifest;
+  actx.artifact_bytes = artifact_bytes;
+  actx.layout         = &layout;
+  actx.state          = &pf.state;
+  actx.clock          = pf.clock.get();
+  actx.platform       = pf.host;
+  actx.current_version = pf.current_version;
+
+  const auto result = apply_update(actx);
+
+  // Persist state regardless — apply_update mutates the in-memory
+  // state object on success, and we want the bumps recorded even if
+  // the on-disk write is the final step that fails (the next
+  // operation will retry the rename via save_update_state's tmp+rename
+  // path).
+  if (!save_update_state(pf.state_path, pf.state)) {
+    fmt::print(stderr,
+        "warning: failed to persist update-state to '{}'\n",
+        pf.state_path.string());
+  }
+
+  if (f.json) {
+    fmt::print(
+        "{{\"status\":\"{}\",\"version\":\"{}\",\"refusal\":\"{}\","
+        "\"detail\":\"{}\"}}\n",
+        to_string(result.outcome),
+        result.applied_version,
+        result.outcome == ApplyOutcome::RefusedByGate
+            ? to_string(result.refusal) : "",
+        result.detail);
+  } else {
+    fmt::print("apply: {} ({})\n",
+               to_string(result.outcome), result.detail);
+    if (!result.applied_version.empty()) {
+      fmt::print("  version:  {}\n", result.applied_version);
+      fmt::print("  root:     {}\n", layout.root().string());
+    }
+  }
+
+  switch (result.outcome) {
+    case ApplyOutcome::Applied:
+    case ApplyOutcome::AppliedButLogWriteFailed:
+      // Both are "the install moved forward" — exit zero so a
+      // wrapping CI step doesn't bail. The log-write-failed path
+      // surfaces a warning in the human-readable detail string.
+      return kExitOk;
+    case ApplyOutcome::RefusedByGate:
+      return kExitUpdateRefused;
+    case ApplyOutcome::ArtifactHashMismatch:
+    case ApplyOutcome::ArtifactSizeMismatch:
+      // The signature checked, the gate passed, but the artifact
+      // bytes don't match the manifest's hash/size declaration. That
+      // is "the input was wrong" (the artifact was fetched from a
+      // mirror serving the wrong file, or the file was tampered with
+      // post-download), not "the program crashed".
+      return kExitInputData;
+    case ApplyOutcome::StageFailed:
+    case ApplyOutcome::SwitchFailed:
+    default:
+      return kExitInternal;
+  }
+}
+
+int cmd_update_rollback(const UpdateFlags& f) {
+  using namespace souxmar::update;
+
+  if (f.target_root.empty()) {
+    fmt::print(stderr,
+        "error: `souxmar update rollback` requires --target-root <dir>\n");
+    return kExitUsage;
+  }
+
+  // Rollback doesn't need a manifest / signature / trust store — the
+  // previous version's bytes are already on disk and were verified
+  // when they were originally applied. We still load the per-user
+  // state so current_installed_version + last_apply_at get bumped.
+  const fs::path state_path = f.state_path_override.empty()
+      ? default_update_state_path()
+      : f.state_path_override;
+  UpdateState state;
+  {
+    auto loaded = load_update_state(state_path);
+    if (auto* lerr = std::get_if<UpdateStateLoadError>(&loaded)) {
+      fmt::print(stderr,
+          "warning: update-state file '{}' could not be read ({}); "
+          "rollback proceeds against on-disk install layout only\n",
+          state_path.string(), lerr->message);
+    } else {
+      state = std::get<UpdateState>(std::move(loaded));
+    }
+  }
+
+  std::unique_ptr<TimeSource> clock;
+  if (!f.as_of_override.empty()) {
+    auto tp = parse_rfc3339_utc(f.as_of_override);
+    if (!tp) {
+      fmt::print(stderr,
+          "error: --as-of '{}' is not canonical RFC-3339 UTC\n",
+          f.as_of_override);
+      return kExitUsage;
+    }
+    clock = std::make_unique<FixedTimeSource>(*tp);
+  } else {
+    clock = std::make_unique<SystemTimeSource>();
+  }
+
+  InstallLayout layout(f.target_root);
+  RollbackContext rctx{&layout, &state, clock.get()};
+  const auto result = rollback(rctx);
+
+  if (!save_update_state(state_path, state)) {
+    fmt::print(stderr,
+        "warning: failed to persist update-state to '{}'\n",
+        state_path.string());
+  }
+
+  if (f.json) {
+    fmt::print(
+        "{{\"status\":\"{}\",\"from\":\"{}\",\"to\":\"{}\","
+        "\"detail\":\"{}\"}}\n",
+        to_string(result.outcome), result.from_version,
+        result.to_version, result.detail);
+  } else {
+    fmt::print("rollback: {} ({})\n",
+               to_string(result.outcome), result.detail);
+    if (!result.to_version.empty()) {
+      fmt::print("  from: {}\n", result.from_version);
+      fmt::print("  to:   {}\n", result.to_version);
+    }
+  }
+
+  switch (result.outcome) {
+    case RollbackOutcome::RolledBack:
+    case RollbackOutcome::RolledBackButLogWriteFailed:
+      return kExitOk;
+    case RollbackOutcome::NoCurrentInstall:
+    case RollbackOutcome::NoRollbackTarget:
+    case RollbackOutcome::TargetPayloadMissing:
+      return kExitUpdateRefused;
+    default:
+      return kExitInternal;
+  }
 }
 
 }  // namespace
@@ -971,6 +1179,14 @@ int main(int argc, char** argv) {
       update_flags.json = true;
     } else if (args[i] == "--dry-run") {
       update_flags.dry_run = true;
+    } else if (args[i] == "--artifact") {
+      auto v = pop_value(args, i, "--artifact");
+      if (!v) return kExitUsage;
+      update_flags.artifact_path = *v;
+    } else if (args[i] == "--target-root") {
+      auto v = pop_value(args, i, "--target-root");
+      if (!v) return kExitUsage;
+      update_flags.target_root = *v;
     } else if (!args[i].empty() && args[i].front() == '-') {
       fmt::print(stderr, "error: unknown flag '{}'\n", args[i]);
       print_usage();
@@ -1030,6 +1246,9 @@ int main(int argc, char** argv) {
     }
     if (positionals[0] == "apply") {
       return cmd_update_apply(update_flags);
+    }
+    if (positionals[0] == "rollback") {
+      return cmd_update_rollback(update_flags);
     }
     fmt::print(stderr, "error: unknown update action '{}'\n",
                positionals[0]);

@@ -44,6 +44,8 @@ add_executable(souxmar_integration_tests
   test_obj_reader.cpp
   # Sprint 10 push 6.
   test_update_check_cli.cpp
+  # Sprint 10 push 7.
+  test_update_apply_rollback_cli.cpp
 )
 
 target_include_directories(souxmar_integration_tests

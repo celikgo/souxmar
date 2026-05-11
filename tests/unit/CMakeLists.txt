@@ -40,6 +40,10 @@ add_executable(souxmar_unit_tests
   # Sprint 10 push 6.
   test_update_state_machine.cpp
   test_update_state.cpp
+  # Sprint 10 push 7.
+  test_update_install_layout.cpp
+  test_update_rollback_log.cpp
+  test_update_apply.cpp
 )
 
 target_link_libraries(souxmar_unit_tests
