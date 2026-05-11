@@ -8,7 +8,16 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (Nothing yet — `0.9.0-beta1` was just cut.)
+#### Sprint 8 push 1 — process-isolation harness
+
+Foundational work for the Sprint 8 OpenFOAM adapter (push 2) and the Blender importer (push 3). The harness lets any plugin author drive an external binary without rolling their own fork/exec/waitpid loop. Host-side C++ utility; **NOT** part of the frozen C ABI — `souxmar-c/*` is unchanged.
+
+- **`include/souxmar/plugin/subprocess.h`** — `SubprocessOptions` (argv / env / work_dir / timeout / stdin_bytes / max_capture_bytes); `SubprocessResult` (ok / exit_code / fatal_signal / timed_out / stdout_bytes / stderr_bytes / *_truncated / error_message / duration); `run_subprocess()` and `find_executable_on_path()`. The contract is "spawn a child, wait for it to terminate, return everything the host needs for an audit-log entry."
+- **`src/plugin-host/subprocess.cpp`** — POSIX path via `posix_spawnp` + `poll()` + `waitpid` + `SIGKILL` on timeout. The env overlay merges with the parent's environment (empty string deletes a key). Stdout/stderr capture is non-blocking and stream-capped (default 64 KiB per stream — keeps audit-log entries tractable). Windows path via `CreateProcessW` + `WaitForSingleObject` + `TerminateProcess` + handle-inherit pipes; structured-exception codes (`STATUS_ACCESS_VIOLATION` / `STATUS_STACK_OVERFLOW` / `STATUS_ILLEGAL_INSTRUCTION` / divide-by-zero variants) map into the signal-like `fatal_signal` slot so cross-platform consumers can pattern-match crashes uniformly. `run_subprocess` is `noexcept` — every failure routes through `SubprocessResult`.
+- **`find_executable_on_path()`** — small helper used by adapters that probe for their underlying binary at plugin-load time. The Sprint 8 push 2 OpenFOAM plugin uses it to refuse to register `solver.cfd.openfoam` if `simpleFoam` isn't on $PATH; absolute paths are checked directly.
+- **Crash isolation by construction.** A SIGSEGV in the child is a populated `fatal_signal`, not a host crash. The reentrancy guard from Sprint 4 push 2 is the cross-stage synchroniser; this harness handles the spawn/wait alone.
+- **Tests** (`tests/unit/test_subprocess.cpp`, POSIX leg): exit-code round-trip, stdout / stderr capture, timeout terminates the child within 2 s of the deadline, missing-binary surfaces a clean error, stdin pass-through (echo via `cat`), environment overlay round-trip, `max_capture_bytes` truncation, `fatal_signal` populated when the child dies on SIGSEGV, empty-argv rejected, `find_executable_on_path("sh")` resolves, missing program returns nullopt. Twelve tests total.
+- **No frozen-header surface touched.** This is a host-side C++ utility under `include/souxmar/plugin/` (not `souxmar-c/`); third-party plugins are welcome to vendor the implementation rather than link against this header.
 
 ### Changed
 
