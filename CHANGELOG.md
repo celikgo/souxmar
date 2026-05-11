@@ -8,6 +8,30 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
+#### Sprint 9 push 7 — `bench_plugin_dispatch` (the 20 µs warm budget enters the gate)
+
+First push to land a benchmark that enforces a named `ENGINEERING_PRACTICES.md` § Performance budgets entry. The "Plugin call overhead (no-op tool) < 20 µs (warm)" line has been on the books since Sprint 0 but had no measurement against it; Sprint 9 push 6's gate infrastructure made the natural follow-on a concrete coverage push. **No frozen-header surface touched** — new bench + workflow loop entry; ABI v1.3 stands.
+
+- **`benchmarks/bench_plugin_dispatch.cpp`** — new Google Benchmark binary. Three workloads share a `DispatchHarness` that statically registers a no-op `mesher.noop` vtable into a `plugin::Registry` and builds a `RegistryDispatcher` over it; construction sits outside the timed region, so what's measured is the production hot path: namespace-prefix routing → `find_mesher` lookup → C ABI shim → vtable call → StageOutput wrapping.
+  - `BM_PluginDispatch_Warm` — single call per iteration. Target: < 20 µs warm. The CI gate's 5% threshold means a hard regression budget of ~21 µs on the reference hardware.
+  - `BM_PluginDispatch_BatchOf32` — 32 calls per iteration. Matches the typical agentic-session "do these 30-ish things in sequence" shape so a regression that only shows up in batched workloads (e.g. an inadvertent per-call allocation that thrashes the small-object heap) surfaces here even if the singleton looks fine.
+  - `BM_PluginDispatch_NotFound` — the negative path. The not-found branch short-circuits before touching any vtable, so it should be at least as fast as the hit path; a future regression that ever made the miss path slower would surface as an absolute number rather than a ratio. Useful as a guard against accidental string-comparison churn in the dispatcher.
+  Units forced to `kMicrosecond` so the report column is human-readable against the documented budget rather than ns scientific notation.
+- **Static-registration harness instead of dlopen.** The harness builds against `souxmar::plugin` + `souxmar::pipeline` and calls `Registry::add_mesher(...)` directly with a constexpr `souxmar_mesher_vtable_t`. Plugin discovery (filesystem walk + `dlopen` + symbol resolution) is a session-amortised cost, not a per-call cost — including it in the per-call measurement would dilute the signal the budget exists to catch. The dispatcher path that runs N times in production is the path the benchmark exercises N times.
+- **CMakeLists registration + workflow run-loop entry.** `benchmarks/CMakeLists.txt` gains the new target via the existing `souxmar_add_benchmark()` helper; `.github/workflows/perf-nightly.yml`'s "Run benchmarks" loop appends `bench_plugin_dispatch` to its list so the gate covers all four binaries (`bench_mesh_construction`, `bench_mmap_buffer`, `bench_face_tag`, `bench_plugin_dispatch`). The directory-mode `compare.py` from push 6 picks up the new `perf-report/bench_plugin_dispatch.json` automatically; no comparison-tool change.
+- **`benchmarks/baselines/README.md`** — coverage table grows the fourth row; the regenerate-locally loop adds the new binary so a baseline rotation lands all four files together.
+
+This is the first benchmark whose target is an *absolute number* rather than a relative-to-baseline ratio. The 5% regression gate from push 6 still applies (a hot-path slowdown blocks the PR), but the 20 µs warm number is also a reviewable wall the gate can hit independently — once the first baseline rotation lands, a `BM_PluginDispatch_Warm` mean over 25 µs is an audit-log moment even if it's within 5% of the previous baseline. The dispatcher's hot path is the most heavily exercised surface in the entire pipeline runtime; protecting it explicitly is the kind of thing the Sprint 9 "Performance + scale" theme is for.
+
+The Sprint 9 perf-coverage roster now reads:
+
+| Benchmark binary           | Surface                                              | Named budget                             |
+| -------------------------- | ---------------------------------------------------- | ---------------------------------------- |
+| `bench_mesh_construction`  | Per-element vs. bulk mesh construction               | (no named budget — relative gate only)   |
+| `bench_mmap_buffer`        | Heap vs. mmap buffer round-trip (ADR-0006 v2)        | (no named budget — relative gate only)   |
+| `bench_face_tag`           | Per-face-tag sparse map (ADR-0012, ABI v1.3)         | constant-time vs. mesh size (push 6)     |
+| `bench_plugin_dispatch`    | `RegistryDispatcher` hot path                        | < 20 µs warm (`ENGINEERING_PRACTICES.md`) |
+
 #### Sprint 9 push 6 — perf-regression gate hardened to the `ENGINEERING_PRACTICES.md` target
 
 First push of Sprint 9's themed "Performance + scale" work; closes the Platform team's named story (`SPRINT_PLAN.md` § Sprint 9: "Benchmark suite gates merges (perf regression > 5 % blocks)"). Aligns the CI gate with the `docs/ENGINEERING_PRACTICES.md` § Performance budgets contract that's been on the books since Sprint 0 but only half-enforced. **No frozen-header surface touched** — CI + tooling + new benchmark; ABI v1.3 stands.

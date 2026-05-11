@@ -106,7 +106,7 @@ jobs:
         # current by name.
         run: |
           mkdir -p perf-report
-          for bench in bench_mesh_construction bench_mmap_buffer bench_face_tag; do
+          for bench in bench_mesh_construction bench_mmap_buffer bench_face_tag bench_plugin_dispatch; do
             echo "::group::run $bench"
             ./build/perf/benchmarks/$bench \
               --benchmark_format=json \

@@ -36,3 +36,10 @@ souxmar_add_benchmark(bench_mmap_buffer
 souxmar_add_benchmark(bench_face_tag
   bench_face_tag.cpp
 )
+
+# Sprint 9 push 7 — plugin-dispatch hot path. ENGINEERING_PRACTICES.md
+# § Performance budgets: "Plugin call overhead (no-op tool) < 20 µs
+# (warm)".
+souxmar_add_benchmark(bench_plugin_dispatch
+  bench_plugin_dispatch.cpp
+)

@@ -18,6 +18,7 @@ mode matches baselines to fresh reports by file name.
 | `bench_mesh_construction.json` | `bench_mesh_construction`    | Per-element vs. bulk mesh construction (`souxmar_mesh_from_buffers`). |
 | `bench_mmap_buffer.json`       | `bench_mmap_buffer`          | Heap vs. mmap buffer round-trip (ADR-0006 v2).                   |
 | `bench_face_tag.json`          | `bench_face_tag`             | Per-face-tag sparse-map throughput (ADR-0012, ABI v1.3).         |
+| `bench_plugin_dispatch.json`   | `bench_plugin_dispatch`      | `RegistryDispatcher` hot path — `ENGINEERING_PRACTICES.md` budget: < 20 µs warm. |
 
 Files absent from this directory are reported by `compare.py` as
 "(new — no baseline yet; skipping)" and do **not** fail the gate.
@@ -46,7 +47,7 @@ cmake -B build/perf -DCMAKE_BUILD_TYPE=Release \
                     -DVCPKG_MANIFEST_FEATURES=tests
 cmake --build build/perf --parallel
 
-for bench in bench_mesh_construction bench_mmap_buffer bench_face_tag; do
+for bench in bench_mesh_construction bench_mmap_buffer bench_face_tag bench_plugin_dispatch; do
   ./build/perf/benchmarks/$bench \
       --benchmark_format=json \
       --benchmark_out=benchmarks/baselines/$bench.json \
