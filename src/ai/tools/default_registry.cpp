@@ -18,6 +18,8 @@ Tool make_screenshot_viewport_tool();
 Tool make_query_field_tool();
 Tool make_compute_field_tool();
 Tool make_propose_pipeline_tool();
+// Sprint 6 push 1 — catalogue 8 → 9.
+Tool make_query_mesh_quality_tool();
 
 ToolRegistry default_v1_tools() {
   ToolRegistry r;
@@ -31,6 +33,8 @@ ToolRegistry default_v1_tools() {
   r.add(make_query_field_tool());
   r.add(make_compute_field_tool());
   r.add(make_propose_pipeline_tool());
+  // Sprint 6 push 1.
+  r.add(make_query_mesh_quality_tool());
   return r;
 }
 

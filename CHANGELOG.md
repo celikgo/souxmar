@@ -321,6 +321,19 @@ This closes the Sprint 5 DX + Platform items called out in `docs/SPRINT_PLAN.md`
 
 This push lands no code under `src/` — it is the contractual moment Sprint 5 has been building toward across pushes 1–5. The first follow-on PR opens the soak tracking issue; PRs landing during soak that touch any frozen header must inspect the ratchet rules in ADR-0007.
 
+#### Sprint 6 push 1 — mesh-quality postproc + `query_mesh_quality` agent tool
+
+- **`souxmar::core::quality`** (`include/souxmar/core/mesh_quality.h`, `src/core/mesh_quality.cpp`): pure-math metric functions on per-element coordinate arrays. v1 catalogue: `SignedVolume`, `EdgeRatio`, `MinDihedralDeg`. Tet4 and Tri3 supported; other element types return NaN (Hex8 / Quad4 / higher-order land when an in-tree mesher emits them). `evaluate` / `evaluate_all` are stateless; `summarise` aggregates a whole-mesh quality field with NaN-skip semantics and exposes per-metric stats plus advisory threshold counters (inverted / sliver-dihedral / extreme-aspect / unsupported). Metric numeric ids are STABLE — they pin the component layout of the field the postproc plugin emits.
+- **`examples/plugins/mesh-quality/`** — sixth in-tree reference plugin. Registers `postproc.mesh_quality`; reads the mesh through `souxmar-c/` accessors, calls `quality::evaluate_all` per cell, emits a per-cell `FieldKind::Vector` (3-component) Field. Declared `reentrant`. The plugin is self-contained on the C ABI: it pulls `src/core/mesh_quality.cpp` directly into its compile list rather than linking `libsouxmar-core`, preserving the docs/PLUGIN_SDK.md contract while keeping the math DRY across the in-tree consumers.
+- **`query_mesh_quality` agent tool** (`src/ai/tools/query_mesh_quality.cpp`) — `default_v1_tools()` registry size 8 → 9. Confirmation::Auto (read-only inspection). Reuses an existing 3-component cell-located Field from `ctx.field_handle` when present; otherwise dispatches `postproc.mesh_quality` against `ctx.mesh_handle` through `ctx.dispatcher` (same synthetic-upstream pattern `compute_field` uses) and stashes the result for follow-up tools. Returns `{metrics: {<name>: {min, max, mean, finite, total}}, flags: {cells_inverted, cells_sliver_dihedral, cells_extreme_aspect, cells_unsupported}, num_cells, source}`.
+- **Conformance gate**: `tests/integration/test_conformance.cpp` extended — the freeze gate now covers six in-tree plugins (hello-mesher, hello-writer, vtu-writer, heat-solver, scalar-magnitude, mesh-quality), all 10 v1 checks green on every one. **No frozen-header surface was touched; the ABI v1 freeze-candidate soak rolls forward unchanged.**
+- **Tests**:
+  - `tests/unit/test_mesh_quality.cpp` pins the math: regular-tet exact values (arccos(1/3) ≈ 70.529° dihedral, edge_ratio == 1, volume > 0), orientation flip → negative volume, sliver tet → sub-1° dihedral, stretched tet → edge_ratio > 50, Tri3 right-angle case, unsupported element type → NaN, degenerate (coincident-vertex) tet → volume 0 + NaN for ratio / dihedral, summariser threshold counters round-trip.
+  - `tests/integration/test_mesh_quality_plugin.cpp` runs `mesh → postproc.mesh_quality` end-to-end against the in-tree hello-mesher, inspects the resulting `FieldKind::Vector` payload, and asserts the summariser flags zero pathologies on the (well-formed) tet.
+  - `tests/unit/test_ai_tools.cpp` registry assertion bumped 8 → 9; new `RequiresMeshHandle` precondition test for `query_mesh_quality`.
+  - `bindings/python/tests/test_agent_tools.py` mirror catalogue assertion bumped 8 → 9.
+- **Build**: `src/core/CMakeLists.txt` adds `mesh_quality.cpp`; `src/ai/CMakeLists.txt` adds `tools/query_mesh_quality.cpp`; `examples/CMakeLists.txt` adds the new plugin subdirectory; `tests/integration/CMakeLists.txt` depends on `mesh_quality` so the integration suite has the plugin to load.
+
 ### Changed
 
 - (None this release.)

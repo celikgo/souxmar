@@ -21,6 +21,8 @@ add_executable(souxmar_unit_tests
   test_c_abi_handles.cpp
   test_c_abi_buffer.cpp
   test_ai_tools.cpp
+  # Sprint 6 push 1.
+  test_mesh_quality.cpp
 )
 
 target_link_libraries(souxmar_unit_tests

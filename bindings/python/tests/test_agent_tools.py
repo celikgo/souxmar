@@ -16,9 +16,9 @@ import pysouxmar as sx
 
 
 def test_default_registry_contains_v1_tools():
-    """Sprint 5 push 2 expanded the catalogue from 5 to 8 tools."""
+    """Sprint 6 push 1 expanded the catalogue from 8 to 9 tools."""
     r = sx.ai.default_v1_tools()
-    assert len(r) == 8
+    assert len(r) == 9
     assert set(r.list()) == {
         "read_geometry_summary",
         "mesh",
@@ -28,6 +28,7 @@ def test_default_registry_contains_v1_tools():
         "query_field",
         "compute_field",
         "propose_pipeline",
+        "query_mesh_quality",
     }
 
 

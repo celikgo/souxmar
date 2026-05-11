@@ -26,6 +26,8 @@ add_executable(souxmar_integration_tests
   test_cli_smoke.cpp
   test_conformance.cpp
   test_postproc_end_to_end.cpp
+  # Sprint 6 push 1.
+  test_mesh_quality_plugin.cpp
 )
 
 target_include_directories(souxmar_integration_tests
@@ -47,7 +49,8 @@ target_link_libraries(souxmar_integration_tests
 # The integration suite depends on the example plugins + CLI being built first.
 add_dependencies(souxmar_integration_tests
   hello_mesher hello_writer vtu_writer
-  heat_solver scalar_magnitude)
+  heat_solver scalar_magnitude
+  mesh_quality)
 if(SOUXMAR_BUILD_CLI AND TARGET souxmar_cli)
   add_dependencies(souxmar_integration_tests souxmar_cli)
 endif()

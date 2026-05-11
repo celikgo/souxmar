@@ -15,6 +15,8 @@ add_library(souxmar_core
   c_abi_field.cpp
   # Sprint 5 push 4 — bulk-buffer ABI for large mesh transfer (ADR-0006).
   c_abi_buffer.cpp
+  # Sprint 6 push 1 — mesh-quality metrics (Tet4 + Tri3 in v1).
+  mesh_quality.cpp
 )
 add_library(souxmar::core ALIAS souxmar_core)
 

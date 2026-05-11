@@ -446,13 +446,29 @@ TEST(ValueYaml, StageRefShorthand) {
 
 TEST(AiDefaultTools_v2, RegistryNowContainsEightTools) {
   auto r = ai::default_v1_tools();
-  EXPECT_EQ(r.list().size(), 8u);
+  // Sprint 6 push 1: catalogue grew to 9 (added query_mesh_quality).
+  EXPECT_EQ(r.list().size(), 9u);
   for (const auto* expected : {
       "read_geometry_summary", "mesh", "set_bc", "solve",
       "screenshot_viewport", "query_field", "compute_field",
-      "propose_pipeline"}) {
+      "propose_pipeline",
+      "query_mesh_quality"}) {
     EXPECT_NE(r.find(expected), nullptr) << "missing tool: " << expected;
   }
+}
+
+TEST(AiTools_QueryMeshQuality, RequiresMeshHandle) {
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;
+  ai::ConfirmationPolicy policy;
+  auto out = ai::dispatch_tool(r, "query_mesh_quality",
+                               pl::Value::null_value(), ctx, policy);
+  ASSERT_TRUE(out.error.has_value());
+  // Without a registry/dispatcher we fail on INTERNAL; with them but no
+  // mesh handle we'd fail on PRECONDITION_FAILED. Either is acceptable
+  // — the point is we never reach the dispatcher.
+  EXPECT_TRUE(out.error->code == "INTERNAL" ||
+              out.error->code == "PRECONDITION_FAILED");
 }
 
 TEST(AiTools_QueryField, RequiresFieldHandle) {

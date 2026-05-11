@@ -1,0 +1,19 @@
+[plugin]
+id            = "dev.souxmar.examples.mesh-quality"
+name          = "Mesh Quality Postproc"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/mesh-quality"
+
+[plugin.binary]
+file          = "libmesh_quality.so"
+
+[plugin.capabilities]
+provides      = ["postproc.mesh_quality"]
+
+[plugin.threading]
+model         = "reentrant"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"
