@@ -38,12 +38,16 @@ between them is a build-time flag — the pipeline YAML doesn't change.
   push 3) to a `pipe-bend.obj` fixture under this directory and swaps
   the `mesh` stage to consume it. The solver + writer stages stay
   identical — that's the point of the in-process pipeline contract.
-- **BC routing is uniform-wall only.** The Sprint 8 push 4 CFD-aware
-  tools (`apply_inlet` / `apply_wall` / `apply_outlet`) stage BCs on
-  the session bag, but `openfoam-solver` currently writes a single
-  `walls` boundary patch (every boundary face → no-slip wall). The
-  patch-level BC routing requires per-face tag exposure on the C ABI
-  (additive minor) and lands in Sprint 9.
+- **BC routing now respects per-face tags.** As of Sprint 9 push 3 the
+  openfoam-solver groups boundary faces by `souxmar_mesh_face_tag` (the
+  ABI v1.3 surface from ADR-0012) and emits one polyMesh patch per
+  matching BC, with the corresponding `0/U` and `0/p` boundaryField
+  entries. Faces with no tag fall through to a single legacy `walls`
+  patch — so meshes built without per-face tags (the current
+  `mesher.tetra.hello` placeholder is one) keep the Sprint 8 behaviour.
+  The full per-patch path activates once `obj-reader` lands per-face
+  tags from `usemtl` group names (planned alongside the
+  `pipe-bend.obj` fixture in a follow-on push).
 - **The cfd-stub field is uniform.** It does not solve any PDE; it
   just produces `(magnitude · direction)` at every node. Good enough
   for the agent eval suite and for the conformance gate; not good
