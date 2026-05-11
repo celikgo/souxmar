@@ -118,10 +118,14 @@ For the last three, an RFC is required before code review begins. See [`docs/GOV
 
 ## Communication
 
-- **Daily questions:** `#dev` on Discord (link in `README.md` once live).
+- **Daily questions:** `#dev` on Discord (link at souxmar.dev/community).
 - **Design discussions:** GitHub Discussions in the project repo.
 - **Real-time review:** weekly RFC office hours (Wednesdays — calendar in the team Slack).
-- **Security disclosures:** GitHub private security advisories. Do not file in public issues.
+- **Security disclosures:** `security@souxmar.dev` or GitHub private security advisories. Do not file in public issues.
+
+## Bug reports + the public-facing triage SLA
+
+The full public contract — what response time each channel commits to, how P0/P1/P2/P3 are assigned, what to expect from the public-alpha window — lives in [`docs/COMMUNITY.md`](docs/COMMUNITY.md). Maintainers on triage rotation cover the SLA windows; the bot in [`.github/workflows/triage.yml`](.github/workflows/triage.yml) auto-acknowledges each new issue with the matching SLA so reporters know what to expect, and auto-labels by surface (desktop / CLI / Python / plugin / agent / abi / docs / build) so the rotation finds the right thread quickly.
 
 ## What we do not do
 
