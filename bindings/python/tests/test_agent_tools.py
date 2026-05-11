@@ -294,20 +294,54 @@ def test_query_field_requires_field_handle():
 
 
 def test_session_budget_threshold_callback(tmp_path):
-    # The on_threshold callback isn't bound for the v1 surface (per the
-    # README), so we exercise the threshold accounting via consumed_total
-    # and the threshold-firing side effects we CAN observe (the
-    # fired_thresholds_ bitset isn't exposed either, but record() returns
-    # the new consumed_total and is idempotent on repeated crossings).
+    # Sprint 6 push 6 — the on_threshold callback is now first-class
+    # from Python. It fires once per crossed (axis, threshold) pair.
     b = sx.ai.SessionBudget()
     b.max_total_tokens = 1000
+    fired = []
+    b.on_threshold = lambda pct, axis, cur: fired.append((pct, axis, cur.consumed_total))
 
     assert b.record(200, 0) == 200
     assert b.record(400, 0) == 600   # crosses 50%
     assert b.record(300, 0) == 900   # crosses 80%
     assert b.record(200, 0) == 1100  # crosses 100%
-    # Repeated calls past 100% must not crash.
+    # Repeated calls past 100% must not re-fire.
     assert b.record(500, 0) == 1600
+
+    pcts_total = [p for (p, axis, _cur) in fired if axis == "total"]
+    assert pcts_total == [50, 80, 100]
+
+    # Clearing the callback (set to None) is well-defined.
+    b.on_threshold = None
+    # Re-cross from a fresh budget — no new firings into the cleared list.
+    b2 = sx.ai.SessionBudget()
+    b2.max_total_tokens = 100
+    b2.on_threshold = None
+    b2.record(50, 50)  # crosses every threshold; callback is None so nothing fires
+
+
+def test_budget_config_round_trip(tmp_path):
+    cfg_path = tmp_path / "budget.toml"
+    cfg_path.write_text("""[budget]
+max_input_tokens  = 200000
+max_output_tokens =  50000
+max_total_tokens  = 250000
+""")
+    cfg = sx.ai.parse_budget_config_file(cfg_path)
+    assert cfg.max_input_tokens  == 200000
+    assert cfg.max_output_tokens ==  50000
+    assert cfg.max_total_tokens  == 250000
+
+    b = sx.ai.SessionBudget()
+    cfg.apply_to(b)
+    assert b.max_total_tokens == 250000
+    assert b.consumed_total   == 0   # apply_to leaves counters alone
+
+
+def test_budget_config_default_path(tmp_path):
+    p = sx.ai.default_budget_config_path(tmp_path)
+    assert str(p).endswith(".souxmar/budget.toml") or \
+           str(p).endswith(".souxmar\\budget.toml")
 
 
 def test_audit_log_writes_lines_per_dispatch(tmp_path):

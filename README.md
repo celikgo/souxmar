@@ -27,24 +27,26 @@ The free tier is the full product. You bring your own Anthropic / OpenAI / local
 
 ## Status
 
-Pre-alpha — Sprint 5 closed (2026-05-11). **Plugin C ABI v1 is in frozen-candidate state** with formal freeze targeted for 2026-06-08; see [ADR-0007](docs/adr/0007-abi-v1-freeze-candidate.md) for the soak rules. Plugin authors can build against the candidate now — additive minor surfaces are forward-compatible by construction.
+Pre-alpha — Sprint 6 closed (2026-05-11). **Plugin C ABI is in frozen-candidate state at v1.1**; formal v1 freeze target is 2026-06-08. The 0 → 1 minor bump landed in Sprint 6 push 4 (added the `reader.*` namespace) — additive, forward-compatible by construction, so the soak window rolls forward unchanged. See [ADR-0007](docs/adr/0007-abi-v1-freeze-candidate.md) for the soak rules.
 
 Runnable today:
 
-- **CLI**: `souxmar run <pipeline.yaml>`, `souxmar plugin list`, `souxmar agent {list,invoke}`, `souxmar-conformance <dir>`.
-- **Python**: `pip install ./bindings/python` → `pysouxmar` (parser, registry, loader, runner, cache, agent tools, audit log).
-- **Plugin SDK**: stable C ABI v1 across five capability namespaces (`mesher.*`, `solver.*`, `writer.*`, `postproc.*`, plus the bulk-buffer ingest path); CMake `souxmar_add_plugin` macro; conformance suite gating the index.
-- **Five in-tree reference plugins**: hello-mesher, hello-writer, vtu-writer (ParaView-readable), heat-solver (time-series Field), scalar-magnitude (postproc).
-- **Two runnable examples**: `examples/cantilever-beam/`, `examples/thermal-fin/`.
+- **CLI**: `souxmar run <pipeline.yaml>`, `souxmar plugin list`, `souxmar agent {list,invoke}` (with `--audit-log`, `--budget-config`, `--yes`), `souxmar-conformance <dir>`.
+- **Python**: `pip install ./bindings/python` → `pysouxmar` (parser, registry, loader, runner, cache, 12 agent tools, audit log, first-class `SessionBudget.on_threshold` callback, `.souxmar/budget.toml` loader).
+- **Plugin SDK**: stable C ABI v1.1 across six capability namespaces (`reader.*`, `mesher.*`, `solver.*`, `writer.*`, `postproc.*`, plus the bulk-buffer ingest path); `souxmar_add_plugin` CMake macro; conformance suite gating the index; structured `ManifestRejection` codes for tooling.
+- **Eight in-tree reference plugins**: hello-mesher, grid-mesher, hello-writer, vtu-writer, heat-solver, scalar-magnitude, mesh-quality, stl-reader.
+- **Two opt-in external adapters**: `occt-reader` (`-DSOUXMAR_WITH_OPENCASCADE=ON`, STEP / IGES via OpenCASCADE) and `gmsh-mesher` (`-DSOUXMAR_WITH_GMSH=ON`, tetrahedralisation via Gmsh's C++ API).
+- **Three runnable examples**: `examples/cantilever-beam/`, `examples/thermal-fin/`, `examples/stl-cube/`. Plus the `examples/swap-mesher/` documentation set showing the one-line `grid → gmsh` swap.
 - **Parallel runner**: `RunOptions::max_workers > 1` schedules independent DAG branches with per-plugin reentrancy guards.
-- **Agent tool surface v1**: 8 tools, structured audit log, session budget plumbing.
+- **Agent tool surface v1**: 12 tools, structured audit log, per-project token budget config, threshold callbacks fired at 50% / 80% / 100% of each axis.
 - **Perf-nightly CI** + bulk-vs-incremental mesh-construction benchmark.
 
 Not yet done — deliberately scoped out of Phase 0:
 
 - No Tauri desktop app yet (Sprint 8+); CLI and Python only.
-- No production-grade adapters yet: the in-tree mesher / solver / writer are reference plugins, not OpenCASCADE / Gmsh / FEniCSx. The OCCT geometry import + native tetrahedral mesher land in Sprint 6.
-- The agent tool surface runs offline; the BYOK provider client + token-counting `SessionBudget` first-class callbacks land alongside the desktop app.
+- No FEM solver yet — the in-tree `solver.heat.linear` is a demonstrative analytical solver; the real FEM heat / elasticity solvers land with the FEniCSx adapter in Sprint 7+.
+- BYOK AI provider client (Anthropic / OpenAI / Ollama) lands alongside the desktop app. The budget / audit plumbing is in place today; tools that talk to a real provider will hook into it.
+- Out-of-core mesh streaming (mmap-backed buffer flow) is Sprint 7; today every mesh is in-memory.
 
 ## Building
 

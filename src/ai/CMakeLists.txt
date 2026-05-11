@@ -3,10 +3,13 @@
 # docs/AI_INTEGRATION.md. Future tools join the catalogue via RFCs.
 
 find_package(fmt CONFIG REQUIRED)
+find_package(tomlplusplus CONFIG REQUIRED)   # Sprint 6 push 6 — budget_config.cpp
 
 add_library(souxmar_ai
   tool_dispatcher.cpp
   audit_log.cpp
+  # Sprint 6 push 6 — per-project budget config loader.
+  budget_config.cpp
   tools/default_registry.cpp
   tools/read_geometry_summary.cpp
   tools/mesh.cpp
@@ -43,6 +46,7 @@ target_link_libraries(souxmar_ai
     souxmar::warnings
     souxmar::sanitizers
     fmt::fmt
+    tomlplusplus::tomlplusplus
 )
 
 install(TARGETS souxmar_ai

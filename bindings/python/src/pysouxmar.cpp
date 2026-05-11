@@ -18,6 +18,7 @@
 // Sprint 5 once we have plugin-side serialization.
 
 #include <pybind11/pybind11.h>
+#include <pybind11/functional.h>   // SessionBudget.on_threshold (Sprint 6 push 6)
 #include <pybind11/stl.h>
 #include <pybind11/stl/filesystem.h>
 
@@ -47,6 +48,7 @@
 #include "souxmar/plugin/registry.h"
 
 #include "souxmar/ai/audit_log.h"
+#include "souxmar/ai/budget_config.h"
 #include "souxmar/ai/tool.h"
 
 namespace py = pybind11;
@@ -675,16 +677,81 @@ PYBIND11_MODULE(_pysouxmar, m) {
       .def_property_readonly("consumed_total",
           &souxmar::ai::SessionBudget::consumed_total)
       .def("record", &souxmar::ai::SessionBudget::record,
-           py::arg("input_delta"), py::arg("output_delta"));
-      // on_threshold callback: pybind11/functional.h not pulled in here;
-      // Python users that want a threshold callback for the v1 build set
-      // it from a C++ shim, or check consumed_total after each record().
+           py::arg("input_delta"), py::arg("output_delta"))
+      // Sprint 6 push 6 — first-class threshold callback. The C++
+      // signature uses std::string_view + a const SessionBudget&; we
+      // adapt to (int, str, SessionBudget) on the Python side so the
+      // caller never has to think about lifetimes.
+      .def_property("on_threshold",
+          [](const souxmar::ai::SessionBudget& b) -> py::object {
+            // We don't keep a Python-side copy of the callable, so the
+            // getter just reports whether one is set. Callers that
+            // need the current callable should keep their own ref.
+            return py::cast(static_cast<bool>(b.on_threshold));
+          },
+          [](souxmar::ai::SessionBudget& b, py::object py_cb) {
+            if (py_cb.is_none()) {
+              b.on_threshold = nullptr;
+              return;
+            }
+            // Wrap the Python callable; pybind11 manages the GIL on each call.
+            auto cb = py::reinterpret_borrow<py::function>(py_cb);
+            b.on_threshold = [cb](int pct, std::string_view axis,
+                                  const souxmar::ai::SessionBudget& cur) {
+              py::gil_scoped_acquire gil;
+              try {
+                cb(pct, std::string(axis), std::ref(cur));
+              } catch (const py::error_already_set& e) {
+                // Per the SessionBudget contract, on_threshold callbacks
+                // must not throw — a misbehaving Python callable is logged
+                // (best-effort) rather than allowed to unwind into the
+                // dispatcher's audit-write path.
+                PyErr_WriteUnraisable(cb.ptr());
+              }
+            };
+          });
 
   py::class_<souxmar::ai::AuditLog>(ai, "AuditLog")
       .def(py::init<std::filesystem::path>(), py::arg("path"))
       .def_property_readonly("path", &souxmar::ai::AuditLog::path)
       .def_static("default_path", &souxmar::ai::AuditLog::default_path,
                   py::arg("project_root") = std::filesystem::path{});
+
+  // Sprint 6 push 6 — per-project budget config loader.
+  py::class_<souxmar::ai::BudgetConfig>(ai, "BudgetConfig")
+      .def(py::init<>())
+      .def_readwrite("max_input_tokens",
+                     &souxmar::ai::BudgetConfig::max_input_tokens)
+      .def_readwrite("max_output_tokens",
+                     &souxmar::ai::BudgetConfig::max_output_tokens)
+      .def_readwrite("max_total_tokens",
+                     &souxmar::ai::BudgetConfig::max_total_tokens)
+      .def("apply_to", &souxmar::ai::BudgetConfig::apply_to,
+           py::arg("budget"));
+
+  ai.def("parse_budget_config",
+      [](const std::string& toml) -> py::object {
+        auto r = souxmar::ai::parse_budget_config(toml);
+        if (auto* err = std::get_if<souxmar::ai::BudgetConfigError>(&r)) {
+          throw py::value_error(err->message);
+        }
+        return py::cast(std::get<souxmar::ai::BudgetConfig>(r));
+      },
+      py::arg("toml"));
+
+  ai.def("parse_budget_config_file",
+      [](const std::filesystem::path& path) -> py::object {
+        auto r = souxmar::ai::parse_budget_config_file(path);
+        if (auto* err = std::get_if<souxmar::ai::BudgetConfigError>(&r)) {
+          throw py::value_error(err->message);
+        }
+        return py::cast(std::get<souxmar::ai::BudgetConfig>(r));
+      },
+      py::arg("path"));
+
+  ai.def("default_budget_config_path",
+         &souxmar::ai::default_budget_config_path,
+         py::arg("project_root") = std::filesystem::path{});
 
   ai.def("default_v1_tools", &souxmar::ai::default_v1_tools,
          "Build the default v1 ToolRegistry. Sprint 4 push 3 catalogue "

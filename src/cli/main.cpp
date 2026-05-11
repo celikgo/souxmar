@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "souxmar/ai/audit_log.h"
+#include "souxmar/ai/budget_config.h"   // Sprint 6 push 6
 #include "souxmar/ai/tool.h"
 #include "souxmar/pipeline/cache.h"
 #include "souxmar/pipeline/parser.h"
@@ -62,7 +63,8 @@ void print_usage() {
       "  souxmar plugin list [--plugin-path <dir>]...\n"
       "  souxmar agent list\n"
       "  souxmar agent invoke <tool> [--input <yaml>] [--input-file <path>] [--yes]\n"
-      "                              [--audit-log <path>] [--plugin-path <dir>]...\n"
+      "                              [--audit-log <path>] [--budget-config <path>]\n"
+      "                              [--plugin-path <dir>]...\n"
       "  souxmar version\n"
       "  souxmar help\n"
       "\n"
@@ -315,6 +317,7 @@ int cmd_agent_invoke(const std::string&            tool_name,
                      bool                          use_cache,
                      const fs::path&               cache_dir_override,
                      const fs::path&               audit_log_path,
+                     const fs::path&               budget_config_path,
                      const std::vector<fs::path>&  extra_paths) {
   // 1. Parse the inputs first so an obvious typo fails before we touch
   //    plugins.
@@ -374,6 +377,35 @@ int cmd_agent_invoke(const std::string&            tool_name,
     fmt::print(stderr, "warning: audit log disabled ({})\n", e.what());
   }
 
+  // Sprint 6 push 6 — per-project budget config. `--budget-config` is
+  // explicit; otherwise we auto-load `.souxmar/budget.toml` from CWD if
+  // present. A parse error logs a warning and runs unbudgeted.
+  souxmar::ai::SessionBudget budget;
+  bool budget_loaded = false;
+  fs::path effective_budget_path = budget_config_path;
+  if (effective_budget_path.empty()) {
+    const auto auto_path = souxmar::ai::default_budget_config_path();
+    if (fs::exists(auto_path)) effective_budget_path = auto_path;
+  }
+  if (!effective_budget_path.empty()) {
+    auto r = souxmar::ai::parse_budget_config_file(effective_budget_path);
+    if (auto* err = std::get_if<souxmar::ai::BudgetConfigError>(&r)) {
+      fmt::print(stderr, "warning: budget config '{}' not loaded: {}\n",
+                 effective_budget_path.string(), err->message);
+    } else {
+      const auto& cfg = std::get<souxmar::ai::BudgetConfig>(r);
+      cfg.apply_to(budget);
+      budget_loaded = true;
+    }
+  }
+  if (budget_loaded) {
+    ctx.budget = &budget;
+    fmt::print(stderr,
+        "budget: max_input={} max_output={} max_total={} ({})\n",
+        budget.max_input_tokens, budget.max_output_tokens,
+        budget.max_total_tokens, effective_budget_path.string());
+  }
+
   // 4. Confirmation policy: --yes maps every tool to Auto for this run.
   //    Without it, a tool needing confirmation will hit the no-prompter
   //    path and fail with NOT_CONFIRMED — explicit and recoverable.
@@ -418,6 +450,7 @@ int main(int argc, char** argv) {
   std::vector<fs::path>    extra_paths;
   fs::path                 cache_dir_override;
   fs::path                 audit_log_path;
+  fs::path                 budget_config_path;
   bool                     use_cache = true;
   bool                     auto_yes  = false;
   std::string              input_yaml;
@@ -460,6 +493,10 @@ int main(int argc, char** argv) {
       auto v = pop_value(args, i, "--audit-log");
       if (!v) return kExitUsage;
       audit_log_path = *v;
+    } else if (args[i] == "--budget-config") {
+      auto v = pop_value(args, i, "--budget-config");
+      if (!v) return kExitUsage;
+      budget_config_path = *v;
     } else if (!args[i].empty() && args[i].front() == '-') {
       fmt::print(stderr, "error: unknown flag '{}'\n", args[i]);
       print_usage();
@@ -502,7 +539,8 @@ int main(int argc, char** argv) {
       }
       return cmd_agent_invoke(positionals[1], input_yaml, auto_yes,
                               use_cache, cache_dir_override,
-                              audit_log_path, extra_paths);
+                              audit_log_path, budget_config_path,
+                              extra_paths);
     }
     fmt::print(stderr, "error: unknown agent action '{}'\n", positionals[0]);
     return kExitUsage;

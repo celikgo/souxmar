@@ -23,6 +23,8 @@ add_executable(souxmar_unit_tests
   test_ai_tools.cpp
   # Sprint 6 push 1.
   test_mesh_quality.cpp
+  # Sprint 6 push 6.
+  test_budget_config.cpp
 )
 
 target_link_libraries(souxmar_unit_tests

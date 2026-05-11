@@ -406,6 +406,29 @@ Closes the Sprint 6 plan exit criterion: **"A user can swap `mesher.tetra.native
 - **Build**: `examples/CMakeLists.txt` adds `plugins/grid-mesher` unconditionally; `plugins/gmsh-mesher` only when `SOUXMAR_WITH_GMSH=ON`. `tests/integration/CMakeLists.txt` depends on `grid_mesher`.
 - **No frozen-header surface was touched.** The mesher.* C ABI is unchanged; both new plugins build against the existing `souxmar-c/mesher.h`. ABI v1 freeze-candidate soak rolls forward.
 
+#### Sprint 6 push 6 — Sprint 6 closeout: cost meter + budget config
+
+- **First-class `SessionBudget.on_threshold` Python binding** (`bindings/python/src/pysouxmar.cpp`): pulls in `<pybind11/functional.h>`, wraps the C++ `std::function<void(int, std::string_view, const SessionBudget&)>` so Python callers write `b.on_threshold = lambda pct, axis, cur: ...`. Sprint 5 push 2 left this unbound; the desktop-app cost-meter work blocked on it.
+  - The wrapper acquires the GIL on each callback and routes Python exceptions through `PyErr_WriteUnraisable` so a misbehaving callable can't unwind into the dispatcher's audit-write path. Per the SessionBudget contract, `on_threshold` callbacks must not throw.
+  - Setting `b.on_threshold = None` clears the callback.
+- **`.souxmar/budget.toml` per-project config** (`include/souxmar/ai/budget_config.h`, `src/ai/budget_config.cpp`): tomlplusplus-backed parser for a small `[budget]` block — `max_input_tokens` / `max_output_tokens` / `max_total_tokens`, all optional, default `0` (the SessionBudget "unlimited" sentinel). `parse_budget_config(toml)` / `parse_budget_config_file(path)` return a `std::variant<BudgetConfig, BudgetConfigError>`; the error carries the offending dotted field path (e.g. `budget.max_input_tokens`) so tooling can group failures by class. `BudgetConfig::apply_to(SessionBudget&)` sets the caps and explicitly **leaves the running counters and the threshold callback untouched** — so a project can hot-reload its budget without losing in-flight session state.
+- **`souxmar agent invoke --budget-config <path>`** (`src/cli/main.cpp`): explicit override path; when omitted, the CLI auto-loads `.souxmar/budget.toml` from CWD if present. A parse error logs one warning line and continues unbudgeted (best-effort, never blocks the agent from running). When a budget is in effect, the CLI prints a one-line `budget: max_input=... max_output=... max_total=... (<path>)` summary so the user sees what's being enforced.
+- **Python**: `pysouxmar.ai.BudgetConfig` class with the same `apply_to` method; `pysouxmar.ai.parse_budget_config(toml)` / `parse_budget_config_file(path)` raise `ValueError` on parse failures; `default_budget_config_path(project_root)` exposes the path resolver.
+- **Tests**:
+  - `tests/unit/test_budget_config.cpp` — valid parse, missing-fields-default-to-unlimited, negative rejection (with dotted field path), wrong-type rejection, malformed-TOML line reporting, `apply_to` semantics (caps set / counters preserved), `default_path` respects project_root, file round-trip via TempDir.
+  - `bindings/python/tests/test_agent_tools.py` — `on_threshold` fires exactly once per crossed (axis, threshold) pair (50 / 80 / 100); clearing to `None` is idempotent; `BudgetConfig` round-trips through a real `.toml` file; `apply_to` leaves `consumed_*` alone.
+- **Build**: `src/ai/CMakeLists.txt` adds `budget_config.cpp` and links `tomlplusplus::tomlplusplus`. The Python module pulls in `<pybind11/functional.h>` to support the `on_threshold` callback signature.
+- **README Status section refreshed** with the Sprint 6 closing summary: ABI v1.1 frozen-candidate, **8 in-tree reference plugins** + 2 opt-in external adapters, 12 agent tools, three runnable examples, structured manifest rejection codes, per-project budget config. Honest about what's still scoped out of Phase 0.
+- **No frozen-header surface touched.** Sprint 6 close-out is host-side and Python-side ergonomics — the `souxmar-c/*` surface remains at the ABI v1.1 shape declared in push 4. **Soak rolls forward unchanged; formal-freeze target 2026-06-08 stays on track.**
+
+This closes Sprint 6 cleanly. Six pushes landed:
+1. Mesh-quality metrics + 9th agent tool (`postproc.mesh_quality`, `query_mesh_quality`).
+2. Manifest schema validation hardening (11 stable rejection codes, additive fields).
+3. Agent tools 9 → 12 (`set_material`, `list_plugins`, `apply_pipeline_diff`, `export_results`).
+4. `reader.*` C ABI surface — **the first soak ratchet event** — STL reader (always-on) + OCCT reader (opt-in).
+5. Second tetrahedral mesher: grid-mesher (always-on) + Gmsh adapter (opt-in). Swap-test exit criterion met.
+6. Cost-meter close-out: first-class `SessionBudget.on_threshold` from Python + `.souxmar/budget.toml` loader.
+
 ### Changed
 
 - (None this release.)
