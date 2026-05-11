@@ -8,6 +8,29 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
+#### Sprint 9 push 4 — mixed-element polyMesh translator (Tet4 / Hex8 / Prism6 / Pyramid5)
+
+Drops the Tet4-only restriction in `openfoam-solver`'s polyMesh translator. The four linear 3D element types now translate as first-class citizens, including arbitrarily-mixed meshes where Tet4 + Pyramid5 + Prism6 + Hex8 cells share faces in the same `souxmar_mesh_t`. **No frozen-header surface touched** — pure plugin-internal change; ABI v1.3 stands.
+
+This closes the Sprint 8 retro's "Tet4-only restriction in the polyMesh translator is brittle" follow-on. The retro named this work as additive-minor scope: the translator's structure (face-key dedup + owner/neighbour bookkeeping + boundary patch extraction) generalises directly once per-element-type face tables join the file — only the per-element face-vertex tables and the FaceKey shape change.
+
+- **Per-element-type face tables (file-scope `constexpr` arrays).** Each table lists the canonical local face-vertex orderings for one element type, CCW from outside the cell so the face normal points outward (matching the OpenFOAM polyMesh convention + Gmsh / VTK side-set ordering).
+  - `kTet4Faces[4]` — 4 triangular faces, opposite-vertex convention (unchanged from Sprint 8 push 6, just lifted to file scope from inside `write_polymesh_from_mesh`).
+  - `kHex8Faces[6]` — 6 quadrilateral faces. Vertex ordering matches the VTK_HEXAHEDRON convention souxmar uses internally (verified against the mixed-element test in `tests/unit/test_mesh.cpp`): v[0..3] bottom face CCW from above, v[4..7] top face CCW from above, with v[i] stacked beneath v[i+4]. Bottom face emits as {0,3,2,1} (CCW from -z); top as {4,5,6,7}; sides per the standard right-hand-rule convention.
+  - `kPrism6Faces[5]` — 2 triangular caps + 3 quadrilateral sides. v[0..2] bottom triangle, v[3..5] top triangle, with v[i+3] stacked above v[i].
+  - `kPyramid5Faces[5]` — 1 quadrilateral base + 4 triangular sides meeting at the apex. v[0..3] base quad CCW from above, v[4] apex.
+- **`face_table_for(element_type) → FaceTable`** dispatch. Returns `{pointer, count}` for supported types; `{nullptr, 0}` for the rest (used by the up-front validation to reject quadratic variants and 0D/1D/2D types with a clean diagnostic before any disk I/O).
+- **Validation reshape.** Replaces the per-cell `if (cell_type != SOUXMAR_ET_TET4)` check with `face_table_for(et).faces == nullptr` — same fail-fast shape, broader acceptance. The diagnostic message now names the supported set explicitly ("Tet4 / Hex8 / Prism6 / Pyramid5 only — linear 3D elements") and points at the deferred quadratic-variant case.
+- **`FaceKey` generalised to variable vertex count.** Carries `uint8_t size` (3 or 4) alongside the sorted vertex array — so a triangular face and a quadrilateral face that happen to share their first three sorted vertex ids never collide. The hash mixes `size` first so dispersion stays good across mixed-element meshes.
+- **`FaceEntry` generalised.** `verts_owner` is now `std::array<uint64_t, 4>` + a `vertex_count` field (4 is the max for any linear 3D element's face). The face-emission writer uses `fe.vertex_count` to emit `N(v0 v1 ... vN-1)` lines — polyMesh accepts mixed N within the same `faces` list, so the format just works for mixed-element meshes.
+- **Cell-walk rewritten.** Instead of hardcoded `cell_nodes[4]` + `for (int f = 0; f < 4; ++f) kTetFaces[f]`, the loop now: (a) reads `souxmar_mesh_cell_type` per cell, (b) looks up the face table, (c) sizes the cell-nodes scratch via `souxmar_mesh_cell_node_count` (8 for Hex8, 6 for Prism6, 5 for Pyramid5, 4 for Tet4), (d) walks each face in the table, resolves local→global node ids, and dedupes via the sized FaceKey. The scratch buffer is hoisted to the outer scope so it amortises across cells.
+- **`examples/plugins/openfoam-solver/openfoam_solver.cpp` scope comment** updated. The "Tet4-only" v1 disclaimer is replaced by an enumeration of supported element types + an explicit note on the deferred quadratic-variant lowering (when a real use case asks for it, a future minor lowers Tet10/Hex20 etc. to their linear corner sets).
+- **`examples/pipe-bend/README.md` mechanics section** updated. The "Tet4 → polyMesh translator" subhead now reads "polyMesh translator … generalised in Sprint 9 push 4 to all linear 3D element types"; the technical paragraph names the FaceKey-with-vertex-count discriminant and the quadratic-rejection contract.
+
+The translator's correctness story stays the same: every internal face appears in two cells with consistent vertex sets; every boundary face appears in exactly one cell; the canonical-orientation pick (owner = lower cell index, orientation from the owner's face direction) ensures the normal points owner→neighbour. The only new failure mode the mixed path could introduce — a 3-vertex face from one cell mistakenly deduped against a 4-vertex face from another cell — is closed off by the size-keyed FaceKey.
+
+In-tree unit tests for `openfoam-solver` remain absent by design (the plugin needs `simpleFoam` on PATH). The nightly OpenFOAM matrix continues to exercise the translator end-to-end via subprocess. **Closes the Sprint 8 retro carry-over** for the polyMesh mixed-element work.
+
 #### Sprint 9 push 3 — per-patch BC routing in `openfoam-solver`
 
 Consumes the Sprint 9 push 2 ABI v1.3 per-face-tag surface (ADR-0012). Boundary faces are now grouped by `souxmar_mesh_face_tag` and emitted as one polyMesh patch each, with the OpenFOAM patch type and matching `0/U` + `0/p` boundaryField sections driven by the BC entries the agent staged via Sprint 8 push 4's `apply_inlet` / `apply_wall` / `apply_outlet` / `set_bc` tools. **No frozen-header surface touched** — pure plugin-internal refactor; ABI v1.3 stands.

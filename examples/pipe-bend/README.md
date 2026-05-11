@@ -104,11 +104,17 @@ What happens under the hood:
    `constant/polyMesh/{points,faces,owner,neighbour,boundary}`,
    `system/{controlDict,fvSchemes,fvSolution}`, `0/{U,p}`,
    `constant/{transport,turbulence}Properties`.
-2. The Tet4 → polyMesh translator (push 6 of Sprint 8) walks the
-   mesh's Tet4 cells, deduplicates faces by canonical sorted-vertex
-   key, partitions internal from boundary, and emits the OpenFOAM
-   polyMesh format. (The unit-tet placeholder from `mesher.tetra.hello`
-   produces 1 cell, 4 boundary faces, 0 internal faces.)
+2. The polyMesh translator (Sprint 8 push 6, generalised in Sprint 9
+   push 4 to all linear 3D element types — Tet4 / Hex8 / Prism6 /
+   Pyramid5) walks the mesh's cells, looks up each cell's per-element
+   face table, deduplicates faces by canonical sorted-vertex key
+   (with the vertex count threaded through the key so tris and quads
+   never collide), partitions internal from boundary, and emits the
+   OpenFOAM polyMesh format. Higher-order variants (Tet10, Hex20,
+   etc.) are rejected with a clean diagnostic — polyMesh doesn't
+   carry mid-edge nodes natively. (The unit-tet placeholder from
+   `mesher.tetra.hello` produces 1 cell, 4 triangular boundary faces,
+   0 internal faces.)
 3. `simpleFoam -case /tmp/souxmar-openfoam-XXXX/` runs as a subprocess
    per ADR-0009 with a mandatory 1-hour wall-clock timeout. Stdout +
    stderr are stream-capped at 64 KiB per stream and surface in the

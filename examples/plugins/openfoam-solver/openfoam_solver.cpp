@@ -20,12 +20,18 @@
 // directory entirely; the always-on cfd-stub sibling carries the
 // default-CI agent eval surface.
 //
-// SCOPE (v1, post-Sprint-9):
-//   - polyMesh generator: Tet4-only. Sprint 8 push 6 lands the real
-//     face-deduplicated translator. Non-Tet4 inputs surface a clean
-//     INVALID_ARGUMENT; mixed-element meshes (Hex8 / Prism6 / Pyramid5)
-//     are the named Sprint 9 push 4 follow-on (face tables are
-//     mechanical but additive).
+// SCOPE (v1, post-Sprint-9 push 4):
+//   - polyMesh generator: linear 3D elements (Tet4 / Hex8 / Prism6 /
+//     Pyramid5). Mixed-element meshes are fully supported — a Tet4
+//     sharing a triangular face with a Pyramid5 next to a Hex8
+//     dedupes and translates correctly because FaceKey carries the
+//     vertex count alongside the sorted vertex ids. Higher-order
+//     variants (Tet10, Hex20, Hex27, Prism15, Pyramid13) are rejected
+//     with a clean INVALID_ARGUMENT — OpenFOAM polyMesh doesn't carry
+//     mid-edge / mid-face nodes natively; a future minor can lower
+//     them to their linear corner sets when a real use case calls for
+//     it. Any 0D / 1D / 2D element (Vertex, Edge*, Tri*, Quad*) is
+//     likewise rejected — they can't form a volumetric polyMesh.
 //   - **Per-patch boundary routing (Sprint 9 push 3).** Boundary faces
 //     are grouped by `souxmar_mesh_face_tag` (the ABI v1.3 surface
 //     from ADR-0012); each distinct tag becomes a separate polyMesh
@@ -306,6 +312,87 @@ struct BoundaryPatch {
   std::vector<std::size_t>    face_local_idx;  // indices into boundary_faces[]
 };
 
+// -------- Per-element-type face tables (Sprint 9 push 4) --------------
+//
+// Each row is one cell-local face: the number of vertices on that face
+// followed by the cell-local node indices that bound it, listed CCW when
+// viewed from *outside* the cell so the face normal points out. This is
+// the canonical OpenFOAM polyMesh convention (and matches Gmsh / VTK
+// side-set ordering up to the same outward-normal sign discipline).
+//
+// Coverage: linear 3D elements only. Quadratic variants (Tet10, Hex20,
+// Hex27, Prism15, Pyramid13) are rejected at validation — OpenFOAM's
+// polyMesh format doesn't carry mid-edge / mid-face nodes natively, and
+// emitting only the corners would silently lose accuracy. A future
+// minor can lower quadratic meshes through `souxmar::core` to the
+// linear corner set if a real use case calls for it.
+
+struct LocalFace {
+  std::uint8_t                  vertex_count;    // 3 or 4
+  std::array<std::uint8_t, 4>   cell_local_idx;  // indices 0..(N-1); 4th slot unused for tri faces
+};
+
+// Tet4 — 4 triangular faces (opposite-vertex convention).
+constexpr LocalFace kTet4Faces[4] = {
+    {3, {{1, 2, 3, 0}}},   // opposite v0
+    {3, {{0, 3, 2, 0}}},   // opposite v1
+    {3, {{0, 1, 3, 0}}},   // opposite v2
+    {3, {{0, 2, 1, 0}}},   // opposite v3
+};
+
+// Hex8 — 6 quadrilateral faces. Vertex ordering matches the VTK_HEXAHEDRON
+// convention souxmar uses internally (verified against the mixed-element
+// test in tests/unit/test_mesh.cpp): v[0..3] bottom face (z=0, CCW from
+// above), v[4..7] top face (z=1, CCW from above), with v[i] stacked
+// vertically beneath v[i+4]. Each polyMesh face below is listed CCW from
+// outside the cell so the normal points away from the cell centroid.
+constexpr LocalFace kHex8Faces[6] = {
+    {4, {{0, 3, 2, 1}}},   // -z (bottom)
+    {4, {{4, 5, 6, 7}}},   // +z (top)
+    {4, {{0, 1, 5, 4}}},   // -y (front)
+    {4, {{3, 7, 6, 2}}},   // +y (back)
+    {4, {{0, 4, 7, 3}}},   // -x (left)
+    {4, {{1, 2, 6, 5}}},   // +x (right)
+};
+
+// Prism6 (linear wedge) — 2 triangular caps + 3 quadrilateral sides.
+// v[0..2] bottom triangle (z=0, CCW from above), v[3..5] top triangle
+// (z=1), with v[i+3] stacked above v[i].
+constexpr LocalFace kPrism6Faces[5] = {
+    {3, {{0, 2, 1, 0}}},     // -z (bottom triangle)
+    {3, {{3, 4, 5, 0}}},     // +z (top triangle)
+    {4, {{0, 1, 4, 3}}},     // side 0-1
+    {4, {{1, 2, 5, 4}}},     // side 1-2
+    {4, {{2, 0, 3, 5}}},     // side 2-0
+};
+
+// Pyramid5 — 1 quadrilateral base + 4 triangular sides meeting at the apex.
+// v[0..3] base quad (z=0, CCW from above), v[4] apex (z > 0).
+constexpr LocalFace kPyramid5Faces[5] = {
+    {4, {{0, 3, 2, 1}}},     // -z (base quad)
+    {3, {{0, 1, 4, 0}}},     // side 0-1
+    {3, {{1, 2, 4, 0}}},     // side 1-2
+    {3, {{2, 3, 4, 0}}},     // side 2-3
+    {3, {{3, 0, 4, 0}}},     // side 3-0
+};
+
+// Return the face table for a given element type. Output: pair of
+// (pointer, count); {nullptr, 0} for unsupported types.
+struct FaceTable {
+  const LocalFace*  faces;
+  std::size_t       count;
+};
+
+FaceTable face_table_for(std::uint16_t element_type) {
+  switch (element_type) {
+    case SOUXMAR_ET_TET4:      return {kTet4Faces,     4};
+    case SOUXMAR_ET_HEX8:      return {kHex8Faces,     6};
+    case SOUXMAR_ET_PRISM6:    return {kPrism6Faces,   5};
+    case SOUXMAR_ET_PYRAMID5:  return {kPyramid5Faces, 5};
+    default:                   return {nullptr,        0};
+  }
+}
+
 // 0/U — initial velocity field. Per-patch boundaryField sections derived
 // from the BoundaryPatch list produced by the polyMesh writer; the BCs
 // the Sprint 8 push 4 CFD-aware tools staged on session_state flow
@@ -400,11 +487,13 @@ void write_initial_p(const fs::path& work,
   write_file(work / "0" / "p", o.str());
 }
 
-// constant/polyMesh — Sprint 8 push 6 lands the real face-deduplicated
-// Tet4 → polyMesh translator; Sprint 9 push 3 adds per-patch boundary
-// routing via the ABI v1.3 per-face-tag surface.
+// constant/polyMesh — Sprint 8 push 6 lands the face-deduplicated
+// translator; Sprint 9 push 3 adds per-patch boundary routing via the
+// v1.3 per-face-tag surface; Sprint 9 push 4 generalises to mixed
+// linear 3D elements (Tet4 + Hex8 + Prism6 + Pyramid5).
 //
-//   1. walk every Tet4 cell, emit its 4 faces by canonical (sorted)
+//   1. walk every cell, look up its element type's face table
+//      (`face_table_for`), and emit each face by canonical (sorted)
 //      vertex key. The face's vertex *order* from the first cell that
 //      claims it becomes the canonical orientation;
 //   2. faces with two claimants are internal (owner = lower cell idx,
@@ -417,15 +506,16 @@ void write_initial_p(const fs::path& work,
 //      land in a fallback "walls" patch. Patch types and BC values are
 //      driven by `inputs.boundary_conditions` (see `parse_boundary_conditions`).
 //
-// OpenFOAM tet face convention (from the user guide, mesh-description
-// section): for a tet with vertices [v0, v1, v2, v3], the four faces
-// listed in canonical order are
-//   f0 = (v1, v2, v3)  -- opposite v0
-//   f1 = (v0, v3, v2)  -- opposite v1
-//   f2 = (v0, v1, v3)  -- opposite v2
-//   f3 = (v0, v2, v1)  -- opposite v3
-// Each face's vertex order is CCW when viewed from *outside* the cell,
-// so the face normal points out of the owner cell.
+// Mixed-element note: triangular and quadrilateral faces coexist freely
+// in one mesh — a Pyramid5 next to a Tet4 shares its triangular face
+// (and only that one face) with the tet; the Pyramid's quad base sits on
+// an external boundary or against a Hex/Prism's quad face. FaceKey
+// encodes the vertex count so 3- and 4-vertex keys never collide even
+// when their sorted-vertex prefixes happen to coincide.
+//
+// Face conventions are defined per-element-type in the file-scope
+// `k<Type>Faces[]` tables above — listed CCW when viewed from outside
+// the owner cell, matching the OpenFOAM polyMesh outward-normal rule.
 
 souxmar_status_t write_polymesh_from_mesh(const fs::path&             work,
                                           const souxmar_mesh_t*       mesh,
@@ -438,16 +528,19 @@ souxmar_status_t write_polymesh_from_mesh(const fs::path&             work,
         "openfoam-solver: mesh has zero nodes or zero cells");
   }
 
-  // Validate Tet4-only up front so we surface a clean diagnostic before
-  // we start writing anything to disk.
+  // Validate up front that every cell has a registered face table.
+  // The v1 translator handles linear 3D elements only; quadratic
+  // variants (Tet10, Hex20, etc.) and any 0D / 1D / 2D elements are
+  // rejected with a clean diagnostic before we touch the disk.
   for (std::size_t c = 0; c < n_cells; ++c) {
-    if (souxmar_mesh_cell_type(mesh, c) != SOUXMAR_ET_TET4) {
+    const std::uint16_t et = souxmar_mesh_cell_type(mesh, c);
+    if (face_table_for(et).faces == nullptr) {
       static thread_local std::string msg;
       msg = "openfoam-solver: cell #" + std::to_string(c) +
-            " is not Tet4 (got element type " +
-            std::to_string(souxmar_mesh_cell_type(mesh, c)) + "); the v1 "
-            "polyMesh translator handles Tet4 only — see openfoam_solver.cpp "
-            "scope comment for the Sprint 9 follow-on";
+            " has unsupported element type " + std::to_string(et) +
+            "; v1 translator handles Tet4 / Hex8 / Prism6 / Pyramid5 only "
+            "(linear 3D elements). Higher-order variants (Tet10, Hex20, "
+            "Hex27, Prism15, Pyramid13) are deferred to a future minor.";
       return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT, msg.c_str());
     }
   }
@@ -469,64 +562,89 @@ souxmar_status_t write_polymesh_from_mesh(const fs::path&             work,
   }
 
   // --- faces / owner / neighbour -----------------------------------
-  // canonical key = sorted triple of vertex ids; value = bookkeeping
-  // entry. We use a vector + linear-probe-on-hash because std::tuple is
-  // awkward as an unordered_map key; the trade-off is acceptable for
-  // tetrahedral meshes where the face count is ~2N for N cells.
+  // canonical key = (vertex count, sorted vertex ids); value =
+  // bookkeeping entry. The vertex count is part of the key so a
+  // triangular face and a quadrilateral face that happen to share
+  // their first three sorted vertex ids never collide. We use
+  // unordered_map for O(1) average dedup; for mixed-element meshes
+  // the face count per cell varies (Tet4=4, Pyramid5=5, Prism6=5,
+  // Hex8=6) so we don't have a tight constant any more — the
+  // reservation below uses an average of 6 faces/cell × 0.5 (each
+  // internal face is shared by two cells).
 
   struct FaceKey {
-    std::uint64_t a, b, c;  // sorted asc
+    std::uint8_t                  size{};       // 3 or 4
+    std::array<std::uint64_t, 4>  v{0, 0, 0, 0}; // sorted asc; v[size..] unused
     bool operator==(const FaceKey& o) const noexcept {
-      return a == o.a && b == o.b && c == o.c;
+      return size == o.size &&
+             v[0] == o.v[0] && v[1] == o.v[1] &&
+             v[2] == o.v[2] && v[3] == o.v[3];
     }
   };
   struct FaceKeyHash {
     std::size_t operator()(const FaceKey& k) const noexcept {
-      std::size_t h = std::hash<std::uint64_t>{}(k.a);
-      h ^= std::hash<std::uint64_t>{}(k.b) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
-      h ^= std::hash<std::uint64_t>{}(k.c) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+      std::size_t h = std::hash<std::uint8_t>{}(k.size);
+      for (std::uint8_t i = 0; i < k.size; ++i) {
+        h ^= std::hash<std::uint64_t>{}(k.v[i]) +
+             0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+      }
       return h;
     }
   };
   struct FaceEntry {
-    std::array<std::uint64_t, 3> verts_owner;  // CCW from outside owner
+    std::array<std::uint64_t, 4> verts_owner{0, 0, 0, 0};  // CCW from outside owner; first vertex_count slots used
+    std::uint8_t                 vertex_count = 0;
     std::int64_t                 owner     = -1;
     std::int64_t                 neighbour = -1;
-    // Owner cell's local face index (0..3 for Tet4). Lets the boundary
-    // grouping step (Sprint 9 push 3) look up the per-face tag via
+    // Owner cell's local face index (0..N where N is the cell's face
+    // count). Lets the boundary grouping step (Sprint 9 push 3) look
+    // up the per-face tag via
     // `souxmar_mesh_face_tag(mesh, owner, owner_local_face)` without
     // re-deriving the face → cell mapping.
     std::uint8_t                 owner_local_face = 0;
   };
 
-  // OpenFOAM tet face vertex order — opposite-vertex convention.
-  constexpr int kTetFaces[4][3] = {
-      {1, 2, 3},   // opposite v0
-      {0, 3, 2},   // opposite v1
-      {0, 1, 3},   // opposite v2
-      {0, 2, 1},   // opposite v3
-  };
-
   std::unordered_map<FaceKey, FaceEntry, FaceKeyHash> face_map;
-  face_map.reserve(n_cells * 4 * 2);
+  face_map.reserve(n_cells * 3);  // ~ avg faces/cell × 0.5 sharing factor
+
+  // Scratch buffer for cell node indices. Hex8 (8 nodes) is the
+  // largest linear element we accept; keeping the scratch on the
+  // outer scope amortises allocations across cells.
+  std::vector<std::uint64_t> cell_nodes;
+  cell_nodes.reserve(8);
 
   for (std::size_t c = 0; c < n_cells; ++c) {
-    std::uint64_t cell_nodes[4];
+    const std::uint16_t et = souxmar_mesh_cell_type(mesh, c);
+    const FaceTable ft = face_table_for(et);
+    // Already validated above; the lookup is defensive against a
+    // future intermediate mutation that adds a non-registered type.
+    if (ft.faces == nullptr) continue;
+
+    const std::size_t cell_node_count = souxmar_mesh_cell_node_count(mesh, c);
+    cell_nodes.assign(cell_node_count, 0);
     souxmar_mesh_cell_nodes(mesh, static_cast<std::uint64_t>(c),
-                            cell_nodes, 4);
-    for (int f = 0; f < 4; ++f) {
-      const std::uint64_t v0 = cell_nodes[kTetFaces[f][0]];
-      const std::uint64_t v1 = cell_nodes[kTetFaces[f][1]];
-      const std::uint64_t v2 = cell_nodes[kTetFaces[f][2]];
-      // Canonical key: sorted.
-      std::array<std::uint64_t, 3> sorted{v0, v1, v2};
-      std::sort(sorted.begin(), sorted.end());
-      const FaceKey key{sorted[0], sorted[1], sorted[2]};
+                            cell_nodes.data(), cell_node_count);
+
+    for (std::size_t f = 0; f < ft.count; ++f) {
+      const LocalFace& lf = ft.faces[f];
+
+      // Resolve cell-local face indices to global node ids.
+      std::array<std::uint64_t, 4> face_verts{0, 0, 0, 0};
+      for (std::uint8_t i = 0; i < lf.vertex_count; ++i) {
+        face_verts[i] = cell_nodes[lf.cell_local_idx[i]];
+      }
+
+      // Canonical key: sorted vertex ids + the vertex count.
+      FaceKey key;
+      key.size = lf.vertex_count;
+      key.v    = face_verts;
+      std::sort(key.v.begin(), key.v.begin() + key.size);
 
       auto it = face_map.find(key);
       if (it == face_map.end()) {
         FaceEntry e;
-        e.verts_owner      = {v0, v1, v2};
+        e.verts_owner      = face_verts;
+        e.vertex_count     = lf.vertex_count;
         e.owner            = static_cast<std::int64_t>(c);
         e.owner_local_face = static_cast<std::uint8_t>(f);
         face_map.emplace(key, e);
@@ -540,7 +658,9 @@ souxmar_status_t write_polymesh_from_mesh(const fs::path&             work,
             static_cast<std::int64_t>(c)) {
           it->second.neighbour        = it->second.owner;
           it->second.owner            = static_cast<std::int64_t>(c);
-          it->second.verts_owner      = {v0, v1, v2};
+          it->second.verts_owner      = face_verts;
+          // vertex_count stays the same — the same face seen from a
+          // different cell has the same vertex count by construction.
           it->second.owner_local_face = static_cast<std::uint8_t>(f);
         } else {
           it->second.neighbour    = static_cast<std::int64_t>(c);
@@ -680,19 +800,23 @@ souxmar_status_t write_polymesh_from_mesh(const fs::path&             work,
   const std::size_t n_faces    = n_internal + n_boundary;
 
   // --- faces -------------------------------------------------------
+  // Each face is emitted as `N(v0 v1 ... vN-1)` where N is the vertex
+  // count (3 for tri faces, 4 for quad faces). The polyMesh `faces`
+  // file accepts mixed N within the same list — Hex / Prism / Pyramid
+  // cells contribute quads and triangles alongside Tet's triangles.
+  auto write_face_line = [](std::ostringstream& o, const FaceEntry& fe) {
+    o << static_cast<int>(fe.vertex_count) << "(";
+    for (std::uint8_t i = 0; i < fe.vertex_count; ++i) {
+      if (i) o << " ";
+      o << fe.verts_owner[i];
+    }
+    o << ")\n";
+  };
   {
     std::ostringstream o;
     o << foam_header("faceList", "faces") << n_faces << "\n(\n";
-    for (const auto& fe : internal_faces) {
-      o << "3(" << fe.verts_owner[0] << " "
-                << fe.verts_owner[1] << " "
-                << fe.verts_owner[2] << ")\n";
-    }
-    for (const auto& fe : boundary_faces) {
-      o << "3(" << fe.verts_owner[0] << " "
-                << fe.verts_owner[1] << " "
-                << fe.verts_owner[2] << ")\n";
-    }
+    for (const auto& fe : internal_faces) write_face_line(o, fe);
+    for (const auto& fe : boundary_faces) write_face_line(o, fe);
     o << ")\n";
     write_file(pm / "faces", o.str());
   }
