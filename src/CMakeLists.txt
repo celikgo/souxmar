@@ -3,9 +3,9 @@
 # go through public headers + linked targets only — no path-based includes.
 
 add_subdirectory(core)
+add_subdirectory(plugin-host)
 
-# Sprint 1+ subdirectories will be added as they land:
-#   add_subdirectory(plugin-host)   # Sprint 2
+# Sprint 2+ subdirectories will be added as they land:
 #   add_subdirectory(pipeline)      # Sprint 3
 #   add_subdirectory(adapters)      # Sprint 1+
 #   add_subdirectory(plugins)       # Sprint 2+

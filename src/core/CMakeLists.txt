@@ -1,9 +1,13 @@
 # libsouxmar-core — the in-process data model and pipeline orchestrator.
-# At Sprint 0 this contains only version introspection. The data model
-# (Geometry / Topology / Mesh / Field / LinearAlgebra) lands in Sprint 1.
+# Sprint 1 lands the data model: Geometry, Topology, Mesh, Field. The pipeline
+# orchestrator and LinearAlgebra abstraction land in Sprints 3 and 5.
 
 add_library(souxmar_core
   version.cpp
+  geometry.cpp
+  topology.cpp
+  mesh.cpp
+  field.cpp
 )
 add_library(souxmar::core ALIAS souxmar_core)
 

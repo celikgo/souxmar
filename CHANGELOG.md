@@ -8,15 +8,26 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- Sprint 0 scaffolding: top-level `CMakeLists.txt`, `CMakePresets.json`, `vcpkg.json` manifest with feature-gated heavy dependencies (OpenCASCADE, Gmsh, PETSc, VTK, Eigen, pybind11).
-- `cmake/` helper modules: options, warnings, sanitisers (ASan / TSan / UBSan / coverage).
-- `libsouxmar-core` skeleton with version introspection (`souxmar::version()`, `version_string()`, `abi_version()`).
-- Unit-test harness (GoogleTest) with version smoke tests.
-- CI workflows: build matrix across Linux (gcc-13, clang-17), macOS (arm64 AppleClang), Windows (MSVC); clang-format check; secret-shaped-string scan; DCO sign-off enforcement.
-- Nightly workflow: ASan and TSan runs on Linux clang-17.
-- Repository governance: CODEOWNERS, PR template, issue templates (bug / feature / RFC), Dependabot for GitHub Actions.
-- Contribution docs: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1 by reference), RFC template at `docs/rfcs/0000-template.md`.
-- `THIRD_PARTY_LICENSES.md` baseline; `.editorconfig`, `.clang-format`, `.clang-tidy`, `.gitattributes`.
+#### Sprint 1 (in progress) — data model + plugin host + C ABI
+
+- `libsouxmar-core` data model in `include/souxmar/core/`:
+  - `tag.h` — strong-typed `EntityTag`, `NodeIndex`, `CellIndex`, `VertexIndex`, `EdgeIndex`, `FaceIndex`, `SolidIndex` with std::hash specialisations.
+  - `element_type.h` — `ElementType` enum (numerically stable across the on-disk format and C ABI) plus per-type `ElementInfo` (dimension, node count, order, canonical name).
+  - `geometry.h` — `Geometry` (PIMPL'd; vertex coordinates, opaque bookkeeping for edges/faces/solids, per-entity tag / name, bounding box, adapter-data slot for native handles).
+  - `topology.h` — `Topology` (kind-indexed entity graph for meshes without a CAD model).
+  - `mesh.h` — `Mesh` (mixed-element, contiguous flat storage, tag inheritance, element histogram, bounding box).
+  - `field.h` — `Field` (scalar/vector/tensor over nodes/cells/faces/Gauss points, optional time series, contiguous storage with VTK-compatible stride).
+- **[ABI v1]** Public C ABI headers in `include/souxmar-c/`: `abi.h` (export macros, version constants), `status.h` (numerically-stable error codes), `plugin.h` (entry-point declaration + host-info struct), `registry.h` (capability registration entry), `mesher.h` (first capability vtable), `types.h` (opaque handle declarations). ABI v1 frozen-candidate begins; final freeze at Sprint 7 per `docs/SPRINT_PLAN.md`.
+- `libsouxmar-plugin`:
+  - `plugin/manifest.h` + `manifest.cpp` — `souxmar-plugin.toml` parser via tomlplusplus, with `ParseError` carrying line context. Validates required fields, capability list, threading model, ABI compatibility.
+  - `plugin/discovery.h` + `discovery.cpp` — search-path computation (`SOUXMAR_PLUGIN_PATH`, install prefix, per-OS user prefix, optional CWD), directory walker, manifest validation, binary-existence check, structured `DiscoveryReport` of loaded + rejected.
+- Unit tests (GoogleTest) covering the above:
+  - `test_tag`, `test_element_type` — strong types + element metadata
+  - `test_geometry`, `test_topology` — counts, tag/name roundtrips, bounding-box, move semantics, adapter-data deleter
+  - `test_mesh` — node/cell add, mixed elements, histogram, validation errors
+  - `test_field` — metadata, components by kind, time-step indexing, error paths
+  - `test_manifest` — valid parse, multi-capability, missing-field, threading-model parsing, ABI mismatch, malformed-TOML line reporting
+  - `test_discovery` — empty paths, missing path, valid plugin, missing binary, wrong extension, malformed manifest, multi-root aggregation
 
 ### Changed
 
