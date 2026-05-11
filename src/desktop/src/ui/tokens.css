@@ -1,0 +1,88 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * Sprint 10 push 10 — design tokens extracted from docs/UI_DESIGN.md.
+ * The contract: components MUST use these custom properties; raw hex
+ * colours outside this file fail visual review (see
+ * `.claude/skills/updating-design-tokens`).
+ */
+
+:root[data-theme="dim"] {
+  /* Surfaces */
+  --bg-canvas:        #15202B;
+  --bg-panel:         #1E2732;
+  --bg-elevated:      #273340;
+  --bg-overlay:       rgba(21, 32, 43, 0.85);
+
+  /* Borders */
+  --border-subtle:    #38444D;
+  --border-strong:    #4C5C6B;
+
+  /* Text */
+  --fg-primary:       #F7F9F9;
+  --fg-secondary:     #8B98A5;
+  --fg-tertiary:      #5B7083;
+  --fg-on-accent:     #FFFFFF;
+
+  /* Accent (Twitter blue) */
+  --accent-default:   #1D9BF0;
+  --accent-hover:     #1A8CD8;
+  --accent-active:    #177CC0;
+  --accent-soft:      rgba(29, 155, 240, 0.12);
+
+  /* Semantic */
+  --success:          #00BA7C;
+  --success-soft:     rgba(0, 186, 124, 0.12);
+  --warning:          #FFD400;
+  --warning-soft:     rgba(255, 212, 0, 0.12);
+  --danger:           #F4212E;
+  --danger-soft:      rgba(244, 33, 46, 0.12);
+
+  /* Type */
+  --font-sans:        "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono:        "JetBrains Mono", "SF Mono", "Cascadia Code", monospace;
+
+  /* Spacing scale (4-px grid) */
+  --space-1:          4px;
+  --space-2:          8px;
+  --space-3:          12px;
+  --space-4:          16px;
+  --space-5:          24px;
+  --space-6:          32px;
+
+  /* Radii */
+  --radius-sm:        4px;
+  --radius-md:        8px;
+  --radius-lg:        12px;
+
+  /* Motion */
+  --duration-fast:    150ms;
+  --duration-slow:    250ms;
+  --ease-out:         cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Lights-out variant for OLED panels. Same hue, deeper. */
+:root[data-theme="lights-out"] {
+  --bg-canvas:        #000000;
+  --bg-panel:         #16181C;
+  --bg-elevated:      #1C1F23;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg-canvas);
+  color: var(--fg-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}

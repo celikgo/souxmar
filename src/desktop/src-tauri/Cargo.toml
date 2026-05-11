@@ -1,0 +1,32 @@
+[package]
+name        = "souxmar-desktop"
+version     = "0.9.0-beta3"
+description = "souxmar desktop application (Tauri 2 shell)"
+edition     = "2021"
+license     = "Apache-2.0"
+
+# Sprint 10 push 10 scaffolding. The shell is intentionally thin: it
+# serves the React frontend, exposes a small set of #[tauri::command]
+# functions, and (in a future push) FFI's into libsouxmar via the
+# souxmar-bridge crate. For now the commands are stubbed so the
+# onboarding wizard can wire its full UX without blocking on the FFI
+# layer.
+
+[[bin]]
+name = "souxmar-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri          = { version = "2.0", features = ["macos-private-api"] }
+tauri-plugin-shell = "2.0"
+serde          = { version = "1.0", features = ["derive"] }
+serde_json     = "1.0"
+keyring        = "3.6"     # OS keychain bridge for BYOK storage
+dirs           = "5.0"     # platform-specific config paths
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

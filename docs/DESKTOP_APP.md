@@ -148,6 +148,75 @@ Benchmarks live in `benchmarks/desktop/` and run on every PR.
 - Reduced-motion preference honoured (`prefers-reduced-motion`).
 - Configurable font size; viewport text scales independently from UI text.
 
+## First-run experience (Sprint 10 push 10)
+
+The onboarding wizard runs once, on the first launch after a fresh
+install. It is the only thing between download and a working analysis
+— per `SPRINT_PLAN.md` § "Sprint 10 exit criteria." Implementation:
+`src/desktop/src/onboarding/`.
+
+### Step sequence
+
+| # | Step          | Purpose                                                                 | Skippable |
+| - | ------------- | ----------------------------------------------------------------------- | --------- |
+| 1 | Welcome       | One-screen "what souxmar is"; sets expectations (BYOK, plugin model).   | No        |
+| 2 | BYOK          | Pick provider (Anthropic / OpenAI / Ollama); paste key; store in OS keychain. | Yes — defers to Settings → AI providers. |
+| 3 | Sample project | Copy `examples/cantilever-beam` to `~/souxmar-projects/cantilever` and open it. | Yes — user starts blank.   |
+| 4 | Done          | Recap; one button into the workbench shell.                             | No        |
+
+The wizard owns its own state (Zustand store); each step is a
+small focused React component. Tauri commands at each step:
+
+* Step 2 → `byok_store_key(provider, key)`: writes to the platform
+  keychain via the `keyring` Rust crate. For Ollama, also calls
+  `byok_test_connection` which does a no-cost `GET /api/tags`
+  against `localhost:11434`. Anthropic / OpenAI are *not* tested
+  here — a "first launch" 1-token call would bill the user.
+* Step 3 → `open_sample_project(which)`: copies the example tree
+  to `~/souxmar-projects/<which>` and returns the destination
+  path. Missing-source case (the example wasn't bundled with this
+  build) leaves a placeholder README so the workbench has
+  somewhere to open and the user sees a clear explanation.
+* Step 4 → `onboarding_complete()`: flips
+  `settings.json::onboarding_completed = true` so the next launch
+  goes straight to the workbench.
+
+### Why this shape
+
+* **Welcome is one screen, not three.** A bored-in-30-seconds user
+  cannot be re-engaged. We say what souxmar is, what BYOK means,
+  what plugins are, and get out of the way.
+* **BYOK is step 2, not step 1.** A user who launches the app to
+  poke around shouldn't have to make a billing decision before
+  seeing what they downloaded. The skippable path is the soft
+  default.
+* **The sample project copies into the user's home, not a tmp
+  directory.** First-run state must persist if the user quits and
+  comes back; tmp directories don't.
+* **No telemetry checkbox.** souxmar collects no telemetry beyond
+  optional crash reports (which the user enables under Settings →
+  Privacy, *after* onboarding, when they have context for what the
+  trade-off is).
+
+### Visual regression
+
+The wizard's screens are tracked in the screenshot suite under
+`tests/visual/onboarding/`. Any token change that lands in
+`src/desktop/src/ui/tokens.css` re-runs the suite (per
+`.claude/skills/updating-design-tokens`). Visual diffs surface in
+the PR; a token bump that visibly changes the wizard's appearance
+is a design-system review, not a code-review.
+
+### What's still scaffolding
+
+The Tauri commands at step 2 (key validation), step 3 (real
+example bundle resolution), and the FFI layer that lets the
+workbench call into `libsouxmar-*` are stubbed in push 10's
+scaffolding. The full wiring lands progressively across Sprint 11
+(dogfood week — every engineer launches this and the rough edges
+get filed). The wizard's UX shape is locked here so subsequent
+pushes have a concrete target.
+
 ## Distribution and updates
 
 - Release artefacts are built in CI, signed in CI (Apple notarisation, Windows EV cert, Linux GPG), and published to a static CDN with a Tauri-format updater manifest.

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "souxmar",
+  "version": "0.9.0-beta3",
+  "identifier": "dev.souxmar.desktop",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "souxmar",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 600,
+        "decorations": true,
+        "resizable": true,
+        "backgroundColor": "#15202B"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "category": "DeveloperTool",
+    "shortDescription": "Open-source CAE platform with agentic AI chat.",
+    "longDescription": "souxmar is an open-source CAD+FEM+CFD pipeline with an agentic AI chat at its centre. Apache-2.0.",
+    "targets": ["dmg", "msi", "deb", "appimage"],
+    "icon": ["icons/icon.png"],
+    "publisher": "souxmar",
+    "copyright": "Copyright (c) souxmar contributors",
+    "macOS": {
+      "minimumSystemVersion": "13.0"
+    },
+    "windows": {
+      "wix": {
+        "language": ["en-US"]
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    }
+  }
+}
