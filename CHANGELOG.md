@@ -51,6 +51,33 @@ The plugin C ABI version is tracked separately and is independent of the project
   - `test_guard` — Ok / std::exception / non-std exception / nested guard.
   - `tests/integration/test_load_hello_mesher` — end-to-end discovery + load + register + capability-listing + RAII unload + registry empties on `LoadedPlugin` drop.
 
+#### Sprint 3 (in progress) — pipeline orchestrator critical path
+
+- New library `libsouxmar-pipeline` (`src/pipeline/`).
+- **[pipeline-format v1]** Pipeline data model + YAML parser:
+  - `include/souxmar/pipeline/value.h` — typed Value tree (Null / Bool / Number / String / StageRef / List / Map). Heavy types (Geometry/Mesh/Field) stay out of Value; they live in the runner's result store and are referenced by StageRef.
+  - `include/souxmar/pipeline/pipeline.h` — `Stage` (id + capability + input map) and `Pipeline` (version + stages).
+  - `include/souxmar/pipeline/parser.h` — strict YAML parser via yaml-cpp. Recognises the `{ from: stage_id }` StageRef shorthand. Validates required fields, version = 1, non-empty stages, unique ids. Errors carry source line/column when yaml-cpp surfaces them.
+- DAG validation + topological sort (`include/souxmar/pipeline/dag.h`):
+  - All errors collected per call (not just the first).
+  - Self-reference, dangling-reference, cycle detection.
+  - Stable topological order (declaration-order tie-break) so determinism gate has a fighting chance.
+  - `collect_stage_refs(Value)` exposed for tests and tooling.
+- Content-addressed cache (`include/souxmar/pipeline/cache.h`):
+  - 64-bit FNV-1a `ContentHash` over (capability_id + plugin_version + recursive Value tree). Upstream stage hashes folded transitively so an upstream change invalidates downstream cache keys automatically. (Cryptographic hashing — BLAKE3 or SHA256 — lands with the on-disk cache in Sprint 3 push 2.)
+  - `Cache` class: thread-safe (`std::shared_mutex`), in-memory put / get / contains / size / clear.
+- Runner (`include/souxmar/pipeline/runner.h`):
+  - `IDispatcher` interface — runner is plugin-agnostic. Sprint 3 push 1 ships with mock dispatcher in tests; Sprint 3 push 2 adds `RegistryDispatcher` that goes through the C ABI to loaded plugins.
+  - Sequential execution in topological order. Per-stage `StageRunResult` records Cached / Executed / Failed / Skipped. Optional `RunOptions::stop_on_first_failure` (default ON) and `use_cache` (default ON).
+  - Aggregate `RunResult` carries validation errors + per-stage results + outputs by stage id.
+- New default dependency: `yaml-cpp >= 0.8.0` (MIT). Documented in `THIRD_PARTY_LICENSES.md`.
+- Tests (all in `tests/unit/`, ~50 new test cases):
+  - `test_pipeline_value` — kind builders, accessors, try-access, equality, kind names.
+  - `test_pipeline_parser` — cantilever-beam YAML round-trip, StageRef shorthand, missing/duplicate/empty-stages rejection, unknown-version explicit rejection, line-reporting on malformed YAML.
+  - `test_pipeline_dag` — straight-line, diamond, self-reference, dangling-reference, cycle detection, deeply-nested StageRef collection, declaration-order topological tie-break.
+  - `test_pipeline_cache` — context distinguishes, upstream change propagates, map-key ordering doesn't matter, hex format, put/get/overwrite/clear.
+  - `test_pipeline_runner` — validation skip, topological dispatch order, output threading, fail-fast skip-downstream, full cache hit, input-change invalidation, plugin-version invalidation, upstream-change invalidation, cache-disabled mode.
+
 ### Changed
 
 - (None this release.)

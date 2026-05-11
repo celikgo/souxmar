@@ -4,9 +4,9 @@
 
 add_subdirectory(core)
 add_subdirectory(plugin-host)
+add_subdirectory(pipeline)
 
-# Sprint 2+ subdirectories will be added as they land:
-#   add_subdirectory(pipeline)      # Sprint 3
+# Sprint 3+ subdirectories will be added as they land:
 #   add_subdirectory(adapters)      # Sprint 1+
 #   add_subdirectory(plugins)       # Sprint 2+
 #   add_subdirectory(cli)           # Sprint 3

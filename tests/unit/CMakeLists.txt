@@ -12,12 +12,18 @@ add_executable(souxmar_unit_tests
   test_discovery.cpp
   test_registry.cpp
   test_guard.cpp
+  test_pipeline_value.cpp
+  test_pipeline_parser.cpp
+  test_pipeline_dag.cpp
+  test_pipeline_cache.cpp
+  test_pipeline_runner.cpp
 )
 
 target_link_libraries(souxmar_unit_tests
   PRIVATE
     souxmar::core
     souxmar::plugin
+    souxmar::pipeline
     souxmar::warnings
     souxmar::sanitizers
     GTest::gtest

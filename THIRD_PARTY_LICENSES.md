@@ -13,6 +13,7 @@ CI verifies that every dependency in `vcpkg.json` is represented here; new entri
 | `fmt`           | 10.2.1      | MIT                              | https://github.com/fmtlib/fmt                 |
 | `spdlog`        | 1.13.0      | MIT                              | https://github.com/gabime/spdlog              |
 | `tomlplusplus`  | 3.4.0       | MIT                              | https://github.com/marzer/tomlplusplus        |
+| `yaml-cpp`      | 0.8.0       | MIT                              | https://github.com/jbeder/yaml-cpp            |
 
 ### Test feature (`tests`, default-on)
 
