@@ -8,10 +8,17 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <atomic>
+#include <filesystem>
+#include <fstream>
 #include <memory>
+#include <random>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "souxmar/ai/audit_log.h"
 
 #include "souxmar/core/field.h"
 #include "souxmar/core/mesh.h"
@@ -431,6 +438,221 @@ TEST(ValueYaml, StageRefShorthand) {
   auto v = pl::parse_value_yaml("{from: stage42}");
   ASSERT_EQ(v.kind(), pl::Value::Kind::Stage);
   EXPECT_EQ(v.as_stage().stage_id, "stage42");
+}
+
+// ============================================================================
+// Sprint 5 push 2 — new tools
+// ============================================================================
+
+TEST(AiDefaultTools_v2, RegistryNowContainsEightTools) {
+  auto r = ai::default_v1_tools();
+  EXPECT_EQ(r.list().size(), 8u);
+  for (const auto* expected : {
+      "read_geometry_summary", "mesh", "set_bc", "solve",
+      "screenshot_viewport", "query_field", "compute_field",
+      "propose_pipeline"}) {
+    EXPECT_NE(r.find(expected), nullptr) << "missing tool: " << expected;
+  }
+}
+
+TEST(AiTools_QueryField, RequiresFieldHandle) {
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;
+  ai::ConfirmationPolicy policy;
+  auto out = ai::dispatch_tool(r, "query_field", pl::Value::null_value(), ctx, policy);
+  ASSERT_TRUE(out.error.has_value());
+  EXPECT_EQ(out.error->code, "PRECONDITION_FAILED");
+}
+
+TEST(AiTools_QueryField, AggregatesOverField) {
+  auto r = ai::default_v1_tools();
+  auto field = std::make_shared<souxmar::core::Field>(
+      "test-field", souxmar::core::FieldLocation::Cell,
+      souxmar::core::FieldKind::Scalar, /*count=*/4);
+  // Field's data() is zero-initialised on construction; mutate via the
+  // mutable span so we can exercise the aggregator with a known input.
+  auto data = field->data();
+  data[0] = -3.0;
+  data[1] =  1.0;
+  data[2] =  5.0;
+  data[3] =  2.0;
+
+  ai::ToolContext ctx;
+  ctx.field_handle = field;
+  ai::ConfirmationPolicy policy;
+  auto out = ai::dispatch_tool(r, "query_field", pl::Value::null_value(), ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << out.summary;
+  EXPECT_EQ(out.data.find("min")->as_number(),   -3.0);
+  EXPECT_EQ(out.data.find("max")->as_number(),    5.0);
+  EXPECT_DOUBLE_EQ(out.data.find("mean")->as_number(), (-3.0 + 1.0 + 5.0 + 2.0) / 4.0);
+  EXPECT_EQ(out.data.find("count")->as_number(),  4.0);
+  EXPECT_EQ(std::string(out.data.find("location")->as_string()), "cell");
+  EXPECT_EQ(std::string(out.data.find("kind")->as_string()),     "scalar");
+}
+
+TEST(AiTools_ComputeField, ReturnsNotAvailableInThisBuild) {
+  // Sprint 5 push 2 ships compute_field as a stub awaiting the postproc
+  // C ABI (push 3). Confirm the contract: NOT_AVAILABLE with a clear
+  // suggestion the agent can route around.
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["compute_field"] = ai::Confirmation::Auto;
+  auto out = ai::dispatch_tool(r, "compute_field", pl::Value::null_value(), ctx, policy);
+  ASSERT_TRUE(out.error.has_value());
+  EXPECT_EQ(out.error->code, "NOT_AVAILABLE");
+}
+
+TEST(AiTools_ProposePipeline, RoundTripsThroughParser) {
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;
+  ai::ConfirmationPolicy policy;
+
+  // Build a valid 2-stage spec: mesher → writer (mirrors the cantilever).
+  auto spec = pl::Value::map({
+      {"version", pl::Value::number(1)},
+      {"stages",  pl::Value::list({
+          pl::Value::map({
+              {"id",     pl::Value::string("mesh")},
+              {"plugin", pl::Value::string("mesher.tetra.hello")},
+          }),
+          pl::Value::map({
+              {"id",     pl::Value::string("write")},
+              {"plugin", pl::Value::string("writer.vtu")},
+              {"input",  pl::Value::map({
+                  {"mesh", pl::Value::stage_ref("mesh")},
+                  {"path", pl::Value::string("out.vtu")},
+              })},
+          }),
+      })},
+  });
+  auto out = ai::dispatch_tool(r, "propose_pipeline", spec, ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << out.summary;
+  EXPECT_EQ(out.data.find("parsed_stages")->as_number(), 2.0);
+  EXPECT_NE(std::string(out.data.find("yaml")->as_string()).find("mesher.tetra.hello"),
+            std::string::npos);
+}
+
+TEST(AiTools_ProposePipeline, RejectsBadSpec) {
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;
+  ai::ConfirmationPolicy policy;
+  // Missing required stages list.
+  auto spec = pl::Value::map({{"version", pl::Value::number(1)}});
+  auto out = ai::dispatch_tool(r, "propose_pipeline", spec, ctx, policy);
+  ASSERT_TRUE(out.error.has_value());
+  EXPECT_EQ(out.error->code, "INVALID_ARGUMENT");
+}
+
+// ============================================================================
+// Audit log + session budget
+// ============================================================================
+
+class AuditLogTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    std::random_device rd;
+    path_ = std::filesystem::temp_directory_path() /
+            ("souxmar-audit-test-" + std::to_string(rd()) + ".log");
+  }
+  void TearDown() override {
+    std::error_code ec;
+    std::filesystem::remove(path_, ec);
+  }
+  std::filesystem::path path_;
+};
+
+TEST_F(AuditLogTest, AppendWritesOneLinePerEntry) {
+  {
+    ai::AuditLog log(path_);
+    ai::AuditLog::Entry e;
+    e.tool_name  = "mesh";
+    e.outcome    = "ok";
+    e.summary    = "mesh: 4 nodes";
+    e.input_hash = "deadbeefcafebabe";
+    e.duration   = std::chrono::milliseconds{42};
+    log.append(e);
+    log.append(e);
+  }
+  std::ifstream in(path_);
+  std::string contents((std::istreambuf_iterator<char>(in)), {});
+  // Two entries → two newlines.
+  EXPECT_EQ(std::count(contents.begin(), contents.end(), '\n'), 2);
+  EXPECT_NE(contents.find("tool: mesh"), std::string::npos);
+  EXPECT_NE(contents.find("outcome: ok"), std::string::npos);
+  EXPECT_NE(contents.find("duration_ms: 42"), std::string::npos);
+}
+
+TEST(AuditLog, DefaultPathHonorsEnvOverride) {
+  // Use putenv-style fallback that works on every platform: set via
+  // setenv on POSIX, _putenv on Windows. Skip the test if the platform
+  // doesn't support it cleanly.
+#if defined(_WIN32)
+  _putenv("SOUXMAR_AUDIT_LOG=C:/tmp/souxmar-audit-env-test.log");
+#else
+  setenv("SOUXMAR_AUDIT_LOG", "/tmp/souxmar-audit-env-test.log", /*overwrite=*/1);
+#endif
+  const auto p = ai::AuditLog::default_path();
+  EXPECT_NE(p.string().find("souxmar-audit-env-test.log"), std::string::npos);
+#if defined(_WIN32)
+  _putenv("SOUXMAR_AUDIT_LOG=");
+#else
+  unsetenv("SOUXMAR_AUDIT_LOG");
+#endif
+}
+
+TEST(SessionBudget, RecordCrossesThresholdsOnce) {
+  ai::SessionBudget b;
+  b.max_total_tokens = 100;
+  std::vector<std::pair<int, std::string>> fires;
+  b.on_threshold = [&](int pct, std::string_view axis,
+                       const ai::SessionBudget&) {
+    fires.emplace_back(pct, std::string(axis));
+  };
+
+  EXPECT_EQ(b.record(40, 0),  40u);
+  EXPECT_TRUE(fires.empty());
+  EXPECT_EQ(b.record(20, 0),  60u);   // crosses 50% total
+  ASSERT_EQ(fires.size(), 1u);
+  EXPECT_EQ(fires[0].first, 50);
+  EXPECT_EQ(fires[0].second, "total");
+  EXPECT_EQ(b.record(30, 0),  90u);   // crosses 80% total
+  ASSERT_EQ(fires.size(), 2u);
+  EXPECT_EQ(fires[1].first, 80);
+  EXPECT_EQ(b.record(20, 0), 110u);   // crosses 100% total
+  ASSERT_EQ(fires.size(), 3u);
+  EXPECT_EQ(fires[2].first, 100);
+  // Re-recording past 100% does not double-fire.
+  EXPECT_EQ(b.record(50, 0), 160u);
+  EXPECT_EQ(fires.size(), 3u);
+}
+
+TEST(SessionBudget, UnlimitedAxisSuppressesCallback) {
+  ai::SessionBudget b;     // max_*_tokens all zero
+  int calls = 0;
+  b.on_threshold = [&](int, std::string_view, const ai::SessionBudget&) { ++calls; };
+  for (int i = 0; i < 10; ++i) b.record(1000, 1000);
+  EXPECT_EQ(calls, 0);
+}
+
+TEST_F(AuditLogTest, DispatchWritesOneEntryPerCall) {
+  ai::AuditLog log(path_);
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;
+  ctx.audit_log = &log;
+  ai::ConfirmationPolicy policy;
+
+  // Mix outcomes so the audit log content reflects the diversity.
+  (void)ai::dispatch_tool(r, "no_such_tool",       pl::Value::null_value(), ctx, policy);
+  (void)ai::dispatch_tool(r, "read_geometry_summary", pl::Value::null_value(), ctx, policy);
+  // close + reopen so the buffered writes flush
+  log = ai::AuditLog(path_);
+
+  std::ifstream in(path_);
+  std::string contents((std::istreambuf_iterator<char>(in)), {});
+  EXPECT_NE(contents.find("tool: no_such_tool"),  std::string::npos);
+  EXPECT_NE(contents.find("outcome: not_found"),  std::string::npos);
+  EXPECT_NE(contents.find("tool: read_geometry_summary"), std::string::npos);
 }
 
 }  // namespace

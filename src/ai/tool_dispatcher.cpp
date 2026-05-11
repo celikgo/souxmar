@@ -2,8 +2,13 @@
 
 #include "souxmar/ai/tool.h"
 
+#include "souxmar/ai/audit_log.h"
+#include "souxmar/pipeline/cache.h"   // hash_inputs / ContentHash
+
 #include <algorithm>
+#include <chrono>
 #include <exception>
+#include <string_view>
 #include <utility>
 
 namespace souxmar::ai {
@@ -55,6 +60,38 @@ ToolResult make_error(std::string code,
   return r;
 }
 
+// Map a ToolResult to the canonical audit `outcome` token. Stable
+// vocabulary so external log analyzers can group / count without
+// guessing.
+std::string outcome_token(const ToolResult& r) {
+  if (!r.error) return "ok";
+  const auto& code = r.error->code;
+  if (code == "DENIED")         return "denied";
+  if (code == "NOT_CONFIRMED")  return "not_confirmed";
+  if (code == "NOT_FOUND")      return "not_found";
+  return "fail";  // INVALID_ARGUMENT / PLUGIN_NOT_FOUND / INTERNAL / NOT_AVAILABLE / ...
+}
+
+void record_audit(ToolContext&            ctx,
+                  std::string_view        tool_name,
+                  const pipeline::Value&  inputs,
+                  const ToolResult&       result,
+                  std::chrono::milliseconds duration) {
+  if (ctx.audit_log == nullptr) return;
+  AuditLog::Entry e;
+  e.tool_name = std::string(tool_name);
+  e.outcome   = outcome_token(result);
+  e.summary   = result.summary;
+  // Same SHA-256 used for the pipeline cache key. Context prefix
+  // ("audit:") namespaces it away from cache keys so an audit hash can
+  // never accidentally collide with a stage cache key.
+  std::string ctx_key = "audit:" + std::string(tool_name);
+  e.input_hash = pipeline::hash_inputs(ctx_key, inputs, {}).hex();
+  e.duration   = duration;
+  e.budget     = ctx.budget;
+  ctx.audit_log->append(e);
+}
+
 }  // namespace
 
 ToolResult dispatch_tool(const ToolRegistry&     registry,
@@ -62,11 +99,19 @@ ToolResult dispatch_tool(const ToolRegistry&     registry,
                          const pipeline::Value&  inputs,
                          ToolContext&            context,
                          ConfirmationPolicy&     policy) {
+  const auto start = std::chrono::steady_clock::now();
+  auto elapsed = [&] {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start);
+  };
+
   const auto* tool = registry.find(tool_name);
   if (tool == nullptr) {
-    return make_error("NOT_FOUND",
+    auto r = make_error("NOT_FOUND",
         "no tool named '" + std::string(tool_name) + "' is registered",
         "call `souxmar agent list` (or ToolRegistry.list()) to see available tools");
+    record_audit(context, tool_name, inputs, r, elapsed());
+    return r;
   }
 
   // Confirmation gate. The order matches the contract in the header
@@ -79,16 +124,20 @@ ToolResult dispatch_tool(const ToolRegistry&     registry,
         policy.confirmed_once.contains(tool->name);
     if (!already_confirmed_once) {
       if (!policy.prompter) {
-        return make_error("NOT_CONFIRMED",
+        auto r = make_error("NOT_CONFIRMED",
             "tool '" + tool->name + "' requires user confirmation but no prompter "
             "was supplied",
             "either set ConfirmationPolicy.prompter or add an override mapping "
             "this tool to Confirmation::Auto");
+        record_audit(context, tool_name, inputs, r, elapsed());
+        return r;
       }
       const bool approved = policy.prompter(*tool, inputs);
       if (!approved) {
-        return make_error("DENIED",
+        auto r = make_error("DENIED",
             "user declined to run '" + tool->name + "'");
+        record_audit(context, tool_name, inputs, r, elapsed());
+        return r;
       }
       if (required == Confirmation::ConfirmOnce) {
         policy.confirmed_once.insert(tool->name);
@@ -99,16 +148,18 @@ ToolResult dispatch_tool(const ToolRegistry&     registry,
   // Invoke handler. Catch every exception type to keep the agent
   // runtime from ever seeing a raw throw — model recovery only works
   // against structured ToolError.
+  ToolResult result;
   try {
-    auto result = tool->handler(inputs, context);
-    return result;
+    result = tool->handler(inputs, context);
   } catch (const std::exception& e) {
-    return make_error("INTERNAL",
+    result = make_error("INTERNAL",
         "tool '" + tool->name + "' threw an exception: " + e.what());
   } catch (...) {
-    return make_error("INTERNAL",
+    result = make_error("INTERNAL",
         "tool '" + tool->name + "' threw an unknown exception");
   }
+  record_audit(context, tool_name, inputs, result, elapsed());
+  return result;
 }
 
 }  // namespace souxmar::ai

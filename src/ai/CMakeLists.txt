@@ -6,12 +6,16 @@ find_package(fmt CONFIG REQUIRED)
 
 add_library(souxmar_ai
   tool_dispatcher.cpp
+  audit_log.cpp
   tools/default_registry.cpp
   tools/read_geometry_summary.cpp
   tools/mesh.cpp
   tools/set_bc.cpp
   tools/solve.cpp
   tools/screenshot_viewport.cpp
+  tools/query_field.cpp
+  tools/compute_field.cpp
+  tools/propose_pipeline.cpp
 )
 add_library(souxmar::ai ALIAS souxmar_ai)
 

@@ -46,6 +46,7 @@
 #include "souxmar/plugin/manifest.h"
 #include "souxmar/plugin/registry.h"
 
+#include "souxmar/ai/audit_log.h"
 #include "souxmar/ai/tool.h"
 
 namespace py = pybind11;
@@ -614,11 +615,53 @@ PYBIND11_MODULE(_pysouxmar, m) {
           [](souxmar::ai::ToolContext& c, py::object v) {
             c.take_session_state(v.is_none() ? pipeline::Value::null_value()
                                               : py_to_value(v));
-          });
+          })
+      // Audit + budget plumbing (Sprint 5 push 2). The pointers are
+      // non-owning: the Python caller must keep the AuditLog and
+      // SessionBudget objects alive across dispatch_tool calls.
+      // keep_alive ties the setters to the context so a GC of the
+      // AuditLog while the ctx is alive can't dangle.
+      .def_property("audit_log",
+          [](const souxmar::ai::ToolContext& c) -> py::object {
+            return c.audit_log ? py::cast(c.audit_log, py::return_value_policy::reference) : py::none();
+          },
+          [](souxmar::ai::ToolContext& c, souxmar::ai::AuditLog* log) { c.audit_log = log; },
+          py::keep_alive<1, 2>())
+      .def_property("budget",
+          [](const souxmar::ai::ToolContext& c) -> py::object {
+            return c.budget ? py::cast(c.budget, py::return_value_policy::reference) : py::none();
+          },
+          [](souxmar::ai::ToolContext& c, souxmar::ai::SessionBudget* b) { c.budget = b; },
+          py::keep_alive<1, 2>());
+
+  // ---- Audit log + session budget (Sprint 5 push 2) ----------------
+
+  py::class_<souxmar::ai::SessionBudget>(ai, "SessionBudget")
+      .def(py::init<>())
+      .def_readwrite("max_input_tokens",   &souxmar::ai::SessionBudget::max_input_tokens)
+      .def_readwrite("max_output_tokens",  &souxmar::ai::SessionBudget::max_output_tokens)
+      .def_readwrite("max_total_tokens",   &souxmar::ai::SessionBudget::max_total_tokens)
+      .def_readwrite("consumed_input",     &souxmar::ai::SessionBudget::consumed_input)
+      .def_readwrite("consumed_output",    &souxmar::ai::SessionBudget::consumed_output)
+      .def_property_readonly("consumed_total",
+          &souxmar::ai::SessionBudget::consumed_total)
+      .def("record", &souxmar::ai::SessionBudget::record,
+           py::arg("input_delta"), py::arg("output_delta"));
+      // on_threshold callback: pybind11/functional.h not pulled in here;
+      // Python users that want a threshold callback for the v1 build set
+      // it from a C++ shim, or check consumed_total after each record().
+
+  py::class_<souxmar::ai::AuditLog>(ai, "AuditLog")
+      .def(py::init<std::filesystem::path>(), py::arg("path"))
+      .def_property_readonly("path", &souxmar::ai::AuditLog::path)
+      .def_static("default_path", &souxmar::ai::AuditLog::default_path,
+                  py::arg("project_root") = std::filesystem::path{});
 
   ai.def("default_v1_tools", &souxmar::ai::default_v1_tools,
-         "Build the default v1 ToolRegistry (read_geometry_summary, mesh, "
-         "set_bc, solve, screenshot_viewport).");
+         "Build the default v1 ToolRegistry. Sprint 4 push 3 catalogue "
+         "(read_geometry_summary, mesh, set_bc, solve, screenshot_viewport) "
+         "plus Sprint 5 push 2 additions (query_field, compute_field, "
+         "propose_pipeline) — 8 tools total.");
 
   ai.def("dispatch_tool",
         [](const souxmar::ai::ToolRegistry& reg,

@@ -32,6 +32,7 @@
 #include <utility>
 #include <vector>
 
+#include "souxmar/ai/audit_log.h"
 #include "souxmar/ai/tool.h"
 #include "souxmar/pipeline/cache.h"
 #include "souxmar/pipeline/parser.h"
@@ -60,7 +61,8 @@ void print_usage() {
       "  souxmar run <pipeline.yaml> [--no-cache] [--cache-dir <dir>] [--plugin-path <dir>]...\n"
       "  souxmar plugin list [--plugin-path <dir>]...\n"
       "  souxmar agent list\n"
-      "  souxmar agent invoke <tool> [--input <yaml>] [--input-file <path>] [--yes] [--plugin-path <dir>]...\n"
+      "  souxmar agent invoke <tool> [--input <yaml>] [--input-file <path>] [--yes]\n"
+      "                              [--audit-log <path>] [--plugin-path <dir>]...\n"
       "  souxmar version\n"
       "  souxmar help\n"
       "\n"
@@ -288,6 +290,7 @@ int cmd_agent_invoke(const std::string&            tool_name,
                      bool                          auto_yes,
                      bool                          use_cache,
                      const fs::path&               cache_dir_override,
+                     const fs::path&               audit_log_path,
                      const std::vector<fs::path>&  extra_paths) {
   // 1. Parse the inputs first so an obvious typo fails before we touch
   //    plugins.
@@ -333,6 +336,20 @@ int cmd_agent_invoke(const std::string&            tool_name,
   (void)cache_dir_override;  // disk_cache only relevant to `run` today
   (void)use_cache;
 
+  // Audit log. By default we write to the platform-relative
+  // `.souxmar/chat/audit.log` (or whatever $SOUXMAR_AUDIT_LOG points
+  // at); --audit-log overrides both. We construct the AuditLog
+  // best-effort: a permission failure surfaces a warning but does not
+  // block the tool from running.
+  std::unique_ptr<souxmar::ai::AuditLog> audit;
+  try {
+    audit = std::make_unique<souxmar::ai::AuditLog>(
+        souxmar::ai::AuditLog::default_path(audit_log_path));
+    ctx.audit_log = audit.get();
+  } catch (const std::exception& e) {
+    fmt::print(stderr, "warning: audit log disabled ({})\n", e.what());
+  }
+
   // 4. Confirmation policy: --yes maps every tool to Auto for this run.
   //    Without it, a tool needing confirmation will hit the no-prompter
   //    path and fail with NOT_CONFIRMED — explicit and recoverable.
@@ -376,6 +393,7 @@ int main(int argc, char** argv) {
   // Common: collect --plugin-path flags from anywhere in the tail.
   std::vector<fs::path>    extra_paths;
   fs::path                 cache_dir_override;
+  fs::path                 audit_log_path;
   bool                     use_cache = true;
   bool                     auto_yes  = false;
   std::string              input_yaml;
@@ -414,6 +432,10 @@ int main(int argc, char** argv) {
       }
     } else if (args[i] == "--yes" || args[i] == "-y") {
       auto_yes = true;
+    } else if (args[i] == "--audit-log") {
+      auto v = pop_value(args, i, "--audit-log");
+      if (!v) return kExitUsage;
+      audit_log_path = *v;
     } else if (!args[i].empty() && args[i].front() == '-') {
       fmt::print(stderr, "error: unknown flag '{}'\n", args[i]);
       print_usage();
@@ -455,7 +477,8 @@ int main(int argc, char** argv) {
         return kExitUsage;
       }
       return cmd_agent_invoke(positionals[1], input_yaml, auto_yes,
-                              use_cache, cache_dir_override, extra_paths);
+                              use_cache, cache_dir_override,
+                              audit_log_path, extra_paths);
     }
     fmt::print(stderr, "error: unknown agent action '{}'\n", positionals[0]);
     return kExitUsage;

@@ -234,6 +234,33 @@ The plugin C ABI version is tracked separately and is independent of the project
   - `src/plugin-host/CMakeLists.txt` builds `conformance.cpp` into `libsouxmar-plugin`.
   - New top-level `tools/` subdirectory; `tools/conformance/CMakeLists.txt` builds the binary when `SOUXMAR_BUILD_CLI=ON` (default).
 
+#### Sprint 5 push 2 — agent catalogue to 8 tools + audit log + session budget
+
+- **3 new agent tools** (`src/ai/tools/`):
+  - `query_field` (Read, Auto) — min/max/mean over `ctx.field_handle->data()`, with NaN filtering and finite-vs-total counts. Reports the field's location / kind / num_components labels so the agent can reason about scalar magnitude vs. vector component interpretation.
+  - `compute_field` (Postproc, ConfirmOnce) — ships as an honest stub returning NOT_AVAILABLE. The postproc C ABI required by this tool lands in Sprint 5 push 3 alongside the heat-conduction solver; extending the existing solver vtable to accept an input field would be an ABI break right before freeze candidacy, so we ratchet rather than rush.
+  - `propose_pipeline` (Pipeline, Auto) — round-trips a structured spec through `emit_value_yaml` + `parse_pipeline`. The parser is the ground truth on what "valid" means, so a draft that passes here is guaranteed to load at `souxmar run` time. Read-only by design — `write_pipeline` (future) is the matching commit tool.
+  - `default_v1_tools()` registry size goes from 5 → 8. The Sprint 5 plan's "tool count to 8" commitment is satisfied.
+- **`souxmar::ai::AuditLog`** (`include/souxmar/ai/audit_log.h`, `src/ai/audit_log.cpp`):
+  - Append-only YAML one-liner per dispatch: `{ts: <iso8601 utc>, tool: ..., outcome: ..., duration_ms: N, input_hash: <sha256>, summary: "...", budget: {in, out, total, max_total}}`.
+  - Thread-safe (internal mutex around the ofstream). Cross-process safe at line granularity on POSIX (`O_APPEND` + PIPE_BUF guarantee); best-effort on Windows.
+  - `default_path()` resolves `$SOUXMAR_AUDIT_LOG` → `<project_root>/.souxmar/chat/audit.log` → `cwd/.souxmar/chat/audit.log`.
+  - Parent directories created lazily on construction; permission failures throw `filesystem_error` rather than silently swallowing.
+- **`souxmar::ai::SessionBudget`** (same header):
+  - Per-session `{max_input, max_output, max_total} × {consumed_input, consumed_output}` counters.
+  - `record(in_delta, out_delta)` increments the counters and fires `on_threshold(pct, axis, current)` exactly once per crossed (axis, threshold) pair. Thresholds: 50% / 80% / 100% of each `max_*_tokens`. `max == 0` means unlimited on that axis (callback suppressed).
+  - Used by tools that talk to AI providers — the v1 catalogue today doesn't, so audit lines carry `budget: {in: 0, out: 0, ...}` for now. The plumbing is here for the desktop / API client work in later pushes.
+- **`ToolContext` extensions** — non-owning `audit_log`, `budget` pointer slots. `dispatch_tool` reads both: every call records one audit entry (with timing via `std::chrono::steady_clock`), and the budget snapshot rides along.
+- **Stable audit outcome vocabulary**: `ok` / `fail` / `denied` / `not_confirmed` / `not_found`. The dispatcher's `outcome_token` mapping is the single source so external log parsers can group / count without dispatch-internals knowledge.
+- **CLI**: new `--audit-log <path>` flag on `souxmar agent invoke`. Default behaviour writes to `default_path()`; the flag overrides. A permission failure surfaces a warning but does NOT block the tool from running.
+- **Python**:
+  - `pysouxmar.ai.AuditLog`, `pysouxmar.ai.SessionBudget` bound; `ToolContext.audit_log` and `.budget` are non-owning Python properties (pybind11 `keep_alive` ties their lifetimes).
+  - `on_threshold` callback for `SessionBudget` is intentionally not bound in v1 (signature involves `std::string_view` + struct ref). Python users watch `consumed_total` after each `record()`. First-class callback lands in Sprint 6.
+- **Tests**:
+  - `tests/unit/test_ai_tools.cpp` extended — registry count assertion now 8; `query_field` precondition + aggregation paths; `compute_field` stub contract; `propose_pipeline` good + bad spec paths; `AuditLog` round-trip + env-override default path; `SessionBudget` crosses-once threshold semantics; full dispatch → audit-line wiring.
+  - `bindings/python/tests/test_agent_tools.py` mirrors the same surface from Python, including a 3-call audit-log roundtrip that asserts on the YAML line content + count.
+- **Build**: `src/ai/CMakeLists.txt` gains `audit_log.cpp`, `tools/query_field.cpp`, `tools/compute_field.cpp`, `tools/propose_pipeline.cpp`.
+
 ### Changed
 
 - (None this release.)

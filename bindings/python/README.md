@@ -158,6 +158,25 @@ The v1 catalogue (see `docs/AI_INTEGRATION.md` for the full design):
 | `set_bc`              | BC       | ConfirmOnce      | Appends to `session_state['boundary_conditions']`.              |
 | `solve`               | Solve    | ConfirmAlways    | Dispatches `solver.*`; requires `mesh` was called first.        |
 | `screenshot_viewport` | Read     | ConfirmOnce      | Stub in headless / pip builds; available in the desktop app.    |
+| `query_field`         | Read     | Auto             | min/max/mean over `ctx.field_handle`; reports NaN count.        |
+| `compute_field`       | Postproc | ConfirmOnce      | Stub awaiting the postproc C ABI (Sprint 5 push 3).              |
+| `propose_pipeline`    | Pipeline | Auto             | Round-trips a spec through the YAML parser; returns canonical text. |
+
+### Audit + budget
+
+Every dispatch is recorded to an `AuditLog` (one YAML one-liner per call) when one is wired into the ToolContext:
+
+```python
+ctx = sx.ai.ToolContext()
+ctx.audit_log = sx.ai.AuditLog(sx.ai.AuditLog.default_path())  # ~/project/.souxmar/chat/audit.log
+ctx.budget    = sx.ai.SessionBudget()
+ctx.budget.max_total_tokens = 100_000
+
+# Tools that call AI providers update the budget themselves:
+ctx.budget.record(prompt_tokens, completion_tokens)
+```
+
+`SessionBudget` fires `on_threshold` at 50% / 80% / 100% of `max_total_tokens` (and the per-axis maxima). The callback is not yet bound from Python — for v1, watch `consumed_total` after each `record()`. A first-class Python callback lands in Sprint 6.
 
 Python v1 limitations:
 

@@ -45,6 +45,9 @@ namespace souxmar::pipeline { class Cache; class IDispatcher; }
 
 namespace souxmar::ai {
 
+class AuditLog;
+struct SessionBudget;
+
 // User-confirmation requirement for a tool. Read tools default to Auto
 // (no prompt); destructive / network-using tools default to higher
 // levels. Match the surface described in docs/AI_INTEGRATION.md.
@@ -105,6 +108,14 @@ struct ToolContext {
   std::shared_ptr<core::Geometry> geometry_handle;
   std::shared_ptr<core::Mesh>     mesh_handle;
   std::shared_ptr<core::Field>    field_handle;
+
+  // Optional audit + budget plumbing (Sprint 5 push 2). When set,
+  // dispatch_tool() appends one entry to `audit_log` per invocation and
+  // consults `budget` for the snapshot it records. Tools that talk to an
+  // AI provider call `budget->record(input, output)` themselves; the
+  // dispatcher does not synthesise token counts.
+  AuditLog*           audit_log = nullptr;
+  SessionBudget*      budget    = nullptr;
 };
 
 // Declaration of a single tool. The handler is the only mandatory field
