@@ -41,6 +41,7 @@
 #include "souxmar/pipeline/runner.h"
 #include "souxmar/pipeline/value.h"
 #include "souxmar/plugin/discovery.h"
+#include "souxmar/plugin/index.h"
 #include "souxmar/plugin/loader.h"
 #include "souxmar/plugin/registry.h"
 #include "souxmar/version.h"
@@ -61,6 +62,7 @@ void print_usage() {
       "Usage:\n"
       "  souxmar run <pipeline.yaml> [--no-cache] [--cache-dir <dir>] [--plugin-path <dir>]...\n"
       "  souxmar plugin list [--plugin-path <dir>]...\n"
+      "  souxmar plugin search [<query>] [--capability <prefix>] [--index <path>]\n"
       "  souxmar agent list\n"
       "  souxmar agent invoke <tool> [--input <yaml>] [--input-file <path>] [--yes]\n"
       "                              [--audit-log <path>] [--budget-config <path>]\n"
@@ -169,6 +171,74 @@ int cmd_plugin_list(const std::vector<fs::path>& extra_paths) {
       }
     }
   }
+  return kExitOk;
+}
+
+// Locate the canonical plugin index. Priority order:
+//   1. --index <path> (caller-supplied, absolute or relative to cwd).
+//   2. $SOUXMAR_PLUGIN_INDEX environment variable.
+//   3. ./docs/plugin-index.toml relative to cwd (works in a checkout).
+//   4. <executable parent>/../share/souxmar/plugin-index.toml (Sprint 10
+//      install-side hardening; not used in dev).
+// Returns the first existing path; an empty fs::path if none found.
+fs::path resolve_index_path(const fs::path& override_path) {
+  if (!override_path.empty()) return override_path;
+  if (const char* env = std::getenv("SOUXMAR_PLUGIN_INDEX"); env && *env) {
+    return fs::path{env};
+  }
+  fs::path cwd_local = fs::current_path() / "docs" / "plugin-index.toml";
+  if (fs::exists(cwd_local)) return cwd_local;
+  return {};
+}
+
+int cmd_plugin_search(const std::string&  query,
+                      const std::string&  capability_prefix,
+                      const fs::path&     index_override) {
+  const fs::path index_path = resolve_index_path(index_override);
+  if (index_path.empty() || !fs::exists(index_path)) {
+    fmt::print(stderr,
+        "error: plugin index not found. Set $SOUXMAR_PLUGIN_INDEX or pass "
+        "--index <path>, or run from a souxmar checkout containing "
+        "docs/plugin-index.toml.\n");
+    return kExitUsage;
+  }
+  auto result = souxmar::plugin::load_index_file(index_path);
+  if (auto* err = std::get_if<souxmar::plugin::IndexParseError>(&result)) {
+    fmt::print(stderr, "error: failed to parse index: {}\n", err->message);
+    return kExitInternal;
+  }
+  const auto& entries = std::get<std::vector<souxmar::plugin::IndexEntry>>(result);
+  const auto matches  = souxmar::plugin::search_index(entries, query, capability_prefix);
+  if (matches.empty()) {
+    if (!query.empty() || !capability_prefix.empty()) {
+      fmt::print(stderr, "no plugins matched (query='{}', capability='{}')\n",
+                 query, capability_prefix);
+    } else {
+      fmt::print(stderr, "no plugins listed in {}\n", index_path.string());
+    }
+    return kExitOk;
+  }
+  for (const auto& e : matches) {
+    fmt::print("{} — {}\n", e.id, e.name);
+    if (!e.description.empty()) {
+      fmt::print("  description:  {}\n", e.description);
+    }
+    fmt::print("  capabilities:");
+    for (const auto& c : e.capabilities) fmt::print(" {}", c);
+    fmt::print("\n");
+    if (!e.license.empty())          fmt::print("  license:      {}\n", e.license);
+    if (!e.author.empty())           fmt::print("  author:       {}\n", e.author);
+    if (!e.source.empty())           fmt::print("  source:       {}\n", e.source);
+    if (!e.souxmar_versions.empty()) fmt::print("  souxmar:      {}\n", e.souxmar_versions);
+    fmt::print("  conformance:  {}", souxmar::plugin::to_string(e.conformance));
+    if (!e.conformance_date.empty()) fmt::print(" ({})", e.conformance_date);
+    fmt::print("\n");
+    fmt::print("  status:       {}{}\n",
+               souxmar::plugin::to_string(e.status),
+               e.paid ? "  [paid]" : "");
+    fmt::print("\n");
+  }
+  fmt::print("{} match(es) in {}\n", matches.size(), index_path.string());
   return kExitOk;
 }
 
@@ -451,6 +521,8 @@ int main(int argc, char** argv) {
   fs::path                 cache_dir_override;
   fs::path                 audit_log_path;
   fs::path                 budget_config_path;
+  fs::path                 index_path_override;     // --index <path>
+  std::string              capability_prefix;       // --capability <prefix>
   bool                     use_cache = true;
   bool                     auto_yes  = false;
   std::string              input_yaml;
@@ -497,6 +569,14 @@ int main(int argc, char** argv) {
       auto v = pop_value(args, i, "--budget-config");
       if (!v) return kExitUsage;
       budget_config_path = *v;
+    } else if (args[i] == "--index") {
+      auto v = pop_value(args, i, "--index");
+      if (!v) return kExitUsage;
+      index_path_override = *v;
+    } else if (args[i] == "--capability") {
+      auto v = pop_value(args, i, "--capability");
+      if (!v) return kExitUsage;
+      capability_prefix = *v;
     } else if (!args[i].empty() && args[i].front() == '-') {
       fmt::print(stderr, "error: unknown flag '{}'\n", args[i]);
       print_usage();
@@ -510,11 +590,28 @@ int main(int argc, char** argv) {
     return cmd_version();
   }
   if (sub == "plugin") {
-    if (positionals.empty() || positionals[0] != "list") {
-      fmt::print(stderr, "error: only `souxmar plugin list` is supported in v0.0.1\n");
+    if (positionals.empty()) {
+      fmt::print(stderr,
+          "error: `souxmar plugin` requires a sub-action (list | search)\n");
       return kExitUsage;
     }
-    return cmd_plugin_list(extra_paths);
+    if (positionals[0] == "list") {
+      return cmd_plugin_list(extra_paths);
+    }
+    if (positionals[0] == "search") {
+      // Optional positional: the query string. Multiple positionals
+      // (rare) are joined with spaces so `souxmar plugin search foo bar`
+      // searches for the literal "foo bar" against the index — matches
+      // how shells naturally tokenise a multi-word query.
+      std::string query;
+      for (std::size_t i = 1; i < positionals.size(); ++i) {
+        if (i > 1) query += ' ';
+        query += positionals[i];
+      }
+      return cmd_plugin_search(query, capability_prefix, index_path_override);
+    }
+    fmt::print(stderr, "error: unknown plugin action '{}'\n", positionals[0]);
+    return kExitUsage;
   }
   if (sub == "run") {
     if (positionals.empty()) {

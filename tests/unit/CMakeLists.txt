@@ -29,6 +29,8 @@ add_executable(souxmar_unit_tests
   test_subprocess.cpp
   # Sprint 9 push 9.
   test_heap_accountant.cpp
+  # Sprint 10 push 2.
+  test_plugin_index.cpp
 )
 
 target_link_libraries(souxmar_unit_tests

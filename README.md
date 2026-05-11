@@ -44,7 +44,7 @@ The ABI v1 soak that ran across Sprints 5–7 picked up its third additive minor
 
 Runnable today:
 
-- **CLI**: `souxmar run <pipeline.yaml>`, `souxmar plugin list`, `souxmar agent {list,invoke}` (with `--audit-log`, `--budget-config`, `--yes`), `souxmar-conformance <dir>`, `souxmar-eval <evals-dir>`.
+- **CLI**: `souxmar run <pipeline.yaml>`, `souxmar plugin {list,search}` (Sprint 10 push 2 — `search` queries the canonical `docs/plugin-index.toml`), `souxmar agent {list,invoke}` (with `--audit-log`, `--budget-config`, `--yes`), `souxmar-conformance <dir>`, `souxmar-eval <evals-dir>` (with `--latency-output` and `--max-p95-ms`).
 - **Python**: `pip install pysouxmar` → parser, registry, loader, runner, cache, **18 agent tools**, audit log, first-class `SessionBudget.on_threshold` callback, `.souxmar/budget.toml` loader.
 - **Plugin SDK**: **frozen-final C ABI v1.3** across six capability namespaces (`reader.*`, `mesher.*`, `solver.*`, `writer.*`, `postproc.*`, plus the bulk-buffer ingest path), now with **per-face tags** on `souxmar_mesh_*` (ADR-0012); `souxmar_add_plugin` CMake macro; conformance suite + CI lockdown gate; host-side **subprocess harness** for plugins that drive external binaries.
 - **Eleven in-tree reference plugins** (always-on): hello-mesher, grid-mesher, hello-writer, vtu-writer, heat-solver, elasticity-stub, cfd-stub, scalar-magnitude, mesh-quality, stl-reader, obj-reader.

@@ -1,0 +1,247 @@
+# souxmar plugin index — canonical static listing.
+#
+# Sprint 10 push 2 (Plugin-team SPRINT_PLAN.md story for Sprint 10).
+# Each [[plugin]] table is one publicly-listed souxmar plugin: who
+# wrote it, what capabilities it serves, where the source lives, the
+# souxmar version range it supports, its conformance state, and its
+# lifecycle marker. Schema in include/souxmar/plugin/index.h; parser
+# in src/plugin-host/index.cpp; CLI surface is `souxmar plugin
+# search`.
+#
+# Open-index policy is in docs/BUSINESS_MODEL.md § Plugin marketplace
+# economics. Authoring procedure is in .claude/skills/
+# publishing-plugin-marketplace/SKILL.md.
+#
+# This file is the single source of truth — the paid-marketplace
+# entries (Sprint 16+) will join via the same schema with `paid =
+# true` set on each. The DX team reviews PRs against this file for
+# completeness; we do not vet code or behaviour. Conformance status
+# is the only quality signal.
+#
+# To add an entry: copy any [[plugin]] block, edit the fields, open a
+# PR. The publishing-plugin-marketplace skill walks through the full
+# process including how to generate a conformance attestation.
+
+# ---- in-tree reference plugins (always-on) ----------------------------
+#
+# Eleven plugins live under examples/plugins/ in the souxmar repo and
+# are built unconditionally. They are listed here so `souxmar plugin
+# search` surfaces them alongside third-party entries — there's no
+# special-case in the index for "in-tree vs. out-of-tree".
+
+[[plugin]]
+id           = "dev.souxmar.examples.hello-mesher"
+name         = "Hello mesher"
+description  = "Canonical reference plugin: produces a unit tetrahedron, ignoring input geometry and options. Used by tests and tutorials."
+capabilities = ["mesher.tetra.hello"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/hello-mesher"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.grid-mesher"
+name         = "Grid tetrahedral mesher"
+description  = "Uniform 5-tet-per-hex tetrahedral fill of an axis-aligned box. Always-on closed-form sibling of gmsh-mesher."
+capabilities = ["mesher.tetra.grid"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/grid-mesher"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.hello-writer"
+name         = "Hello writer"
+description  = "Reference writer plugin — emits a one-line summary text file. Pairs with hello-mesher in the plugin-tutorial set."
+capabilities = ["writer.text"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/hello-writer"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.vtu-writer"
+name         = "VTU writer"
+description  = "Writes meshes + fields to ParaView-readable .vtu (VTK XML unstructured-grid). Default writer for every example pipeline."
+capabilities = ["writer.vtu"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/vtu-writer"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.heat-solver"
+name         = "Heat-conduction solver (linear, closed-form demo)"
+description  = "Closed-form transient heat solver on a tetrahedral mesh — demonstration grade, not production. The fenicsx-solver adapter handles the real case."
+capabilities = ["solver.heat.linear"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/heat-solver"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.elasticity-stub"
+name         = "Linear-elasticity solver (closed-form demo)"
+description  = "Closed-form linear-elasticity solver on a tetrahedral mesh — demonstration grade. Pairs with fenicsx-solver for the real-FEM path."
+capabilities = ["solver.elasticity.linear"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/elasticity-stub"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.cfd-stub"
+name         = "CFD solver (closed-form demo)"
+description  = "Closed-form uniform-velocity CFD solver. Always-on sibling of openfoam-solver — same `solver.cfd.simple` capability so swapping is a build-time flag."
+capabilities = ["solver.cfd.simple"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/cfd-stub"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.scalar-magnitude"
+name         = "Scalar-magnitude postproc"
+description  = "Computes the elementwise magnitude of a vector field — e.g. velocity-magnitude from a CFD vector solution."
+capabilities = ["postproc.scalar.magnitude"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/scalar-magnitude"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.mesh-quality"
+name         = "Mesh-quality postproc"
+description  = "Per-cell quality metrics: Jacobian, aspect ratio, dihedral angle, skewness, orthogonality. Surfaces bad cells before they reach the solver."
+capabilities = ["postproc.mesh_quality"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/mesh-quality"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.stl-reader"
+name         = "STL reader"
+description  = "Reads ASCII + binary STL files into a Tri3 surface mesh. Deduplicates coincident vertices."
+capabilities = ["reader.stl"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/stl-reader"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.obj-reader"
+name         = "Wavefront OBJ reader"
+description  = "Reads Wavefront OBJ files into a Tri3 surface mesh. Preserves usemtl group names as per-cell tags (Sprint 9 push 5)."
+capabilities = ["reader.obj"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/obj-reader"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+# ---- in-tree opt-in adapters ------------------------------------------
+#
+# Five external-binary adapters live under examples/plugins/ but build
+# only when their respective SOUXMAR_WITH_* CMake flag is on and the
+# external dependency is reachable. They appear in the index so users
+# searching for a CFD or CAD path can find them; the `paid` flag stays
+# false (they're open-source) but installation is the user's
+# responsibility.
+
+[[plugin]]
+id           = "dev.souxmar.examples.occt-reader"
+name         = "OpenCASCADE CAD reader"
+description  = "Reads STEP and IGES CAD files via OpenCASCADE. Opt-in: requires `-DSOUXMAR_WITH_OPENCASCADE=ON` and OCCT 7.x at build time."
+capabilities = ["reader.step", "reader.iges"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/occt-reader"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.gmsh-mesher"
+name         = "Gmsh tetrahedral mesher"
+description  = "Embeds Gmsh as a library. Production-grade tetrahedralisation; advancing-front + Delaunay strategies. Opt-in: `-DSOUXMAR_WITH_GMSH=ON`."
+capabilities = ["mesher.tetra.gmsh"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/gmsh-mesher"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.fenicsx-solver"
+name         = "FEniCSx FEM solver (Poisson)"
+description  = "Routes a souxmar Mesh + BCs through DOLFINx; consumes the DOLFINx solution back into a souxmar Field. v1 covers Poisson — broader element coverage tracks DOLFINx releases. Opt-in: `-DSOUXMAR_WITH_FENICSX=ON`."
+capabilities = ["solver.fem.poisson"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/fenicsx-solver"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.openfoam-solver"
+name         = "OpenFOAM CFD adapter"
+description  = "Invokes simpleFoam / pimpleFoam / interFoam via subprocess per ADR-0009 (no GPL linking). Mixed-element polyMesh translator (Tet4 / Hex8 / Prism6 / Pyramid5) + per-patch BC routing via the v1.3 per-face-tag ABI. Opt-in: `-DSOUXMAR_WITH_OPENFOAM=ON`."
+capabilities = ["solver.cfd.openfoam.simple", "solver.cfd.openfoam.pimple", "solver.cfd.openfoam.inter"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/openfoam-solver"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.blender-reader"
+name         = "Blender .blend importer"
+description  = "Reads Blender .blend files via the same subprocess harness OpenFOAM uses (bpy.ops.wm.obj_export → OBJ → souxmar mesh). Round-trips named collections to per-cell tags. Opt-in: `-DSOUXMAR_WITH_BLENDER=ON` and Blender 4.x on PATH."
+capabilities = ["reader.blend"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/blender-reader"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "passed"
+conformance_date = "2026-05-11"
+status           = "active"

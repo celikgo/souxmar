@@ -16,6 +16,8 @@ add_library(souxmar_plugin
   subprocess.cpp
   # Sprint 9 push 9 — per-plugin heap accounting (mallinfo2 on glibc).
   heap_accountant.cpp
+  # Sprint 10 push 2 — plugin-index data model + search.
+  index.cpp
 )
 
 # POSIX needs libdl for dlopen(); Windows uses kernel32 implicitly.
