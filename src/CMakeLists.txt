@@ -6,6 +6,9 @@ add_subdirectory(core)
 add_subdirectory(plugin-host)
 add_subdirectory(pipeline)
 add_subdirectory(ai)
+# Sprint 10 push 4 — auto-updater (manifest parser + validator now;
+# verifier + state machine + rollback land in subsequent pushes).
+add_subdirectory(updater)
 
 if(SOUXMAR_BUILD_CLI)
   add_subdirectory(cli)

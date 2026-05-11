@@ -31,6 +31,8 @@ add_executable(souxmar_unit_tests
   test_heap_accountant.cpp
   # Sprint 10 push 2.
   test_plugin_index.cpp
+  # Sprint 10 push 4.
+  test_update_manifest.cpp
 )
 
 target_link_libraries(souxmar_unit_tests
@@ -39,6 +41,7 @@ target_link_libraries(souxmar_unit_tests
     souxmar::plugin
     souxmar::pipeline
     souxmar::ai
+    souxmar::update
     souxmar::warnings
     souxmar::sanitizers
     GTest::gtest

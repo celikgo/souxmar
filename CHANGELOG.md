@@ -8,6 +8,45 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
+#### Sprint 10 push 4 — auto-updater foundation: signed manifest format + parser + validator (ADR-0013)
+
+Opens Platform's "Auto-updater across all 3 OSes; signed manifest pipeline; rollback protocol" XL story (`docs/SPRINT_PLAN.md` § Sprint 10). This is the foundation push: the on-disk format and the parser/validator that the verifier (push 5), state machine (push 6), and rollback log (push 7) will all key off. The whole-story design decisions are locked in by ADR-0013, so subsequent pushes can focus on behaviour rather than re-litigating the data model. **No frozen-header surface touched, no new third-party dependency** — re-uses tomlplusplus from the existing manifest/index parsers; libsodium is deferred to push 5 where the verifier actually needs it.
+
+- **`docs/adr/0013-signed-update-manifest.md`** — tier-2 design ADR locking in: TOML manifest with `schema = 1` discriminator; three channels (`stable`/`beta`/`nightly`); per-(OS × arch) artifact metadata pinned by sha256 + size; ed25519 detached signature; pinned `public_key_id` with separate-event key rotation. Alternatives considered (JSON, embedded JWS-style, full TUF, Sigstore, platform-native-signing only) each get their pro/con and the rationale for deferring. Pre-mortem covers the three most plausible failure modes a year out (schema-too-narrow → additive field; key compromise → rotation already covered; downgrade-attack incident → constructive migration to TUF snapshot+timestamp roles, this manifest stays as `targets`).
+- **`include/souxmar/update/manifest.h`** — new `souxmar::update` namespace, data model only:
+  - `enum class Channel { Stable, Beta, Nightly }`, `enum class Os { Linux, Macos, Windows }`, `enum class Arch { X86_64, Aarch64 }`.
+  - `struct Artifact { os, arch, url, sha256, size }` — one per platform tuple.
+  - `struct ChannelBlock`, `struct ReleaseBlock` (with `min_previous_version` floor + `rollback_target` + `mandatory` UI-hint), `struct SigningBlock` (algorithm + pinned public-key id).
+  - `struct Manifest` — the whole document, schema-stamped.
+  - `parse_manifest_file(path)` and `parse_manifest_string(toml)` returning `std::variant<Manifest, ManifestParseError>`. Splitting parse from verify means the verifier can be added next push without re-cutting this surface.
+  - `validate_manifest(m) → vector<ManifestValidationIssue>` — structural-publishability gate; `ManifestIssueSeverity { Error, Warning }` matches the plugin-index validator's two-tier pattern.
+  - `kManifestSchemaV1 = 1` exposed for future schema-version comparison.
+- **`src/updater/manifest.cpp`** — parser + validator implementation. Parser is strict on required fields (`schema`, `[channel].name`, `[release].version`, every `[[artifact]]` field, the entire `[signing]` block) and defensive on optional ones (missing/empty/wrong-type defaults to empty). Required-field failures throw a per-scope diagnostic ("[[artifact]] #2: missing required field 'sha256'") wrapped into `ManifestParseError` — release-pipeline engineers fixing a broken emitter see the offending field by name, not a generic "parse failed". Unknown values on enum-shaped fields (channel name, os, arch) reject the manifest outright. Negative `size` rejects with "must be non-negative".
+- **`src/updater/manifest.cpp` validator — six error checks + three warning checks.**
+  - **Error: `signing.algorithm != "ed25519"`.** The v1 manifest is ed25519-only; ADR-0013 keeps the field a string so a future `sigstore` value slots in without re-cutting, but rejects every other value today.
+  - **Error: empty `signing.public_key_id`.** The verifier needs an id to look up the trust-store key.
+  - **Error: `release.version` is not three dot-separated numeric tokens.** Lightweight grammar check ("MAJOR.MINOR.PATCH"); full SemVer comparison lives in the version-comparison module that lands with the state machine in push 6.
+  - **Error: duplicate (`os`, `arch`) pair across `[[artifact]]` entries.** Catches the canonical release-pipeline bug where two `artifact` blocks claim the same platform tuple.
+  - **Error: `artifact.url` is not `http(s)://`.** Same shape check as the plugin-index validator's source-URL check; catches a local path or an `ssh://` URL.
+  - **Error: `artifact.sha256` is not exactly 64 lowercase hex characters.** Both length and character-set; the canonical sha256 representation is lowercase-hex per SHA-256/POSIX `sha256sum` convention.
+  - **Error: `artifact.size == 0`.** A zero-byte declaration would defeat the pre-flight disk-space check.
+  - **Warning: empty `release.rollback_target`.** Disables rollback; reviewer confirms it's intentional.
+  - **Warning: empty `release.min_previous_version`.** No floor; reviewer flags so the release pipeline's omission is deliberate.
+  - **Warning: empty `channel.expires_at`.** The freshness check loses its grip; reviewer confirms.
+- **Validator deliberately does NOT check time-dependent properties.** The "is `channel.expires_at` in the past" check is the *apply gate*'s job (push 6) — wall-clock is meaningful there, not in CI or unit tests. Unit-test stability is paid for in design.
+- **`src/updater/CMakeLists.txt`** — new `souxmar::update` target. Builds against tomlplusplus + the public-headers interface target; no other deps yet. Subsequent pushes append source files to this list (verifier → push 5; state machine → push 6; rollback log → push 7).
+- **`tests/unit/test_update_manifest.cpp`** — 24 tests. Parser: minimal-valid roundtrip, full-five-artifact roundtrip, enum string roundtrip, beta + nightly channel parsing, missing-schema rejection, unknown-schema-version rejection, unknown-channel-name rejection, unknown-OS rejection, unknown-arch rejection, missing-required-artifact-field rejection, malformed-TOML rejection, empty-artifact-array rejection, negative-size rejection. Validator: full-manifest-validates-clean, minimal-validates-clean-with-no-warnings, non-ed25519-algorithm-error, empty-public-key-id-error, malformed-version-error (×3: short, prefixed, too-long), bad-sha-length-error, uppercase-sha-error, bad-URL-scheme-error (×2: ftp + local-path), zero-size-error, duplicate-os-arch-error, empty-rollback-target-warning, empty-min-previous-version-warning, empty-channel-expires-at-warning, multi-issue-accumulation-error (5 distinct errors + 1 warning reported on a single mangled manifest — the test that locks in "every issue reported, not just the first").
+
+What the auto-updater push sequence looks like from here:
+
+1. **Push 4 (this push):** signed-manifest format + parser + validator + ADR.
+2. **Push 5:** ed25519 detached-signature verifier (introduces libsodium); maps `signing.public_key_id` to an embedded trust-store entry.
+3. **Push 6:** updater state machine (discover → download → verify → stage → swap) + `souxmar update check` / `souxmar update apply` CLI subcommands; the time-dependent freshness check (`expires_at` vs. wall-clock) lives here.
+4. **Push 7:** rollback log (records the previous install path + version so `souxmar update rollback` lands deterministically); first-launch crash → automatic rollback path.
+5. **Push 8:** Apple notarisation automation (the second Platform Sprint 10 story; handles altool/notarytool queue stalls with retry/backoff). Closes the XL.
+
+The downstream consumers (`docs/DESKTOP_APP.md` § Update protocol, `docs/SECURITY.md` § Release signing) reference this ADR for the data model + signing scheme; subsequent pushes annotate the same docs with the concrete behaviour as it lands.
+
 #### Sprint 10 push 3 — plugin-index publication workflow (PR-gated, conformance surfaced)
 
 Closes the second Plugin-team named SPRINT_PLAN.md story for Sprint 10 ("Index publication workflow: PR-based, with conformance status surfaced"). Builds directly on push 2's parser + canonical index. A new validator runs every check the parser deliberately doesn't (duplicate id detection, URL format, capability shape, license / version-range completeness, conformance status surfacing) and a new CI workflow runs that validator on every PR touching `docs/plugin-index.toml`. Third-party authors get a structured "what's wrong with my entry" check before review; reviewers focus on what reviewers should focus on. **No frozen-header surface touched** — extends the push 2 surface; ABI v1.3 stands.
