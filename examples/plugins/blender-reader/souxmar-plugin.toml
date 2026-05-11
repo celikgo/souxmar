@@ -1,0 +1,33 @@
+[plugin]
+id            = "dev.souxmar.examples.blender-reader"
+name          = "Blender (.blend) Reader"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/blender-reader"
+
+description   = "Reads Blender .blend files by invoking blender as a subprocess to export OBJ, then parses the OBJ into a Tri3 mesh."
+documentation = "https://souxmar.dev/docs/plugins/blender-reader"
+tags          = ["reader", "blend", "blender", "subprocess", "concept-geom"]
+min_souxmar_abi_minor = 1
+
+[plugin.binary]
+file          = "libblender_reader.so"
+
+[plugin.capabilities]
+provides      = ["reader.blend"]
+
+[plugin.threading]
+# Blender's embedded Python interpreter / bpy state isn't reentrant.
+# Even across subprocesses we serialise to avoid temp-path collisions.
+model         = "single-threaded"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"
+
+# Range matches Blender 4.x — the `bpy.ops.wm.obj_export` operator
+# we invoke is the canonical name from 4.0 onwards. Earlier 3.4–3.6
+# expose the same call under a different prefix (`bpy.ops.export_scene.obj`),
+# which we may add via a Blender-version probe in a follow-on push.
+[plugin.blender_required]
+version_range = ">=4.0,<5.0"

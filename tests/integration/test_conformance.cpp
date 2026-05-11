@@ -168,6 +168,16 @@ TEST_F(ConformanceGateTest, CfdStubPassesAllChecks) {
   expect_all_v1_checks_pass(plugin::run_conformance(*p));
 }
 
+// Sprint 8 push 3 — always-on Wavefront OBJ reader. The opt-in
+// blender-reader sibling subprocesses out to `blender -b` and is
+// exercised on the nightly Blender-bearing matrix. 11 in-tree plugins
+// green here.
+TEST_F(ConformanceGateTest, ObjReaderPassesAllChecks) {
+  const auto* p = find_plugin(discovery_, "dev.souxmar.examples.obj-reader");
+  ASSERT_NE(p, nullptr);
+  expect_all_v1_checks_pass(plugin::run_conformance(*p));
+}
+
 // Negative: confirm that a deliberately-mismatched manifest (declared ABI
 // 99) trips C001 + Skips the rest. Builds on the discovered hello-mesher
 // to keep the test self-contained — we fabricate a DiscoveredPlugin in

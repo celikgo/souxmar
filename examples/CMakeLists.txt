@@ -38,3 +38,12 @@ add_subdirectory(plugins/cfd-stub)
 if(SOUXMAR_WITH_OPENFOAM)
   add_subdirectory(plugins/openfoam-solver)
 endif()
+# Sprint 8 push 3 — concept geometry readers. Always-on obj-reader
+# (Wavefront OBJ → Tri3); opt-in blender-reader (subprocess invocation
+# of `blender -b --python-expr ...` exports the .blend to OBJ first).
+# Blender is GPL-2.0+, so the same ADR-0009 process-isolation rule
+# the OpenFOAM adapter follows applies to the blender adapter too.
+add_subdirectory(plugins/obj-reader)
+if(SOUXMAR_WITH_BLENDER)
+  add_subdirectory(plugins/blender-reader)
+endif()

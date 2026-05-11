@@ -8,6 +8,19 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
+#### Sprint 8 push 3 — concept-geometry readers (OBJ always-on, Blender opt-in)
+
+Second use of the Sprint 8 push 1 subprocess harness. Lands the always-on / opt-in pair that gets concept-geometry meshes into souxmar — Wavefront OBJ directly, .blend through a Blender subprocess. **No frozen-header surface touched** — `souxmar-c/*` is unchanged; ABI v1.1 stands.
+
+Why this pair: STEP/IGES (Sprint 6 push 4's `occt-reader`) cover production CAD; STL (sibling `stl-reader`) covers tessellated CAD. OBJ + .blend cover the concept-art / DCC funnel — what designers send before any CAD model exists. The same gate keeps the default CI matrix hermetic: always-on closed-form/text parsing, opt-in subprocess for anything heavy.
+
+- **`examples/plugins/obj-reader/`** — always-on. Capability `reader.obj`, plugin id `dev.souxmar.examples.obj-reader`, reentrant. Wavefront OBJ parser: `v` (positions), `f` (faces with all four field forms — `v`, `v/vt`, `v/vt/vn`, `v//vn`), 1-based and negative-index resolution, polygon faces fan-triangulated into Tri3 cells from the first vertex. `vn` / `vt` / `vp` / `o` / `g` / `s` / `mtllib` / `usemtl` are accepted and silently ignored — Blender's OBJ exporter writes all of these, and the parser stays permissive to absorb vendor-specific extensions.
+- **`examples/plugins/blender-reader/`** — opt-in. Built only when `SOUXMAR_WITH_BLENDER=ON` **and** `blender` is resolvable on `$PATH` at configure time. Capability `reader.blend`. `find_program(SOUXMAR_BLENDER_BIN blender)` at configure time + `find_executable_on_path("blender")` at plugin-load time (the plugin refuses to register the capability if the binary is missing at load — clean "capability not found" instead of runtime spawn failure). Per-call work directory under `std::filesystem::temp_directory_path()`; invokes `blender -b <input.blend> --python-expr "..."` to run `bpy.ops.wm.obj_export(filepath=..., export_triangulated_mesh=True)` into that work dir, then parses the OBJ back. Mandatory wall-clock timeout (default 5 min); cleaned up unconditionally on every exit path.
+- **ADR-0009 compliance, extended to GPL Blender.** No `find_package(Blender)`, no Blender header in souxmar's include path, no link against `libblender.so`. The plugin links `souxmar::plugin` (Apache-2.0 internal C++) for `run_subprocess` and walks `blender` as a child process — the same well-trodden pattern push 2's OpenFOAM adapter follows.
+- **Manifest.** `[plugin.blender_required]` carries `version_range = ">=4.0,<5.0"` because the `bpy.ops.wm.obj_export` operator name is canonical from Blender 4.0 onwards (3.4–3.6 expose the same operator under `bpy.ops.export_scene.obj` — a follow-on push can add a version probe if 3.x support is needed).
+- **Tests** (`tests/integration/test_obj_reader.cpp`): tetrahedron OBJ → assert 4 nodes / 4 triangles + VTU lands on disk; quad-face OBJ → assert 4 nodes / 2 fan-triangulated cells; tetrahedron with `f v/vt/vn` triples → same shape (verifies the face-field parser's slash-stripping). The Blender adapter itself is exercised on the nightly Blender-bearing matrix (Docker image with Blender 4.x pre-staged), not in default CI.
+- **Conformance gate.** `tests/integration/test_conformance.cpp` now also asserts `dev.souxmar.examples.obj-reader` passes all 10 v1 checks. **11 in-tree plugins green.**
+
 #### Sprint 8 push 2 — OpenFOAM adapter (subprocess) + always-on CFD stub
 
 Closes **R-003**. ADR-0009 (Sprint 7 push 5) defined the contract — subprocess invocation only, never `find_package(OpenFOAM)`, never link `libOpenFOAM.so`. Push 1 (below) landed the subprocess harness. Push 2 lands the actual adapter and its closed-form sibling. **No frozen-header surface touched** — `souxmar-c/*` is unchanged; ABI v1.1 stands.
