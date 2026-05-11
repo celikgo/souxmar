@@ -140,10 +140,12 @@ PluginLoader::load(const DiscoveredPlugin& discovered) {
       0,
   };
 
-  // 5. Set the registry's "current plugin id" so add_mesher_c can attribute
-  //    capabilities to this plugin without each plugin call passing its id.
-  //    Cleared after register returns (success or failure).
-  registry_.current_plugin_id_ = discovered.manifest.id;
+  // 5. Stash the plugin's id + threading model on the registry so the
+  //    C ABI add_*_c bridges can attribute capabilities + carry threading
+  //    through without every plugin call having to pass them. Both slots
+  //    are cleared after register returns (success or failure).
+  registry_.current_plugin_id_        = discovered.manifest.id;
+  registry_.current_plugin_threading_ = discovered.manifest.threading;
 
   // 6. Call register inside the crash-isolation frame.
   int rc = -1;
@@ -153,6 +155,7 @@ PluginLoader::load(const DiscoveredPlugin& discovered) {
     rc = register_fn(registry_handle, &host_info);
   });
   registry_.current_plugin_id_.clear();
+  registry_.current_plugin_threading_ = ThreadingModel::SingleThreaded;
 
   if (guard.outcome != GuardOutcome::Ok) {
     registry_.remove_plugin(discovered.manifest.id);

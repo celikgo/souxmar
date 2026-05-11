@@ -7,6 +7,7 @@
 #include <algorithm>
 
 #include "souxmar/pipeline/dag.h"
+#include "souxmar/pipeline/parallel_runner.h"
 
 namespace souxmar::pipeline {
 
@@ -14,6 +15,14 @@ RunResult run_pipeline(const Pipeline&    pipeline,
                        IDispatcher&       dispatcher,
                        Cache&             cache,
                        const RunOptions&  options) {
+  // Dispatch into the parallel scheduler whenever the caller asked for
+  // more than one worker. The parallel implementation handles cache,
+  // disk_backing, and stop_on_first_failure with the same contract as
+  // the sequential path below, so callers see a single API.
+  if (options.max_workers > 1) {
+    return run_pipeline_parallel(pipeline, dispatcher, cache, options);
+  }
+
   RunResult result;
 
   // 1. Validate + topologically sort.

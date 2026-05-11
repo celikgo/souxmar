@@ -17,6 +17,7 @@ add_executable(souxmar_unit_tests
   test_pipeline_dag.cpp
   test_pipeline_cache.cpp
   test_pipeline_runner.cpp
+  test_parallel_runner.cpp
   test_c_abi_handles.cpp
 )
 

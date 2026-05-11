@@ -20,7 +20,8 @@ std::variant<std::monostate, RegistryError>
 Registry::add_mesher(std::string                     capability_id,
                      std::string                     plugin_id,
                      const souxmar_mesher_vtable_t*  vtable,
-                     void*                           user_data) {
+                     void*                           user_data,
+                     ThreadingModel                  threading) {
   if (capability_id.empty()) {
     return RegistryError{"capability_id must not be empty"};
   }
@@ -47,6 +48,7 @@ Registry::add_mesher(std::string                     capability_id,
       std::move(plugin_id),
       CapabilityKind::Mesher,
       vtable->abi_version,
+      threading,
       MesherEntry{vtable, user_data},
   };
   entries_.emplace(std::move(capability_id), std::move(entry));
@@ -111,7 +113,8 @@ std::variant<std::monostate, RegistryError>
 Registry::add_solver(std::string                     capability_id,
                      std::string                     plugin_id,
                      const souxmar_solver_vtable_t*  vtable,
-                     void*                           user_data) {
+                     void*                           user_data,
+                     ThreadingModel                  threading) {
   if (capability_id.empty()) return RegistryError{"capability_id must not be empty"};
   if (vtable == nullptr) {
     return RegistryError{fmt::format("'{}': vtable pointer is null", capability_id)};
@@ -132,6 +135,7 @@ Registry::add_solver(std::string                     capability_id,
   CapabilityEntry entry{
       capability_id, std::move(plugin_id),
       CapabilityKind::Solver, vtable->abi_version,
+      threading,
       SolverEntry{vtable, user_data},
   };
   entries_.emplace(std::move(capability_id), std::move(entry));
@@ -142,7 +146,8 @@ std::variant<std::monostate, RegistryError>
 Registry::add_writer(std::string                     capability_id,
                      std::string                     plugin_id,
                      const souxmar_writer_vtable_t*  vtable,
-                     void*                           user_data) {
+                     void*                           user_data,
+                     ThreadingModel                  threading) {
   if (capability_id.empty()) return RegistryError{"capability_id must not be empty"};
   if (vtable == nullptr) {
     return RegistryError{fmt::format("'{}': vtable pointer is null", capability_id)};
@@ -163,10 +168,20 @@ Registry::add_writer(std::string                     capability_id,
   CapabilityEntry entry{
       capability_id, std::move(plugin_id),
       CapabilityKind::Writer, vtable->abi_version,
+      threading,
       WriterEntry{vtable, user_data},
   };
   entries_.emplace(std::move(capability_id), std::move(entry));
   return std::monostate{};
+}
+
+std::optional<ThreadingModel>
+Registry::find_threading(std::string_view capability_id) const {
+  std::shared_lock lock(mu_);
+  if (auto it = entries_.find(std::string(capability_id)); it != entries_.end()) {
+    return it->second.threading;
+  }
+  return std::nullopt;
 }
 
 void Registry::remove_plugin(std::string_view plugin_id) {
@@ -210,8 +225,9 @@ souxmar_status_t Registry::add_mesher_c(std::string_view                plugin_i
                                         const char*                     capability_id,
                                         const souxmar_mesher_vtable_t*  vtable,
                                         void*                           user_data) noexcept {
+  const auto threading = current_plugin_threading_;
   return add_c_impl(capability_id, "souxmar_registry_add_mesher", [&] {
-    return add_mesher(capability_id, std::string(plugin_id), vtable, user_data);
+    return add_mesher(capability_id, std::string(plugin_id), vtable, user_data, threading);
   });
 }
 
@@ -219,8 +235,9 @@ souxmar_status_t Registry::add_solver_c(std::string_view                plugin_i
                                         const char*                     capability_id,
                                         const souxmar_solver_vtable_t*  vtable,
                                         void*                           user_data) noexcept {
+  const auto threading = current_plugin_threading_;
   return add_c_impl(capability_id, "souxmar_registry_add_solver", [&] {
-    return add_solver(capability_id, std::string(plugin_id), vtable, user_data);
+    return add_solver(capability_id, std::string(plugin_id), vtable, user_data, threading);
   });
 }
 
@@ -228,8 +245,9 @@ souxmar_status_t Registry::add_writer_c(std::string_view                plugin_i
                                         const char*                     capability_id,
                                         const souxmar_writer_vtable_t*  vtable,
                                         void*                           user_data) noexcept {
+  const auto threading = current_plugin_threading_;
   return add_c_impl(capability_id, "souxmar_registry_add_writer", [&] {
-    return add_writer(capability_id, std::string(plugin_id), vtable, user_data);
+    return add_writer(capability_id, std::string(plugin_id), vtable, user_data, threading);
   });
 }
 

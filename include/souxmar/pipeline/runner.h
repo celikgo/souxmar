@@ -23,6 +23,7 @@
 #include "souxmar/pipeline/cache.h"
 #include "souxmar/pipeline/pipeline.h"
 #include "souxmar/pipeline/value.h"
+#include "souxmar/plugin/manifest.h"  // ThreadingModel — referenced by IDispatcher
 
 namespace souxmar::pipeline {
 
@@ -53,6 +54,27 @@ class IDispatcher {
   // Default is empty (cache will treat "unknown version" as a single bucket).
   virtual std::string plugin_version(std::string_view /*capability_id*/) {
     return {};
+  }
+
+  // Optional: identify which plugin owns a capability. Used by the
+  // parallel runner's reentrancy guard to scope per-plugin locking. The
+  // default returns the capability id itself, which makes every
+  // capability look like its own plugin — safe (over-serialises if
+  // anything) and correct for dispatchers that don't model plugins.
+  virtual std::string plugin_id(std::string_view capability_id) {
+    return std::string(capability_id);
+  }
+
+  // Optional: declare the capability's threading model. The parallel
+  // runner consults this before dispatch:
+  //   * Reentrant         — concurrent calls to this plugin are allowed.
+  //   * SingleThreaded    — only one stage of this plugin runs at a time.
+  //   * InternalParallel  — externally serialized; plugin uses internal threads.
+  // Defaulting to SingleThreaded is the safe choice for dispatchers that
+  // don't know — at worst it under-parallelizes; it cannot corrupt state.
+  virtual ::souxmar::plugin::ThreadingModel
+  plugin_threading(std::string_view /*capability_id*/) {
+    return ::souxmar::plugin::ThreadingModel::SingleThreaded;
   }
 };
 
@@ -97,6 +119,13 @@ struct DiskBacking {
 struct RunOptions {
   bool                          use_cache    = true;
   bool                          stop_on_first_failure = true;
+
+  // 0 or 1 → sequential (original Sprint 3 behaviour).
+  // > 1 → up to that many worker threads dispatch independent DAG branches
+  //       concurrently. Reentrancy enforcement comes from each capability's
+  //       declared ThreadingModel: SingleThreaded / InternalParallel plugins
+  //       serialize across stages; Reentrant plugins overlap freely.
+  std::size_t                   max_workers  = 1;
 
   // When std::nullopt the runner stays purely in-memory (the Sprint 3
   // push 1/push 2 behaviour, preserved for tests and library callers).

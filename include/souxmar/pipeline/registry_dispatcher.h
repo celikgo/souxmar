@@ -65,6 +65,12 @@ class RegistryDispatcher : public IDispatcher {
   // Sprint 5 hardening.
   std::string plugin_version(std::string_view capability_id) override;
 
+  // Used by the parallel runner to attribute capabilities back to their
+  // owning plugin and to honor manifest-declared threading models.
+  std::string plugin_id(std::string_view capability_id) override;
+  ::souxmar::plugin::ThreadingModel
+  plugin_threading(std::string_view capability_id) override;
+
  private:
   plugin::Registry& registry_;
 };

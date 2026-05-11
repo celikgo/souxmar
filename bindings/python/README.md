@@ -126,12 +126,29 @@ PYTHONPATH=../../build/dev-python/bindings/python pytest
 The plugin-loading tests skip cleanly if no built plugins are found, so
 the unit-test layer runs fine on a clean install.
 
+## Parallel runs
+
+The runner is parallel under the hood — set `RunOptions.max_workers > 1`
+and independent DAG branches dispatch concurrently:
+
+```python
+opts = sx.RunOptions()
+opts.max_workers = 4
+result = sx.run_pipeline(pipeline, dispatcher, cache, opts)
+```
+
+Reentrancy is enforced from each capability's `Manifest.threading`:
+`SingleThreaded` and `InternalParallel` plugins serialise across stages
+(per plugin id, so two stages of *different* single-threaded plugins still
+overlap); `Reentrant` plugins overlap freely. A custom `IDispatcher`
+override of `plugin_threading()` lets non-registry-backed dispatchers
+declare the same contract.
+
 ## Roadmap
 
-- **Sprint 4 push 2** — Python-subclassable `IDispatcher` for custom
-  capability routing; parallel runner exposure.
-- **Sprint 4 push 3** — `@sx.plugin.mesher` / `@sx.plugin.solver`
-  decorator (write a plugin in pure Python).
+- **Sprint 4 push 3** — Python-subclassable `IDispatcher` (the Python
+  trampoline) and the `@sx.plugin.mesher` / `@sx.plugin.solver` decorator
+  (write a plugin in pure Python). Plus the agent-tool dispatcher v1.
 - **Sprint 5** — direct Mesh / Geometry / Field handle access through
   the C ABI accessors; numpy-backed coordinate arrays via the buffer
   protocol.

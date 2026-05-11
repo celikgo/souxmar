@@ -241,6 +241,24 @@ std::string RegistryDispatcher::plugin_version(std::string_view capability_id) {
   return {};
 }
 
+std::string RegistryDispatcher::plugin_id(std::string_view capability_id) {
+  if (const auto* e = registry_.find(capability_id); e) {
+    return e->plugin_id;
+  }
+  return std::string(capability_id);
+}
+
+::souxmar::plugin::ThreadingModel
+RegistryDispatcher::plugin_threading(std::string_view capability_id) {
+  if (auto m = registry_.find_threading(capability_id); m.has_value()) {
+    return *m;
+  }
+  // Conservative default: SingleThreaded. The parallel runner over-
+  // serialises an unknown capability rather than risking concurrent calls
+  // into a plugin that did not declare itself reentrant.
+  return ::souxmar::plugin::ThreadingModel::SingleThreaded;
+}
+
 DispatchResult RegistryDispatcher::dispatch(const DispatchContext& ctx) {
   // Route by namespace prefix.
   if (ctx.capability_id.starts_with("mesher.")) {

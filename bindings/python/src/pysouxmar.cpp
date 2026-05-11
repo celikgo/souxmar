@@ -453,6 +453,10 @@ PYBIND11_MODULE(_pysouxmar, m) {
       .def(py::init<>())
       .def_readwrite("use_cache",            &pipeline::RunOptions::use_cache)
       .def_readwrite("stop_on_first_failure",&pipeline::RunOptions::stop_on_first_failure)
+      // 0 or 1 = sequential; > 1 hands the run off to the parallel
+      // scheduler. Reentrancy is enforced via each capability's manifest
+      // threading model — see Manifest.threading.
+      .def_readwrite("max_workers",          &pipeline::RunOptions::max_workers)
       // Convenience: instead of exposing the C++ DiskBacking with its
       // raw callbacks, we accept a directory path here and the binding
       // wires the Path-StageOutput round-trip on the user's behalf.

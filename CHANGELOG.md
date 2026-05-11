@@ -156,6 +156,33 @@ The plugin C ABI version is tracked separately and is independent of the project
   - `bindings/python/examples/cantilever.py` — 20-line script demonstrating the full discover/load/parse/run flow. Mirrors the Sprint 3 cantilever-beam C example.
   - `bindings/python/README.md` — install, quick start, API surface table, lifetime rules, roadmap to Sprint 4 push 2/3 and Sprint 5.
 
+#### Sprint 4 push 2 — parallel runner + manifest-driven reentrancy
+
+- **Parallel runner** (`include/souxmar/pipeline/parallel_runner.h`, `src/pipeline/parallel_runner.cpp`):
+  - New `run_pipeline_parallel(...)` schedules independent DAG branches across an inline thread pool of size `RunOptions::max_workers`. Worker pulls from a ready queue, runs the stage (cache → dispatch under reentrancy guard → cache put), decrements dependents' in-degree, re-enqueues anything that becomes ready.
+  - `run_pipeline(...)` (the public entry) dispatches into the parallel impl whenever `max_workers > 1`; `max_workers <= 1` keeps the original sequential path.
+  - Stage results are emitted in declaration order regardless of completion order — same shape downstream consumers see from the sequential runner.
+  - Stop-on-failure semantics: in-flight stages complete naturally, no new stage starts; downstream stages of a failed stage are marked `Skipped`.
+- **`ReentrancyGuard`** (same header) — per-plugin `std::mutex` map. `acquire(plugin_id, threading)` returns a `unique_lock` that owns the per-plugin mutex for `SingleThreaded` / `InternalParallel`, and is empty for `Reentrant`. Plugin granularity means two capabilities from the same plugin share a lock; capabilities from different plugins overlap freely even when both declare single-threaded.
+- **Threading model in the registry**:
+  - `CapabilityEntry` gains a `threading` field (`include/souxmar/plugin/registry.h`).
+  - `Registry::add_mesher` / `add_solver` / `add_writer` accept an optional `ThreadingModel` argument (defaults to `SingleThreaded` — the safe choice).
+  - C ABI bridges (`add_mesher_c` etc.) read the loader-stamped `current_plugin_threading_` slot, mirroring the existing `current_plugin_id_` pattern.
+  - `PluginLoader::load` sets `current_plugin_threading_ = discovered.manifest.threading` before invoking `souxmar_plugin_register_v1` and clears it after — same protocol as the plugin id slot.
+  - New accessor: `Registry::find_threading(capability_id) -> std::optional<ThreadingModel>`.
+- **`IDispatcher` extensions** (`include/souxmar/pipeline/runner.h`):
+  - New optional virtual `plugin_id(capability_id)` — defaults to the capability id (over-serialises rather than under-).
+  - New optional virtual `plugin_threading(capability_id)` — defaults to `SingleThreaded` (safe assumption when a dispatcher does not know).
+  - `RegistryDispatcher` overrides both to consult the underlying registry.
+- **`RunOptions::max_workers`** — `0`/`1` = sequential; `>1` = parallel up to that many workers (clamped to `min(max_workers, num_stages)`).
+- Tests:
+  - `tests/unit/test_parallel_runner.cpp` — mock dispatcher with sleep + atomic concurrency counter proves: independent stages run in parallel, dependent stages serialise, two `SingleThreaded` stages of the *same* plugin serialise, two `SingleThreaded` stages of *different* plugins still overlap, `stop_on_first_failure` marks downstream `Skipped`, `max_workers=1` produces a valid result, validation errors short-circuit before any worker spawns. Direct unit tests of `ReentrancyGuard` for `Reentrant` (no-op) and `SingleThreaded` (blocks) cases.
+- Python:
+  - `RunOptions.max_workers` exposed via `pysouxmar`. `bindings/python/tests/test_end_to_end.py` adds a parallel run of the cantilever pipeline asserting the expected result shape.
+  - `bindings/python/README.md` documents `max_workers` + the per-plugin reentrancy contract.
+- Build:
+  - `src/pipeline/CMakeLists.txt` adds `parallel_runner.cpp` and links `Threads::Threads` (PUBLIC, so consumers don't have to repeat the find).
+
 ### Changed
 
 - (None this release.)

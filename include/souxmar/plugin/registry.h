@@ -24,6 +24,8 @@
 #include "souxmar-c/status.h"
 #include "souxmar-c/writer.h"
 
+#include "souxmar/plugin/manifest.h"  // ThreadingModel
+
 namespace souxmar::plugin {
 
 enum class CapabilityKind : std::uint8_t {
@@ -54,6 +56,11 @@ struct CapabilityEntry {
   CapabilityKind  kind;
   std::int32_t    abi_version; // taken from the vtable
 
+  // Threading model declared by the owning plugin's manifest. Drives the
+  // parallel runner's reentrancy guard: SingleThreaded / InternalParallel
+  // plugins serialize across stages; Reentrant plugins run concurrently.
+  ThreadingModel  threading = ThreadingModel::SingleThreaded;
+
   // Capability-specific payload, discriminated by `kind`.
   std::variant<MesherEntry, SolverEntry, WriterEntry> payload;
 };
@@ -77,23 +84,28 @@ class Registry {
 
   // Register a mesher. Returns std::monostate on success or a RegistryError
   // describing why registration was refused (duplicate id, bad ABI, etc.).
+  // `threading` defaults to SingleThreaded — the safest assumption when a
+  // caller does not know the plugin's manifest declaration.
   std::variant<std::monostate, RegistryError>
   add_mesher(std::string                     capability_id,
              std::string                     plugin_id,
              const souxmar_mesher_vtable_t*  vtable,
-             void*                           user_data);
+             void*                           user_data,
+             ThreadingModel                  threading = ThreadingModel::SingleThreaded);
 
   std::variant<std::monostate, RegistryError>
   add_solver(std::string                     capability_id,
              std::string                     plugin_id,
              const souxmar_solver_vtable_t*  vtable,
-             void*                           user_data);
+             void*                           user_data,
+             ThreadingModel                  threading = ThreadingModel::SingleThreaded);
 
   std::variant<std::monostate, RegistryError>
   add_writer(std::string                     capability_id,
              std::string                     plugin_id,
              const souxmar_writer_vtable_t*  vtable,
-             void*                           user_data);
+             void*                           user_data,
+             ThreadingModel                  threading = ThreadingModel::SingleThreaded);
 
   // -------- Read access --------
 
@@ -108,6 +120,12 @@ class Registry {
   [[nodiscard]] const MesherEntry* find_mesher(std::string_view capability_id) const;
   [[nodiscard]] const SolverEntry* find_solver(std::string_view capability_id) const;
   [[nodiscard]] const WriterEntry* find_writer(std::string_view capability_id) const;
+
+  // Threading model declared by the plugin owning `capability_id`. Returns
+  // std::nullopt if the capability is not registered. Used by the parallel
+  // runner's reentrancy guard.
+  [[nodiscard]] std::optional<ThreadingModel>
+  find_threading(std::string_view capability_id) const;
 
   // Drop every capability owned by `plugin_id`. Used at plugin unload.
   void remove_plugin(std::string_view plugin_id);
@@ -141,6 +159,12 @@ class Registry {
   // calling souxmar_plugin_register_v1; consumed by add_mesher_c so the
   // C ABI surface does not need to thread plugin id through every call.
   std::string                                            current_plugin_id_;
+
+  // The threading model of the plugin currently being registered. Same
+  // protocol as current_plugin_id_ — set + cleared by the loader, read by
+  // the add_*_c bridges.
+  ThreadingModel                                         current_plugin_threading_
+      = ThreadingModel::SingleThreaded;
 
   friend class PluginLoader;
 };

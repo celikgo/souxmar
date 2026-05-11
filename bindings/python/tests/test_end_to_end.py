@@ -130,6 +130,40 @@ stages:
     )
 
 
+def test_parallel_run_succeeds(tmp_path, loaded_registry):
+    """Run the same pipeline with max_workers > 1. Real plugins for the
+    in-tree mesher / writer are SingleThreaded — the parallel runner serialises
+    each plugin's stages, but the pipeline still completes successfully."""
+    registry, _handles = loaded_registry
+
+    out = tmp_path / "parallel.vtu"
+    pipeline_text = f"""
+version: 1
+stages:
+  - id: mesh
+    plugin: mesher.tetra.hello
+  - id: write
+    plugin: writer.vtu
+    input:
+      mesh: {{ from: mesh }}
+      path: {out}
+"""
+    pipeline   = sx.parse_pipeline(pipeline_text)
+    dispatcher = sx.RegistryDispatcher(registry)
+    cache      = sx.Cache()
+    opts       = sx.RunOptions()
+    opts.max_workers = 4
+
+    result = sx.run_pipeline(pipeline, dispatcher, cache, opts)
+    assert result.status == sx.RunStatus.Success, (
+        f"validation_errors={result.validation_errors}, "
+        f"failures={[(s.stage_id, s.error.message if s.error else None) for s in result.stage_results if s.error]}"
+    )
+    assert out.exists()
+    # stage_results stays in declaration order regardless of completion order.
+    assert [s.stage_id for s in result.stage_results] == ["mesh", "write"]
+
+
 def test_dispatch_failure_surfaces_message(loaded_registry):
     """A pipeline that names a non-existent capability fails cleanly;
     the StageRunResult carries the dispatcher's error message."""

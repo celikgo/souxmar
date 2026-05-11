@@ -105,4 +105,11 @@ def test_run_options_defaults():
     o = sx.RunOptions()
     assert o.use_cache is True
     assert o.stop_on_first_failure is True
+    assert o.max_workers == 1
     assert o.disk_cache_dir is None
+
+
+def test_run_options_max_workers_assignable():
+    o = sx.RunOptions()
+    o.max_workers = 4
+    assert o.max_workers == 4
