@@ -24,6 +24,7 @@ add_executable(souxmar_integration_tests
   test_load_hello_mesher.cpp
   test_pipeline_end_to_end.cpp
   test_cli_smoke.cpp
+  test_conformance.cpp
 )
 
 target_include_directories(souxmar_integration_tests

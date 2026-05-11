@@ -55,6 +55,14 @@ configure_file(
 
 add_subdirectory(src)
 
+# `tools/` holds operator-facing binaries that pair with the runtime
+# libraries. Sprint 5 ships `souxmar-conformance`; later sprints add
+# `souxmar-bench`, etc. Gated by SOUXMAR_BUILD_CLI for symmetry with
+# the main `souxmar` binary.
+if(SOUXMAR_BUILD_CLI)
+  add_subdirectory(tools/conformance)
+endif()
+
 # Examples must be added BEFORE tests: the integration test_config.h
 # substitutes cache variables (SOUXMAR_HELLO_MESHER_DIR,
 # SOUXMAR_VTU_WRITER_DIR, SOUXMAR_CLI_BINARY) that the example plugin and

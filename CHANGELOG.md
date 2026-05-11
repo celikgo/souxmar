@@ -212,6 +212,28 @@ The plugin C ABI version is tracked separately and is independent of the project
   - `tests/unit/test_ai_tools.cpp` — framework (Auto / ConfirmOnce / ConfirmAlways / DENIED / NOT_CONFIRMED / override / exception → INTERNAL), default v1 registry contents, every tool's success + error path (mesh against a fake mesher vtable, solve precondition, set_bc append semantics, screenshot stub), plus Value↔YAML round-trip.
   - `bindings/python/tests/test_agent_tools.py` — Python mirror of the same surface, including a real-plugin mesh test (skips cleanly without built plugins).
 
+#### Sprint 5 push 1 — plugin conformance suite v1 + ABI freeze gate
+
+- **[ABI v1]** New plugin conformance suite (`include/souxmar/plugin/conformance.h`, `src/plugin-host/conformance.cpp`) — 10 v1 checks (C001–C010) covering the manifest, the load chain, the manifest↔registry mapping, the threading-model contract, and the load/unload cycle. Stable check ids; ratchet-only growth per [ADR-0004](docs/adr/0004-plugin-conformance-suite.md).
+  - C001  manifest ABI version matches host
+  - C002  manifest binary file resolves to an existing path
+  - C003  plugin binary loads (dlopen / LoadLibrary succeeds)
+  - C004  `souxmar_plugin_register_v1` symbol is exported
+  - C005  registration returns success
+  - C006  every capability announced in the manifest is registered
+  - C007  no unannounced capabilities are registered
+  - C008  each registered capability's threading model matches the manifest declaration
+  - C009  plugin unload removes every capability owned by this plugin
+  - C010  three load/unload cycles leave the registry at the same baseline
+- **`souxmar-conformance`** runnable binary (`tools/conformance/`): `souxmar-conformance <search-dir> [--plugin-id <id>] [--quiet] [--summary-only]`. Discovers every plugin under the search dir, runs all 10 checks against each, prints a results table, exits 0 iff every plugin passes every check. Sysexits-style codes (0 / 1 / 2 / 3).
+- `tests/integration/test_conformance.cpp` — the **Sprint 5 ABI freeze gate**. Runs `run_conformance` against all three in-tree plugins (hello-mesher, hello-writer, vtu-writer); asserts every check Passes for each, plus a negative test verifying a deliberately-mismatched ABI trips C001 and Skips the downstream chain.
+- Docs:
+  - New `docs/adr/0004-plugin-conformance-suite.md` explaining the 10 checks, the freeze-candidate process, and the ratchet policy.
+  - `docs/PLUGIN_SDK.md` § Conformance updated to match the actual v1 surface that landed (was placeholder copy).
+- Build:
+  - `src/plugin-host/CMakeLists.txt` builds `conformance.cpp` into `libsouxmar-plugin`.
+  - New top-level `tools/` subdirectory; `tools/conformance/CMakeLists.txt` builds the binary when `SOUXMAR_BUILD_CLI=ON` (default).
+
 ### Changed
 
 - (None this release.)

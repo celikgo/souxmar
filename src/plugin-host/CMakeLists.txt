@@ -10,6 +10,7 @@ add_library(souxmar_plugin
   registry.cpp
   loader.cpp
   guard.cpp
+  conformance.cpp
 )
 
 # POSIX needs libdl for dlopen(); Windows uses kernel32 implicitly.

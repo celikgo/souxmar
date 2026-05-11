@@ -174,20 +174,54 @@ The `souxmar_add_plugin` macro produces a shared library, copies the manifest ne
 
 ## Conformance suite
 
-`tests/plugin-conformance/` ships an executable, `souxmar-conformance`, that any plugin author can run against their plugin:
+Sprint 5 ships **conformance suite v1** as a binary plugin authors run against any plugin tree:
 
 ```
-$ souxmar-conformance --plugin ./libmy_mesher.so --capability mesher.tetra.example
-[ OK ] Manifest present and parseable
-[ OK ] Single registration symbol present
-[ OK ] ABI version compatible with souxmar 1.x
-[ OK ] Reentrancy contract honoured (10 parallel meshes, 0 races detected by TSAN)
-[ OK ] Tag inheritance: 6 input geometric faces -> 6 distinct tag IDs on output
-[FAIL] Empty geometry returns SOUXMAR_E_EMPTY_INPUT (got SOUXMAR_OK)
-[ OK ] Memory: 0 leaks under ASAN over 100 invocations
+$ souxmar-conformance ./build/dev/examples/plugins
+
+plugin: dev.souxmar.examples.hello-mesher
+  manifest: .../examples/plugins/hello-mesher/souxmar-plugin.toml
+  check    outcome  detail
+  -------- -------  ------------------------------------------------------------
+  C001     PASS
+  C002     PASS
+  C003     PASS
+  C004     PASS
+  C005     PASS
+  C006     PASS
+  C007     PASS
+  C008     PASS
+  C009     PASS
+  C010     PASS
+  10 passed, 0 failed, 0 skipped
+
+3 plugin(s) scanned, 0 failed
 ```
 
-A plugin that passes the suite for its capability gets a "conformant" badge in the plugin index. Conformance is recommended, not required — but unconformant plugins should expect bug reports.
+The v1 catalogue (see [ADR-0004](adr/0004-plugin-conformance-suite.md) for the contract each check enforces):
+
+| ID    | What it checks                                                        |
+| ----- | --------------------------------------------------------------------- |
+| C001  | Manifest's `abi` field matches `SOUXMAR_ABI_VERSION_MAJOR`            |
+| C002  | Manifest's `binary` file resolves to an existing path on disk         |
+| C003  | Plugin binary loads (dlopen / LoadLibraryExW succeeds)                |
+| C004  | `souxmar_plugin_register_v1` symbol is exported                       |
+| C005  | Registration returns success                                          |
+| C006  | Every capability announced in the manifest is registered              |
+| C007  | No unannounced capabilities are registered                            |
+| C008  | Each registered capability's threading model matches the manifest    |
+| C009  | Plugin unload removes every capability owned by this plugin           |
+| C010  | Three load/unload cycles leave the registry at the same baseline      |
+
+Flags:
+
+- `--plugin-id <id>` — run only against the plugin with this manifest id.
+- `--summary-only` — one line per plugin instead of the full table.
+- `--quiet` — suppress per-plugin output; emit only the final tally.
+
+Exit codes: `0` everything passed · `1` at least one check failed · `2` usage error · `3` no plugins discovered.
+
+Conformance is **required** for plugins published to the plugin index. A plugin that fails any v1 check is rejected at publish time. The same suite is the gate for the ABI v1 freeze candidate per [ADR-0004](adr/0004-plugin-conformance-suite.md).
 
 ## Python plugins (escape hatch)
 
