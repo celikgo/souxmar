@@ -20,22 +20,23 @@
 // directory entirely; the always-on cfd-stub sibling carries the
 // default-CI agent eval surface.
 //
-// LIMITATIONS (v1):
-//   - The polyMesh generator currently writes a placeholder
-//     single-cell case. Generating a complete OpenFOAM polyMesh from
-//     an arbitrary souxmar Tet4 mesh (face deduplication +
-//     owner/neighbour bookkeeping + boundary patch extraction) is
-//     substantial; it lands as an additive-minor ratchet event
-//     mid-sprint-8 alongside the pipe-bend example (push 6). The v1
-//     plugin proves the subprocess + case-dir + read-back contract
-//     end-to-end against the placeholder.
-//   - Homogeneous wall BCs only. Structured `apply_inlet` /
-//     `apply_wall` / `apply_outlet` from push 4 of this sprint will
-//     thread real BCs through the value bag.
+// SCOPE (v1, post-Sprint-8):
+//   - polyMesh generator: Tet4-only. Sprint 8 push 6 lands the real
+//     face-deduplicated translator (closes the placeholder noted by
+//     pushes 2 + 5). Non-Tet4 inputs surface a clean INVALID_ARGUMENT;
+//     mixed-element meshes are a Sprint 9 follow-on (Hex8 / Prism6 /
+//     Pyramid5 face tables are mechanical but additive).
+//   - Single "walls" boundary patch. Routing apply_inlet / apply_wall /
+//     apply_outlet (push 4) through to per-patch boundaries requires
+//     per-face tag exposure on the C ABI (additive minor) — Sprint 9
+//     follow-on. Until then, openfoam-solver runs with uniform wall BCs
+//     and the BC list staged on session_state is informational.
 //
 // Declared `single-threaded` — OpenFOAM holds working-directory
 // state; the reentrancy guard from Sprint 4 push 2 serialises calls.
 
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -44,6 +45,8 @@
 #include <sstream>
 #include <string>
 #include <system_error>
+#include <unordered_map>
+#include <vector>
 
 #include "souxmar-c/abi.h"
 #include "souxmar-c/field.h"
@@ -194,63 +197,214 @@ void write_initial_p(const fs::path& work) {
   write_file(work / "0" / "p", s);
 }
 
-// constant/polyMesh — Sprint 8 push 2 ships a placeholder
-// single-tetrahedron polyMesh so the subprocess + case-dir + run-back
-// contract is end-to-end testable. Real polyMesh generation from
-// arbitrary souxmar Tet4 meshes (face dedup + owner/neighbour
-// bookkeeping + boundary patch extraction) lands mid-sprint-8 as a
-// follow-on additive-minor ratchet event alongside the pipe-bend
-// example (push 6 of this sprint).
-void write_placeholder_polymesh(const fs::path& work) {
+// constant/polyMesh — Sprint 8 push 6 replaces the push-2 placeholder
+// single-cell case with a real Tet4 → polyMesh translator. The shape:
+//
+//   1. walk every Tet4 cell, emit its 4 faces by canonical (sorted)
+//      vertex key. The face's vertex *order* from the first cell that
+//      claims it becomes the canonical orientation;
+//   2. faces with two claimants are internal (owner = lower cell idx,
+//      neighbour = higher idx); the canonical orientation came from
+//      the owner so the normal already points owner→neighbour;
+//   3. faces with one claimant are boundary — emitted after every
+//      internal face per the OpenFOAM polyMesh contract;
+//   4. a single "walls" boundary patch covers every boundary face.
+//      Per-patch routing (apply_inlet / apply_wall / apply_outlet from
+//      push 4) requires per-face tags on the C ABI — Sprint 9 follow-on.
+//
+// OpenFOAM tet face convention (from the user guide, mesh-description
+// section): for a tet with vertices [v0, v1, v2, v3], the four faces
+// listed in canonical order are
+//   f0 = (v1, v2, v3)  -- opposite v0
+//   f1 = (v0, v3, v2)  -- opposite v1
+//   f2 = (v0, v1, v3)  -- opposite v2
+//   f3 = (v0, v2, v1)  -- opposite v3
+// Each face's vertex order is CCW when viewed from *outside* the cell,
+// so the face normal points out of the owner cell.
+
+souxmar_status_t write_polymesh_from_mesh(const fs::path&        work,
+                                          const souxmar_mesh_t*  mesh) {
+  const std::size_t n_nodes = souxmar_mesh_num_nodes(mesh);
+  const std::size_t n_cells = souxmar_mesh_num_cells(mesh);
+  if (n_nodes == 0 || n_cells == 0) {
+    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT,
+        "openfoam-solver: mesh has zero nodes or zero cells");
+  }
+
+  // Validate Tet4-only up front so we surface a clean diagnostic before
+  // we start writing anything to disk.
+  for (std::size_t c = 0; c < n_cells; ++c) {
+    if (souxmar_mesh_cell_type(mesh, c) != SOUXMAR_ET_TET4) {
+      static thread_local std::string msg;
+      msg = "openfoam-solver: cell #" + std::to_string(c) +
+            " is not Tet4 (got element type " +
+            std::to_string(souxmar_mesh_cell_type(mesh, c)) + "); the v1 "
+            "polyMesh translator handles Tet4 only — see openfoam_solver.cpp "
+            "scope comment for the Sprint 9 follow-on";
+      return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT, msg.c_str());
+    }
+  }
+
   const fs::path pm = work / "constant" / "polyMesh";
   fs::create_directories(pm);
 
-  // 8 points of a unit cube.
+  // --- points ------------------------------------------------------
   {
     std::ostringstream o;
-    o << foam_header("vectorField", "points")
-      << "8\n(\n"
-      << "(0 0 0)\n(1 0 0)\n(1 1 0)\n(0 1 0)\n"
-      << "(0 0 1)\n(1 0 1)\n(1 1 1)\n(0 1 1)\n"
-      << ")\n";
+    o << foam_header("vectorField", "points") << n_nodes << "\n(\n";
+    double p[3]{};
+    for (std::size_t i = 0; i < n_nodes; ++i) {
+      souxmar_mesh_node(mesh, static_cast<std::uint64_t>(i), p);
+      o << "(" << p[0] << " " << p[1] << " " << p[2] << ")\n";
+    }
+    o << ")\n";
     write_file(pm / "points", o.str());
   }
-  // 6 faces (cube faces — quads).
+
+  // --- faces / owner / neighbour -----------------------------------
+  // canonical key = sorted triple of vertex ids; value = bookkeeping
+  // entry. We use a vector + linear-probe-on-hash because std::tuple is
+  // awkward as an unordered_map key; the trade-off is acceptable for
+  // tetrahedral meshes where the face count is ~2N for N cells.
+
+  struct FaceKey {
+    std::uint64_t a, b, c;  // sorted asc
+    bool operator==(const FaceKey& o) const noexcept {
+      return a == o.a && b == o.b && c == o.c;
+    }
+  };
+  struct FaceKeyHash {
+    std::size_t operator()(const FaceKey& k) const noexcept {
+      std::size_t h = std::hash<std::uint64_t>{}(k.a);
+      h ^= std::hash<std::uint64_t>{}(k.b) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+      h ^= std::hash<std::uint64_t>{}(k.c) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+      return h;
+    }
+  };
+  struct FaceEntry {
+    std::array<std::uint64_t, 3> verts_owner;  // CCW from outside owner
+    std::int64_t                 owner     = -1;
+    std::int64_t                 neighbour = -1;
+  };
+
+  // OpenFOAM tet face vertex order — opposite-vertex convention.
+  constexpr int kTetFaces[4][3] = {
+      {1, 2, 3},   // opposite v0
+      {0, 3, 2},   // opposite v1
+      {0, 1, 3},   // opposite v2
+      {0, 2, 1},   // opposite v3
+  };
+
+  std::unordered_map<FaceKey, FaceEntry, FaceKeyHash> face_map;
+  face_map.reserve(n_cells * 4 * 2);
+
+  for (std::size_t c = 0; c < n_cells; ++c) {
+    std::uint64_t cell_nodes[4];
+    souxmar_mesh_cell_nodes(mesh, static_cast<std::uint64_t>(c),
+                            cell_nodes, 4);
+    for (int f = 0; f < 4; ++f) {
+      const std::uint64_t v0 = cell_nodes[kTetFaces[f][0]];
+      const std::uint64_t v1 = cell_nodes[kTetFaces[f][1]];
+      const std::uint64_t v2 = cell_nodes[kTetFaces[f][2]];
+      // Canonical key: sorted.
+      std::array<std::uint64_t, 3> sorted{v0, v1, v2};
+      std::sort(sorted.begin(), sorted.end());
+      const FaceKey key{sorted[0], sorted[1], sorted[2]};
+
+      auto it = face_map.find(key);
+      if (it == face_map.end()) {
+        FaceEntry e;
+        e.verts_owner = {v0, v1, v2};
+        e.owner       = static_cast<std::int64_t>(c);
+        face_map.emplace(key, e);
+      } else {
+        // Second claimant. The cell with lower index is the owner; if
+        // we picked the wrong order on the first pass, swap and flip
+        // the orientation so the normal points owner→neighbour.
+        if (it->second.owner >
+            static_cast<std::int64_t>(c)) {
+          it->second.neighbour    = it->second.owner;
+          it->second.owner        = static_cast<std::int64_t>(c);
+          it->second.verts_owner  = {v0, v1, v2};
+        } else {
+          it->second.neighbour    = static_cast<std::int64_t>(c);
+        }
+      }
+    }
+  }
+
+  // Partition into (internal, boundary) and sort internal by
+  // (owner, neighbour) per OpenFOAM's polyMesh ordering rule.
+  std::vector<FaceEntry> internal_faces;
+  std::vector<FaceEntry> boundary_faces;
+  internal_faces.reserve(face_map.size());
+  boundary_faces.reserve(face_map.size());
+  for (auto& [_, fe] : face_map) {
+    if (fe.neighbour >= 0) internal_faces.push_back(fe);
+    else                   boundary_faces.push_back(fe);
+  }
+  std::sort(internal_faces.begin(), internal_faces.end(),
+            [](const FaceEntry& a, const FaceEntry& b) {
+              if (a.owner != b.owner) return a.owner < b.owner;
+              return a.neighbour < b.neighbour;
+            });
+  std::sort(boundary_faces.begin(), boundary_faces.end(),
+            [](const FaceEntry& a, const FaceEntry& b) {
+              return a.owner < b.owner;
+            });
+
+  const std::size_t n_internal = internal_faces.size();
+  const std::size_t n_boundary = boundary_faces.size();
+  const std::size_t n_faces    = n_internal + n_boundary;
+
+  // --- faces -------------------------------------------------------
   {
     std::ostringstream o;
-    o << foam_header("faceList", "faces")
-      << "6\n(\n"
-      << "4(0 3 2 1)\n"   // bottom (-z)
-      << "4(4 5 6 7)\n"   // top    (+z)
-      << "4(0 1 5 4)\n"   // front  (-y)
-      << "4(2 3 7 6)\n"   // back   (+y)
-      << "4(0 4 7 3)\n"   // left   (-x)
-      << "4(1 2 6 5)\n"   // right  (+x)
-      << ")\n";
+    o << foam_header("faceList", "faces") << n_faces << "\n(\n";
+    for (const auto& fe : internal_faces) {
+      o << "3(" << fe.verts_owner[0] << " "
+                << fe.verts_owner[1] << " "
+                << fe.verts_owner[2] << ")\n";
+    }
+    for (const auto& fe : boundary_faces) {
+      o << "3(" << fe.verts_owner[0] << " "
+                << fe.verts_owner[1] << " "
+                << fe.verts_owner[2] << ")\n";
+    }
+    o << ")\n";
     write_file(pm / "faces", o.str());
   }
-  // 1 owner per face — all faces own the single cell index 0.
+
+  // --- owner -------------------------------------------------------
   {
     std::ostringstream o;
-    o << foam_header("labelList", "owner")
-      << "6\n(\n0\n0\n0\n0\n0\n0\n)\n";
+    o << foam_header("labelList", "owner") << n_faces << "\n(\n";
+    for (const auto& fe : internal_faces) o << fe.owner << "\n";
+    for (const auto& fe : boundary_faces) o << fe.owner << "\n";
+    o << ")\n";
     write_file(pm / "owner", o.str());
   }
-  // No internal faces — neighbour list is empty.
+
+  // --- neighbour (internal faces only) -----------------------------
   {
     std::ostringstream o;
-    o << foam_header("labelList", "neighbour") << "0\n(\n)\n";
+    o << foam_header("labelList", "neighbour") << n_internal << "\n(\n";
+    for (const auto& fe : internal_faces) o << fe.neighbour << "\n";
+    o << ")\n";
     write_file(pm / "neighbour", o.str());
   }
-  // boundary — one "walls" patch covering all 6 faces of the cube.
+
+  // --- boundary — single "walls" patch ----------------------------
   {
     std::ostringstream o;
     o << foam_header("polyBoundaryMesh", "boundary")
       << "1\n(\n"
-      << "    walls { type wall; nFaces 6; startFace 0; }\n"
+      << "    walls { type wall; nFaces " << n_boundary
+      << "; startFace " << n_internal << "; }\n"
       << ")\n";
     write_file(pm / "boundary", o.str());
   }
+  return souxmar_status_ok();
 }
 
 // constant/transportProperties — kinematic viscosity for laminar flow.
@@ -318,7 +472,12 @@ souxmar_status_t openfoam_solve_impl(const char*                     solver_bina
   write_turbulence_properties(work);
   write_initial_U(work);
   write_initial_p(work);
-  write_placeholder_polymesh(work);
+  if (const auto pm_status = write_polymesh_from_mesh(work, mesh);
+      pm_status.code != SOUXMAR_OK) {
+    std::error_code ec_rm;
+    fs::remove_all(work, ec_rm);
+    return pm_status;
+  }
 
   // Spawn. Per ADR-0009 the timeout is mandatory; the caller may
   // override via inputs.timeout_seconds.

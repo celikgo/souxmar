@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Pipe-bend CFD — Sprint 8's runnable CFD example. Drives the
+# Sprint 8 capability chain (mesher → CFD solver → writer) against
+# in-tree plugins.
+#
+# What this models (notionally): steady laminar flow through a curved
+# pipe bend, with an axial inlet velocity prescribed by `apply_inlet`-
+# style BC vocabulary and a static-pressure outlet. The hello-mesher
+# placeholder substitutes a unit tet for the actual pipe geometry; a
+# future ratchet swaps in an STL/OBJ reader feeding a real pipe-bend
+# mesh, with the rest of the pipeline unchanged.
+#
+# Default CI: cfd-stub serves `solver.cfd.simple` (uniform velocity
+# field — no PDE solve). Nightly CFD-bearing matrix: openfoam-solver
+# serves the same capability via the Sprint 8 push 2 subprocess
+# adapter, exercising the real Tet4 → polyMesh translator landed in
+# push 6.
+#
+# Run:
+#   souxmar run examples/pipe-bend/pipeline.yaml \
+#     --plugin-path build/dev/examples/plugins
+#
+# Output: pipe-bend.vtu in $PWD.
+
+version: 1
+
+stages:
+  # Stage 1: mesh.
+  # hello-mesher is the placeholder for default CI (unit tet, no
+  # external dependency). The nightly-matrix recipe substitutes
+  # `reader.obj` reading a pipe-bend.obj fixture; the writer and
+  # solver stages stay identical.
+  - id: mesh
+    plugin: mesher.tetra.hello
+
+  # Stage 2: CFD solve.
+  # solver.cfd.simple is served by:
+  #   - cfd-stub (always-on) in default CI — closed-form uniform
+  #     velocity field; runs in microseconds.
+  #   - openfoam-solver (opt-in) on the nightly CFD-bearing matrix —
+  #     simpleFoam invoked via subprocess per ADR-0009; reads BCs
+  #     through the real polyMesh translator (push 6).
+  - id: solve
+    plugin: solver.cfd.simple
+    input:
+      mesh: { from: mesh }
+      velocity_magnitude: 1.5
+      flow_direction: [1.0, 0.0, 0.0]
+      kinematic_viscosity: 1.5e-5
+      end_time: 10.0
+      delta_t: 1.0
+      write_interval: 10.0
+
+  # Stage 3: write.
+  # The VTU writer doesn't care which solver produced the velocity
+  # field — same downstream as every other Sprint 5+ example.
+  - id: write
+    plugin: writer.vtu
+    input:
+      mesh:  { from: mesh }
+      field: { from: solve }
+      path:  pipe-bend.vtu

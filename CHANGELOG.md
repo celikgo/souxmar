@@ -8,6 +8,44 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
+- (None this release — `[Unreleased]` reopens after the v0.9.0-beta2 cut below.)
+
+### Changed
+
+- (None this release.)
+
+### Fixed
+
+- (None this release.)
+
+### Removed
+
+- (None this release.)
+
+### Security
+
+- (None this release.)
+
+---
+
+## [0.9.0-beta2] - 2026-05-11
+
+Second public pre-release. Source + Linux CLI tarball + Python sdist published as a GitHub release. **Tag:** `v0.9.0-beta2`. **ABI:** v1.2 frozen (unchanged from beta1). **Tool contract:** v1 freeze candidate (ADR-0010 — soak in progress, final freeze targeted for Sprint 9 push 1).
+
+Sprint 8 closes here. Everything below this header was the `[Unreleased]` block as of beta1 → beta2; it now snapshots what shipped in this release.
+
+### Added
+
+#### Sprint 8 push 6 — real Tet4 → polyMesh translator + `examples/pipe-bend/` + Sprint 8 retro
+
+Closes Sprint 8. Lands the deferred work from push 2 (which named the real polyMesh translator as a mid-sprint follow-on) and the canonical CFD example the sprint was building toward. **No frozen-header surface touched** — `souxmar-c/*` unchanged; ABI v1.2 stands.
+
+- **`examples/plugins/openfoam-solver/openfoam_solver.cpp`** — `write_placeholder_polymesh()` is gone. Replaced by `write_polymesh_from_mesh(work, mesh)`: walks every Tet4 cell, enumerates its 4 faces via the OpenFOAM tet face convention (`{(1,2,3), (0,3,2), (0,1,3), (0,2,1)}` — CCW from outside, normal-out by construction), builds canonical sorted-vertex keys to deduplicate, partitions internal-from-boundary, sorts internal by `(owner, neighbour)` per the polyMesh ordering rule, and emits all five files: `points` (from `souxmar_mesh_node`), `faces` (canonical vertex order from the owner cell), `owner` / `neighbour` (parallel arrays), `boundary` (single "walls" patch covering every boundary face). The scope comment in the plugin's header is updated: Tet4-only is now the explicit v1 constraint (mixed-element support is the named Sprint 9 follow-on; the translator's structure generalises directly once Pyramid5/Prism6/Hex8 face tables join).
+- **`examples/pipe-bend/`** — three-stage YAML (`mesher.tetra.hello → solver.cfd.simple → writer.vtu`) + a README walking through the default-CI shape (cfd-stub serves `solver.cfd.simple`; uniform velocity output) and the nightly-matrix shape (openfoam-solver same capability, real simpleFoam invocation, real polyMesh translation via push 6's work). The geometry stage is still the unit-tet placeholder — `pipe-bend.obj` + reader-driven mesh is a Sprint 9 task per the retro.
+- **`docs/retros/sprint-08.md`** — keep/fix/one-ADR-worthy-decision per the SPRINT_PLAN.md retro practice. Names per-face-tag C ABI exposure as the most likely Sprint 9 ratchet event (it unblocks per-patch BC routing in `openfoam-solver`, the mesh-quality postproc's face-tag diagnostics, and the readers' named-collection / `usemtl` preservation). Capacity forecast: ~55 pts again, with 24 pts of Sprint 8 follow-on carry.
+- **`VERSION` unchanged** (still `0.9.0` — the SemVer pre-release suffix `-beta2` lives in the git tag, not the `VERSION` file).
+- **README** — refreshed banner advertising the `v0.9.0-beta2` tag + the additions since beta1 (subprocess harness, OpenFOAM adapter, Blender importer, OBJ reader, CFD-aware tools, planner + validator, tool-contract candidate, polyMesh translator). 18 tools in the agent catalogue; 12 in-tree plugins (10 always-on + 2 opt-in).
+
 #### Sprint 8 push 5 — CFD planner + BC validator (catalogue 16 → 18); ADR-0010 tool-contract v1 freeze candidate
 
 Two new agent tools that close out the v1 catalogue at 18, plus the

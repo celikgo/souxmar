@@ -27,30 +27,39 @@ The free tier is the full product. You bring your own Anthropic / OpenAI / local
 
 ## Status
 
-**First public pre-release — `v0.9.0-beta1` tagged 2026-05-11.** Source, Linux x86_64 CLI tarball, and Python sdist are attached to the [GitHub release](https://github.com/souxmar/souxmar/releases/tag/v0.9.0-beta1). Plugin C ABI is **frozen FINAL at v1.2** ([ADR-0008](docs/adr/0008-abi-v1-final-freeze.md)). The desktop app, hosted services, and OpenFOAM adapter are explicitly **not** in this release — see the Sprint 7 retro ([`docs/retros/sprint-07.md`](docs/retros/sprint-07.md)) and the SPRINT_PLAN.md roadmap for their target sprints.
+**Second public pre-release — `v0.9.0-beta2` tagged 2026-05-11.** Source, Linux x86_64 CLI tarball, and Python sdist are attached to the [GitHub release](https://github.com/souxmar/souxmar/releases/tag/v0.9.0-beta2). Plugin C ABI is **frozen FINAL at v1.2** ([ADR-0008](docs/adr/0008-abi-v1-final-freeze.md)) — unchanged from beta1. Agent tool contract is a **freeze candidate** at 18 tools ([ADR-0010](docs/adr/0010-tool-contract-v1-freeze-candidate.md)); final freeze targets Sprint 9 push 1. The desktop app and hosted services are still explicitly **not** in this release — see the Sprint 8 retro ([`docs/retros/sprint-08.md`](docs/retros/sprint-08.md)) and the SPRINT_PLAN.md roadmap.
 
-The ABI v1 soak ran cleanly across Sprint 6 + Sprint 7 with two additive ratchet events — the `reader.*` namespace (v1.0 → v1.1, Sprint 6 push 4) and the mmap-backed buffer protocol (v1.1 → v1.2, Sprint 7 push 3) — and zero breaks. The freeze is permanent for the entire 1.x release series; `scripts/check-frozen-headers.sh` enforces the ratchet on every PR.
+What changed since beta1 (Sprint 8 in full):
+
+- **Subprocess plugin harness** — `souxmar::plugin::run_subprocess` with cross-platform crash isolation, mandatory timeouts, stream-capped capture. Foundation for every external-binary plugin going forward.
+- **OpenFOAM CFD adapter** (opt-in) per [ADR-0009](docs/adr/0009-openfoam-process-isolation.md) — `simpleFoam` / `pimpleFoam` / `interFoam` invoked via subprocess only, never linked. **Closes R-003.** Real Tet4 → polyMesh translator (face dedup + owner/neighbour bookkeeping + boundary patch extraction) lands in push 6.
+- **Blender (.blend) importer** (opt-in) — `blender -b --python-expr "bpy.ops.wm.obj_export"` via the same subprocess harness; round-trips .blend → OBJ → Tri3.
+- **Wavefront OBJ reader** (always-on) — all four `f` field forms supported, polygon faces fan-triangulated.
+- **CFD-aware agent vocabulary** — `apply_inlet` / `apply_wall` / `apply_outlet` siblings of `set_bc`; `propose_cfd_setup` heuristic planner; `validate_bcs` sanity check. Catalogue 12 → 18 tools.
+- **Always-on `cfd-stub` solver** + the `examples/pipe-bend/` example wiring the full mesh → CFD → write chain.
+
+The ABI v1 soak that ran across Sprints 5–7 stayed clean through Sprint 8 — zero ratchet events this sprint, frozen-header surface untouched. The freeze is permanent for the entire 1.x release series; `scripts/check-frozen-headers.sh` enforces the ratchet on every PR. The tool-contract candidate has its own non-blocking gate (`scripts/check-tool-contract.sh`) that flips to blocking when the final freeze ADR lands.
 
 Runnable today:
 
 - **CLI**: `souxmar run <pipeline.yaml>`, `souxmar plugin list`, `souxmar agent {list,invoke}` (with `--audit-log`, `--budget-config`, `--yes`), `souxmar-conformance <dir>`, `souxmar-eval <evals-dir>`.
-- **Python**: `pip install pysouxmar` → parser, registry, loader, runner, cache, 12 agent tools, audit log, first-class `SessionBudget.on_threshold` callback, `.souxmar/budget.toml` loader.
-- **Plugin SDK**: **frozen-final C ABI v1.2** across six capability namespaces (`reader.*`, `mesher.*`, `solver.*`, `writer.*`, `postproc.*`, plus the bulk-buffer ingest path); `souxmar_add_plugin` CMake macro; conformance suite + CI lockdown gate; structured `ManifestRejection` codes for tooling.
-- **Nine in-tree reference plugins**: hello-mesher, grid-mesher, hello-writer, vtu-writer, heat-solver, elasticity-stub, scalar-magnitude, mesh-quality, stl-reader.
-- **Three opt-in external adapters**: `occt-reader` (`-DSOUXMAR_WITH_OPENCASCADE=ON`, STEP / IGES via OpenCASCADE), `gmsh-mesher` (`-DSOUXMAR_WITH_GMSH=ON`, tetrahedralisation via Gmsh), `fenicsx-solver` (`-DSOUXMAR_WITH_FENICSX=ON`, FEM Poisson via DOLFINx + FFCx).
-- **Three runnable examples**: `examples/cantilever-beam/`, `examples/thermal-fin/`, `examples/stl-cube/`. Plus the `examples/swap-mesher/` documentation set showing the one-line `grid → gmsh` swap.
-- **Out-of-core mesh streaming**: mmap-backed `souxmar_buffer_t` v2 (Sprint 7 push 3). `souxmar_mesh_from_buffers` ingests through `_data_const` and routes transparently to heap or mmap — datasets that don't fit in RAM page through the OS cache.
+- **Python**: `pip install pysouxmar` → parser, registry, loader, runner, cache, **18 agent tools**, audit log, first-class `SessionBudget.on_threshold` callback, `.souxmar/budget.toml` loader.
+- **Plugin SDK**: **frozen-final C ABI v1.2** across six capability namespaces (`reader.*`, `mesher.*`, `solver.*`, `writer.*`, `postproc.*`, plus the bulk-buffer ingest path); `souxmar_add_plugin` CMake macro; conformance suite + CI lockdown gate; host-side **subprocess harness** for plugins that drive external binaries.
+- **Eleven in-tree reference plugins** (always-on): hello-mesher, grid-mesher, hello-writer, vtu-writer, heat-solver, elasticity-stub, cfd-stub, scalar-magnitude, mesh-quality, stl-reader, obj-reader.
+- **Five opt-in external adapters**: `occt-reader` (`-DSOUXMAR_WITH_OPENCASCADE=ON`, STEP / IGES), `gmsh-mesher` (`-DSOUXMAR_WITH_GMSH=ON`), `fenicsx-solver` (`-DSOUXMAR_WITH_FENICSX=ON`, FEM Poisson), `openfoam-solver` (`-DSOUXMAR_WITH_OPENFOAM=ON`, three CFD capabilities), `blender-reader` (`-DSOUXMAR_WITH_BLENDER=ON`, `.blend` import).
+- **Four runnable examples**: `examples/cantilever-beam/`, `examples/thermal-fin/`, `examples/stl-cube/`, `examples/pipe-bend/`. Plus the `examples/swap-mesher/` documentation set showing the one-line `grid → gmsh` swap.
+- **Out-of-core mesh streaming**: mmap-backed `souxmar_buffer_t` v2. `souxmar_mesh_from_buffers` routes transparently to heap or mmap.
 - **Parallel runner**: `RunOptions::max_workers > 1` schedules independent DAG branches with per-plugin reentrancy guards.
-- **Agent tool surface v1**: 12 tools, structured audit log, per-project token budget config, threshold callbacks fired at 50% / 80% / 100% of each axis. **30-task agent eval suite** runs nightly.
+- **Agent tool surface v1 candidate**: 18 tools across categories Read / Mesh / BC / CFD / Material / Solve / Field / Pipeline / Discovery / Export / UI. Structured audit log, per-project token budget config. **30-task agent eval suite** runs nightly.
 - **Perf-nightly CI** + bulk-vs-incremental mesh-construction benchmark + heap-vs-mmap buffer benchmark.
 
-Not yet done — deliberately scoped out of `0.9.0-beta1`:
+Not yet done — deliberately scoped out of `0.9.0-beta2`:
 
-- **No Tauri desktop app yet** (Sprint 8+); CLI and Python only.
-- **No CFD solver yet** — the OpenFOAM adapter is design-locked in [ADR-0009](docs/adr/0009-openfoam-process-isolation.md) and ships in Sprint 8 push 1.
-- **No production-grade FEM solver yet** — the in-tree `solver.heat.linear` + `solver.elasticity.linear` are demonstrative closed-form solutions; the FEniCSx adapter (opt-in, Poisson only in v1) handles the real case when `-DSOUXMAR_WITH_FENICSX=ON`. Full elasticity + structured BC arrays land via additive minor ratchet in Sprint 8+.
-- **No BYOK AI provider client yet** (Anthropic / OpenAI / Ollama). The budget / audit / tool-dispatch plumbing is fully in place; the eval suite scripts the same dispatch path. The first real LLM-driven session lands alongside the desktop app.
-- **No signed installers / auto-update** yet — `release.yml` ships source + Linux CLI tarball + Python sdist; macOS notarisation + Windows EV signing + Tauri auto-update manifests land with the desktop app.
+- **No Tauri desktop app yet** (Sprint 11+ per the revised plan); CLI and Python only.
+- **No per-patch CFD BC routing yet** — `apply_inlet`/`apply_wall`/`apply_outlet` stage BCs but `openfoam-solver` writes a single "walls" patch. Per-face-tag exposure on the C ABI lands as an additive-minor v1.3 ratchet in Sprint 9.
+- **No production-grade FEM solver yet** — `solver.heat.linear` + `solver.elasticity.linear` are closed-form demonstrations; the FEniCSx adapter (opt-in, Poisson only in v1) handles the real case.
+- **No BYOK AI provider client yet** (Anthropic / OpenAI / Ollama). The budget / audit / tool-dispatch plumbing is fully in place; the eval suite scripts the same dispatch path.
+- **No signed installers / auto-update** yet — `release.yml` ships source + Linux CLI tarball + Python sdist; macOS notarisation + Windows EV signing land with the desktop app.
 
 ## Building
 
