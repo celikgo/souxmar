@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "souxmar-c/mesher.h"
+#include "souxmar-c/postproc.h"
 #include "souxmar-c/solver.h"
 #include "souxmar-c/status.h"
 #include "souxmar-c/writer.h"
@@ -29,10 +30,11 @@
 namespace souxmar::plugin {
 
 enum class CapabilityKind : std::uint8_t {
-  Mesher = 0,
-  Solver = 1,
-  Writer = 2,
-  // Sprint 4+: Reader, Element, Postproc.
+  Mesher   = 0,
+  Solver   = 1,
+  Writer   = 2,
+  Postproc = 3,  // Sprint 5 push 3.
+  // Sprint 6+: Reader, Element.
 };
 
 struct MesherEntry {
@@ -50,6 +52,11 @@ struct WriterEntry {
   void*                          user_data;
 };
 
+struct PostprocEntry {
+  const souxmar_postproc_vtable_t* vtable;
+  void*                            user_data;
+};
+
 struct CapabilityEntry {
   std::string     id;          // "mesher.tetra.netgen"
   std::string     plugin_id;   // owning plugin's manifest id
@@ -62,7 +69,7 @@ struct CapabilityEntry {
   ThreadingModel  threading = ThreadingModel::SingleThreaded;
 
   // Capability-specific payload, discriminated by `kind`.
-  std::variant<MesherEntry, SolverEntry, WriterEntry> payload;
+  std::variant<MesherEntry, SolverEntry, WriterEntry, PostprocEntry> payload;
 };
 
 struct RegistryError {
@@ -107,6 +114,13 @@ class Registry {
              void*                           user_data,
              ThreadingModel                  threading = ThreadingModel::SingleThreaded);
 
+  std::variant<std::monostate, RegistryError>
+  add_postproc(std::string                       capability_id,
+               std::string                       plugin_id,
+               const souxmar_postproc_vtable_t*  vtable,
+               void*                             user_data,
+               ThreadingModel                    threading = ThreadingModel::SingleThreaded);
+
   // -------- Read access --------
 
   [[nodiscard]] std::size_t size() const noexcept;
@@ -117,9 +131,10 @@ class Registry {
   [[nodiscard]] const CapabilityEntry* find(std::string_view capability_id) const;
 
   // Convenience: typed lookups. Return nullptr if not found OR wrong kind.
-  [[nodiscard]] const MesherEntry* find_mesher(std::string_view capability_id) const;
-  [[nodiscard]] const SolverEntry* find_solver(std::string_view capability_id) const;
-  [[nodiscard]] const WriterEntry* find_writer(std::string_view capability_id) const;
+  [[nodiscard]] const MesherEntry*   find_mesher(std::string_view capability_id) const;
+  [[nodiscard]] const SolverEntry*   find_solver(std::string_view capability_id) const;
+  [[nodiscard]] const WriterEntry*   find_writer(std::string_view capability_id) const;
+  [[nodiscard]] const PostprocEntry* find_postproc(std::string_view capability_id) const;
 
   // Threading model declared by the plugin owning `capability_id`. Returns
   // std::nullopt if the capability is not registered. Used by the parallel
@@ -149,6 +164,11 @@ class Registry {
                                 const char*                     capability_id,
                                 const souxmar_writer_vtable_t*  vtable,
                                 void*                           user_data) noexcept;
+
+  souxmar_status_t add_postproc_c(std::string_view                   plugin_id,
+                                  const char*                        capability_id,
+                                  const souxmar_postproc_vtable_t*   vtable,
+                                  void*                              user_data) noexcept;
 
  private:
   // shared_mutex: read-mostly (the orchestrator queries; registration is rare).

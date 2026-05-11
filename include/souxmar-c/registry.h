@@ -25,6 +25,7 @@ SOUXMAR_C_BEGIN
 struct souxmar_mesher_vtable;
 struct souxmar_solver_vtable;
 struct souxmar_writer_vtable;
+struct souxmar_postproc_vtable;
 
 /* Register a mesher capability, identified by `capability_id`
  * (e.g. "mesher.tetra.example"). The vtable's ABI version is checked
@@ -52,6 +53,12 @@ souxmar_status_t souxmar_registry_add_writer(
     const char*                          capability_id,
     const struct souxmar_writer_vtable*  vtable,
     void*                                user_data);
+
+souxmar_status_t souxmar_registry_add_postproc(
+    souxmar_registry_t*                    registry,
+    const char*                            capability_id,
+    const struct souxmar_postproc_vtable*  vtable,
+    void*                                  user_data);
 
 SOUXMAR_C_END
 

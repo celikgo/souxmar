@@ -261,6 +261,24 @@ The plugin C ABI version is tracked separately and is independent of the project
   - `bindings/python/tests/test_agent_tools.py` mirrors the same surface from Python, including a 3-call audit-log roundtrip that asserts on the YAML line content + count.
 - **Build**: `src/ai/CMakeLists.txt` gains `audit_log.cpp`, `tools/query_field.cpp`, `tools/compute_field.cpp`, `tools/propose_pipeline.cpp`.
 
+#### Sprint 5 push 3 — postproc C ABI surface + heat solver + scalar-magnitude
+
+- **[ABI v1]** New capability namespace `postproc.*` with a dedicated C ABI surface:
+  - `include/souxmar-c/postproc.h` — `souxmar_postproc_vtable_t` (`abi_version`, `compute_fn`, `destroy_fn`) + `souxmar_postproc_options_t`. `compute_fn` takes `(mesh, input_field, value_bag, options, &out_field, user_data)` — the field input parameter is the key difference from `solver.*`.
+  - `souxmar_registry_add_postproc()` registration entry (see [ADR-0005](docs/adr/0005-postproc-c-abi.md) for why this is a new vtable instead of an extension to `solver.*`).
+  - **The solver C ABI is unchanged** — existing solver plugins keep compiling. The ratchet rule from ADR-0004 (no breaking changes pre-freeze) is honored.
+- **Registry + dispatcher extensions** (`include/souxmar/plugin/registry.h`, `src/plugin-host/registry.cpp`, `src/pipeline/registry_dispatcher.cpp`):
+  - `CapabilityKind::Postproc` (value 3), `PostprocEntry`, `add_postproc` / `add_postproc_c` / `find_postproc`.
+  - `RegistryDispatcher::dispatch_postproc` requires both `mesh: {from: ...}` and `field: {from: ...}` upstream; passes them through to the plugin's `compute_fn` under `plugin::guard_call`; wraps the returned field as a `StageOutput::Kind::Field` with the standard `souxmar_field_free` deleter.
+  - Namespace routing table now: `mesher.*` / `solver.*` / `writer.*` / `postproc.*`.
+- **`compute_field` agent tool — activated**: the Sprint 5 push 2 stub is replaced. The tool wraps `ctx.mesh_handle` + `ctx.field_handle` as synthetic upstream stages, dispatches the named `postproc.*` capability via `RegistryDispatcher`, and stashes the resulting Field on `ctx.field_handle` for downstream tools. Returns `{capability_id, location, kind, num_components, num_time_steps}`. Marked `ConfirmAlways` (runtime / cost surface).
+- **`examples/plugins/heat-solver/`** — registers `solver.heat.linear`. Reads `num_time_steps` / `dt` / `tau` / `t_steady` from the value bag; produces a nodal scalar `Field` with multi-step temperature evolution: `T(node_i, step_j) = T_steady · (1 − exp(−t_j/τ)) · ½(1 + cos(π·x_norm))`. Demonstrates `Field` time-series across the C ABI — the Sprint 5 deliverable.
+- **`examples/plugins/scalar-magnitude/`** — registers `postproc.scalar_magnitude`. Takes any-kind input field (scalar / vector / tensor), emits a scalar Field with same `count` × `num_time_steps`. Per-location output is `sqrt(sum_c v_c²)` (Frobenius norm). Declared `reentrant` — pure functional transform, no shared state — so the parallel runner can fan out concurrent calls.
+- **Conformance gate**: `tests/integration/test_conformance.cpp` extended with the two new plugins. The freeze gate now covers five in-tree plugins (hello-mesher, hello-writer, vtu-writer, heat-solver, scalar-magnitude) — all 10 v1 checks pass on every one.
+- **New integration test**: `tests/integration/test_postproc_end_to_end.cpp` runs `mesh → heat → scalar_magnitude` end-to-end against the in-tree plugins. Asserts every stage `Executed`, that the postproc output is a Field with `num_time_steps == 3` and `count == 4` (matches the upstream heat solver), and that a missing `field: {from: ...}` upstream is rejected by the dispatcher.
+- **Unit test updates**: `tests/unit/test_ai_tools.cpp` — `compute_field` is no longer NOT_AVAILABLE. New assertions: `INVALID_ARGUMENT` for a missing `capability_id`, `PLUGIN_NOT_FOUND` / `PRECONDITION_FAILED` for an empty registry. Python pytest mirrors the same.
+- **Docs**: ADR-0005 documents the decision, the three alternatives considered (extend solver vtable / smuggle through value bag / subprocess), and the consequences.
+
 ### Changed
 
 - (None this release.)

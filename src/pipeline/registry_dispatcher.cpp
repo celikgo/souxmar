@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "souxmar-c/mesher.h"
+#include "souxmar-c/postproc.h"
 #include "souxmar-c/solver.h"
 #include "souxmar-c/writer.h"
 #include "souxmar/plugin/guard.h"
@@ -229,6 +230,88 @@ DispatchResult dispatch_writer(plugin::Registry&       registry,
   return std::static_pointer_cast<void>(out);
 }
 
+DispatchResult dispatch_postproc(plugin::Registry&       registry,
+                                 const DispatchContext&  ctx) {
+  const auto* entry = registry.find_postproc(ctx.capability_id);
+  if (!entry) {
+    return DispatchError{fmt::format(
+        "no postproc capability registered as '{}'", ctx.capability_id)};
+  }
+
+  // Required `mesh` upstream handle.
+  auto mesh_stage = extract_stage_ref(ctx.inputs, "mesh");
+  if (!mesh_stage) {
+    return DispatchError{fmt::format(
+        "postproc '{}' input is missing required 'mesh: {{from: ...}}'", ctx.capability_id)};
+  }
+  const auto* mesh_up = upstream_as(ctx.upstream_outputs, *mesh_stage, StageOutput::Kind::Mesh);
+  if (!mesh_up) {
+    return DispatchError{fmt::format(
+        "stage referenced by 'mesh' ({}) did not produce a Mesh", *mesh_stage)};
+  }
+  const auto* c_mesh = reinterpret_cast<const souxmar_mesh_t*>(mesh_up->mesh.get());
+
+  // Required `field` upstream handle — postproc is field-in / field-out by
+  // definition; missing input field is a hard error, not silent NULL.
+  auto field_stage = extract_stage_ref(ctx.inputs, "field");
+  if (!field_stage) {
+    return DispatchError{fmt::format(
+        "postproc '{}' input is missing required 'field: {{from: ...}}'", ctx.capability_id)};
+  }
+  const auto* field_up = upstream_as(ctx.upstream_outputs, *field_stage, StageOutput::Kind::Field);
+  if (!field_up) {
+    return DispatchError{fmt::format(
+        "stage referenced by 'field' ({}) did not produce a Field", *field_stage)};
+  }
+  const auto* c_field = reinterpret_cast<const souxmar_field_t*>(field_up->field.get());
+
+  souxmar_postproc_options_t options{-1, 0.0, 0};
+  if (const auto* v = ctx.inputs.find("tolerance"); v && v->kind() == Value::Kind::Number) {
+    options.tolerance = v->as_number();
+  }
+  if (const auto* v = ctx.inputs.find("max_iterations"); v && v->kind() == Value::Kind::Number) {
+    options.max_iterations = static_cast<std::int32_t>(v->as_number());
+  }
+  if (const auto* v = ctx.inputs.find("random_seed"); v && v->kind() == Value::Kind::Number) {
+    options.random_seed = static_cast<std::int64_t>(v->as_number());
+  }
+
+  // Pass the whole stage input bag through — the plugin may inspect
+  // non-mesh / non-field keys (e.g. component-selection flags).
+  const auto* c_inputs = reinterpret_cast<const souxmar_value_t*>(&ctx.inputs);
+
+  souxmar_field_t* out_field = nullptr;
+  souxmar_status_t status{SOUXMAR_E_INTERNAL, "uninitialised", nullptr};
+  const auto guard = plugin::guard_call([&] {
+    status = entry->vtable->compute_fn(c_mesh, c_field, c_inputs, &options,
+                                       &out_field, entry->user_data);
+  });
+  if (guard.outcome != plugin::GuardOutcome::Ok) {
+    if (out_field) souxmar_field_free(out_field);
+    return DispatchError{fmt::format(
+        "postproc '{}' raised: {}", ctx.capability_id, guard.detail)};
+  }
+  if (status.code != SOUXMAR_OK) {
+    if (out_field) souxmar_field_free(out_field);
+    return DispatchError{fmt::format(
+        "postproc '{}' returned error {}: {}", ctx.capability_id,
+        status.code, status.message ? status.message : "(no message)")};
+  }
+  if (!out_field) {
+    return DispatchError{fmt::format(
+        "postproc '{}' returned OK but no field", ctx.capability_id)};
+  }
+
+  auto out = std::make_shared<StageOutput>();
+  out->kind  = StageOutput::Kind::Field;
+  out->field = std::shared_ptr<souxmar::core::Field>(
+      reinterpret_cast<souxmar::core::Field*>(out_field),
+      [](souxmar::core::Field* f) {
+        souxmar_field_free(reinterpret_cast<souxmar_field_t*>(f));
+      });
+  return std::static_pointer_cast<void>(out);
+}
+
 }  // namespace
 
 RegistryDispatcher::RegistryDispatcher(plugin::Registry& registry)
@@ -270,9 +353,12 @@ DispatchResult RegistryDispatcher::dispatch(const DispatchContext& ctx) {
   if (ctx.capability_id.starts_with("writer.")) {
     return dispatch_writer(registry_, ctx);
   }
+  if (ctx.capability_id.starts_with("postproc.")) {
+    return dispatch_postproc(registry_, ctx);
+  }
   return DispatchError{fmt::format(
       "unsupported capability namespace for '{}' "
-      "(known namespaces: mesher.*, solver.*, writer.*)",
+      "(known namespaces: mesher.*, solver.*, writer.*, postproc.*)",
       ctx.capability_id)};
 }
 

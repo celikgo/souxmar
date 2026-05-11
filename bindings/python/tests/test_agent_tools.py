@@ -186,14 +186,18 @@ def test_propose_pipeline_rejects_missing_stages():
     assert out.error.code == "INVALID_ARGUMENT"
 
 
-def test_compute_field_stub_reports_not_available():
+def test_compute_field_requires_capability_id():
+    """Sprint 5 push 3 replaced the NOT_AVAILABLE stub with a real
+    dispatcher path. Without `capability_id` we get INVALID_ARGUMENT;
+    without an active session we get PLUGIN_NOT_FOUND or
+    PRECONDITION_FAILED depending on which precondition trips first."""
     r = sx.ai.default_v1_tools()
     ctx = sx.ai.ToolContext()
     policy = sx.ai.ConfirmationPolicy()
     policy.overrides = {"compute_field": sx.ai.Confirmation.Auto}
     out = sx.ai.dispatch_tool(r, "compute_field", {}, ctx, policy)
     assert out.error is not None
-    assert out.error.code == "NOT_AVAILABLE"
+    assert out.error.code == "INVALID_ARGUMENT"
 
 
 def test_query_field_requires_field_handle():

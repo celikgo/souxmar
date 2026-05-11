@@ -111,6 +111,21 @@ TEST_F(ConformanceGateTest, VtuWriterPassesAllChecks) {
   expect_all_v1_checks_pass(plugin::run_conformance(*p));
 }
 
+// Sprint 5 push 3 added two new in-tree plugins. The gate test asserts
+// they also pass every v1 check — same bar as the original three.
+
+TEST_F(ConformanceGateTest, HeatSolverPassesAllChecks) {
+  const auto* p = find_plugin(discovery_, "dev.souxmar.examples.heat-solver");
+  ASSERT_NE(p, nullptr);
+  expect_all_v1_checks_pass(plugin::run_conformance(*p));
+}
+
+TEST_F(ConformanceGateTest, ScalarMagnitudePostprocPassesAllChecks) {
+  const auto* p = find_plugin(discovery_, "dev.souxmar.examples.scalar-magnitude");
+  ASSERT_NE(p, nullptr);
+  expect_all_v1_checks_pass(plugin::run_conformance(*p));
+}
+
 // Negative: confirm that a deliberately-mismatched manifest (declared ABI
 // 99) trips C001 + Skips the rest. Builds on the discovered hello-mesher
 // to keep the test self-contained — we fabricate a DiscoveredPlugin in

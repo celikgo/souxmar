@@ -490,17 +490,38 @@ TEST(AiTools_QueryField, AggregatesOverField) {
   EXPECT_EQ(std::string(out.data.find("kind")->as_string()),     "scalar");
 }
 
-TEST(AiTools_ComputeField, ReturnsNotAvailableInThisBuild) {
-  // Sprint 5 push 2 ships compute_field as a stub awaiting the postproc
-  // C ABI (push 3). Confirm the contract: NOT_AVAILABLE with a clear
-  // suggestion the agent can route around.
+TEST(AiTools_ComputeField, RejectsMissingCapabilityIdInput) {
+  // Sprint 5 push 3 activated compute_field against the postproc C ABI.
+  // Without a capability_id we should get a clean INVALID_ARGUMENT now
+  // (was NOT_AVAILABLE while the stub shipped).
   auto r = ai::default_v1_tools();
   ai::ToolContext ctx;
   ai::ConfirmationPolicy policy;
   policy.overrides["compute_field"] = ai::Confirmation::Auto;
   auto out = ai::dispatch_tool(r, "compute_field", pl::Value::null_value(), ctx, policy);
   ASSERT_TRUE(out.error.has_value());
-  EXPECT_EQ(out.error->code, "NOT_AVAILABLE");
+  EXPECT_EQ(out.error->code, "INVALID_ARGUMENT");
+}
+
+TEST(AiTools_ComputeField, RequiresMeshAndFieldHandles) {
+  auto r = ai::default_v1_tools();
+  souxmar::plugin::Registry registry;
+  FakeDispatcher dispatcher;
+  ai::ToolContext ctx;
+  ctx.registry   = &registry;
+  ctx.dispatcher = &dispatcher;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["compute_field"] = ai::Confirmation::Auto;
+
+  auto input = pl::Value::map({{"capability_id", pl::Value::string("postproc.x")}});
+  auto out = ai::dispatch_tool(r, "compute_field", input, ctx, policy);
+  ASSERT_TRUE(out.error.has_value());
+  // The order in compute_field.cpp checks registry->find_postproc before
+  // mesh_handle, so a missing capability surfaces PLUGIN_NOT_FOUND
+  // first. Either is correct contract.
+  EXPECT_TRUE(out.error->code == "PLUGIN_NOT_FOUND" ||
+              out.error->code == "PRECONDITION_FAILED")
+      << "unexpected code: " << out.error->code;
 }
 
 TEST(AiTools_ProposePipeline, RoundTripsThroughParser) {

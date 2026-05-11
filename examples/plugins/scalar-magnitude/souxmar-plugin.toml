@@ -1,0 +1,19 @@
+[plugin]
+id            = "dev.souxmar.examples.scalar-magnitude"
+name          = "Scalar Magnitude Postproc"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/scalar-magnitude"
+
+[plugin.binary]
+file          = "libscalar_magnitude.so"
+
+[plugin.capabilities]
+provides      = ["postproc.scalar_magnitude"]
+
+[plugin.threading]
+model         = "reentrant"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"

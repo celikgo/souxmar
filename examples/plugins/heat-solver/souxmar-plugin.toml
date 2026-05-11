@@ -1,0 +1,19 @@
+[plugin]
+id            = "dev.souxmar.examples.heat-solver"
+name          = "Heat Solver (analytic 1-D demo)"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/heat-solver"
+
+[plugin.binary]
+file          = "libheat_solver.so"
+
+[plugin.capabilities]
+provides      = ["solver.heat.linear"]
+
+[plugin.threading]
+model         = "single-threaded"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"
