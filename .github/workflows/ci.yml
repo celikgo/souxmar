@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite"
+  CMAKE_GENERATOR: Ninja
+
+jobs:
+  build-test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-gcc
+            os: ubuntu-22.04
+            preset: ci-linux-gcc
+          - name: linux-clang
+            os: ubuntu-22.04
+            preset: ci-linux-clang
+          - name: macos-arm64
+            os: macos-14
+            preset: ci-macos
+          - name: windows-msvc
+            os: windows-2022
+            preset: ci-windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux toolchain
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config curl zip unzip tar
+          if [ "${{ matrix.preset }}" = "ci-linux-clang" ]; then
+            wget -q https://apt.llvm.org/llvm.sh
+            chmod +x llvm.sh
+            sudo ./llvm.sh 17
+            sudo apt-get install -y clang-17 clang-tools-17 clang-tidy-17
+          fi
+
+      - name: Install macOS toolchain
+        if: runner.os == 'macOS'
+        run: brew install ninja pkg-config
+
+      - name: Install Windows toolchain
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: ec6fe06e8da05a8157dc8581fa96b36b571c1bd5
+          runVcpkgInstall: false
+
+      - name: Cache vcpkg binary archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-cache
+          key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ matrix.name }}-
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+        env:
+          VCPKG_ROOT: ${{ env.VCPKG_ROOT }}
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }} --parallel
+
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }} --output-on-failure --no-tests=error
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.name }}
+          path: |
+            build/**/Testing/Temporary/LastTest.log
+            build/**/Testing/Temporary/LastTestsFailed.log
+
+  format-check:
+    name: clang-format
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format-17
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 17
+          sudo apt-get install -y clang-format-17
+
+      - name: Verify formatting
+        run: |
+          shopt -s globstar nullglob
+          fail=0
+          for f in src/**/*.cpp src/**/*.h include/**/*.h tests/**/*.cpp tests/**/*.h; do
+            if ! clang-format-17 --dry-run --Werror "$f"; then
+              fail=1
+            fi
+          done
+          exit $fail
+
+  no-secrets:
+    name: secret-scan
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for secret-shaped strings
+        run: |
+          # Conservative regex set; expand over time. Excludes the docs that DOCUMENT
+          # the patterns themselves (e.g. ENGINEERING_PRACTICES.md, AI_INTEGRATION.md).
+          patterns='(sk-[A-Za-z0-9_-]{20,}|xoxb-[0-9]{10,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36})'
+          ! git grep -nE "$patterns" -- ':!docs/' ':!.claude/skills/' ':!.github/workflows/'

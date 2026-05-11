@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussion / question
+    url: https://github.com/souxmar/souxmar/discussions
+    about: For open-ended questions, design ideas, and requests for help.
+  - name: Security disclosure
+    url: https://github.com/souxmar/souxmar/security/advisories/new
+    about: Report a security issue privately. Do not open a public issue.
+  - name: Plugin author support
+    url: https://github.com/souxmar/souxmar/discussions/categories/plugins
+    about: Help with the plugin SDK, conformance suite, or marketplace.

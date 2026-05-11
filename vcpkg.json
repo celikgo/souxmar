@@ -1,0 +1,102 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "souxmar",
+  "version-string": "0.0.1",
+  "description": "Open-source CAE platform: CAD, mesh, FEM/CFD, post-processing.",
+  "homepage": "https://souxmar.dev",
+  "license": "Apache-2.0",
+  "supports": "(linux | osx | windows) & (x64 | arm64)",
+  "dependencies": [
+    {
+      "name": "fmt",
+      "version>=": "10.2.1"
+    },
+    {
+      "name": "spdlog",
+      "version>=": "1.13.0"
+    },
+    {
+      "name": "tomlplusplus",
+      "version>=": "3.4.0"
+    }
+  ],
+  "default-features": [
+    "tests"
+  ],
+  "features": {
+    "tests": {
+      "description": "Build the unit + integration test suite",
+      "dependencies": [
+        {
+          "name": "gtest",
+          "version>=": "1.14.0"
+        },
+        {
+          "name": "benchmark",
+          "version>=": "1.8.3"
+        }
+      ]
+    },
+    "opencascade": {
+      "description": "OpenCASCADE adapter (CAD geometry kernel)",
+      "dependencies": [
+        {
+          "name": "opencascade",
+          "version>=": "7.7.0"
+        }
+      ]
+    },
+    "gmsh": {
+      "description": "Gmsh adapter (alternative tetrahedral mesher)",
+      "dependencies": [
+        {
+          "name": "gmsh",
+          "version>=": "4.12.0"
+        }
+      ]
+    },
+    "petsc": {
+      "description": "PETSc backend for the LinearAlgebra abstraction",
+      "dependencies": [
+        {
+          "name": "petsc",
+          "version>=": "3.20.0"
+        }
+      ]
+    },
+    "eigen": {
+      "description": "Eigen backend for small-problem LinearAlgebra",
+      "dependencies": [
+        {
+          "name": "eigen3",
+          "version>=": "3.4.0"
+        }
+      ]
+    },
+    "vtk": {
+      "description": "VTK writer for ParaView output",
+      "dependencies": [
+        {
+          "name": "vtk",
+          "version>=": "9.3.0"
+        }
+      ]
+    },
+    "python": {
+      "description": "Python bindings (pysouxmar) via pybind11",
+      "dependencies": [
+        {
+          "name": "pybind11",
+          "version>=": "2.11.1"
+        }
+      ]
+    }
+  },
+  "vcpkg-configuration": {
+    "default-registry": {
+      "kind": "git",
+      "baseline": "ec6fe06e8da05a8157dc8581fa96b36b571c1bd5",
+      "repository": "https://github.com/microsoft/vcpkg"
+    }
+  }
+}

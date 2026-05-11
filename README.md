@@ -27,7 +27,29 @@ The free tier is the full product. You bring your own Anthropic / OpenAI / local
 
 ## Status
 
-Pre-alpha. Architectural design phase. The repository currently contains design documents only.
+Pre-alpha. Sprint 0 scaffolding in place: top-level `CMakeLists.txt`, `vcpkg.json` manifest, CI matrix (Linux/macOS/Windows), `libsouxmar-core` skeleton, GoogleTest harness, governance metadata. Phase 1 (data model) starts at Sprint 1.
+
+## Building
+
+Prerequisites:
+
+- CMake ≥ 3.25, Ninja, a C++20 compiler (GCC 13 / Clang 17 / AppleClang / MSVC 19.36+)
+- [vcpkg](https://github.com/microsoft/vcpkg) — cloned and `VCPKG_ROOT` exported
+
+```bash
+git clone https://github.com/souxmar/souxmar.git
+cd souxmar
+
+export VCPKG_ROOT="$HOME/vcpkg"   # or wherever you cloned vcpkg
+
+cmake --preset dev
+cmake --build --preset dev
+ctest --preset dev --output-on-failure
+```
+
+Other presets (see [`CMakePresets.json`](CMakePresets.json)): `ci-linux-gcc`, `ci-linux-clang`, `ci-macos`, `ci-windows`, `asan`, `tsan`.
+
+The first `cmake --preset` invocation builds vcpkg dependencies from source (~5 min for the default feature set; longer if heavy adapters are enabled). Subsequent runs use the vcpkg binary cache.
 
 ## Documents
 

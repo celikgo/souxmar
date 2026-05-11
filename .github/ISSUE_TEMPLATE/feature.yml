@@ -1,0 +1,49 @@
+name: Feature request
+description: Propose a new feature or enhancement that does not require an RFC.
+title: "[feature]: "
+labels: ["type:feature", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For Tier-3 architectural changes (ABI, pipeline format, agent tool contract, data model,
+        governance), open an RFC instead — see `docs/GOVERNANCE.md` and the `[rfc]` issue template.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user need is not met today? Be specific — quote a concrete workflow.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Sketch of the solution. API shape, UI sketch, or pseudocode.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: At least one alternative; "do nothing" counts.
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface affected
+      multiple: true
+      options:
+        - Desktop app
+        - CLI
+        - Python (pysouxmar)
+        - Plugin SDK
+        - AI agent / chat
+        - Adapters
+        - Docs
+        - Other
+    validations:
+      required: true

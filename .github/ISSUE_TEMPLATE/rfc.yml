@@ -1,0 +1,51 @@
+name: RFC (Tier-3 architectural change)
+description: Propose a Tier-3 change requiring an RFC per docs/GOVERNANCE.md.
+title: "[rfc]: "
+labels: ["type:rfc", "needs-triage", "tier-3"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to **track** an RFC. The RFC document itself goes in `docs/rfcs/`
+        as a numbered Markdown file using `docs/rfcs/0000-template.md`.
+
+        See `docs/GOVERNANCE.md` and the `writing-souxmar-rfc` skill for the process.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: One-paragraph summary
+      description: What you propose, in plain language.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: affects
+    attributes:
+      label: Affects
+      multiple: true
+      options:
+        - C plugin ABI
+        - Data model
+        - Pipeline / on-disk format
+        - Agent tool contract
+        - Governance / process
+        - Build / dependencies
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: rfc-pr
+    attributes:
+      label: RFC document PR
+      description: Link to the PR adding `docs/rfcs/NNNN-*.md` (open in parallel with this issue).
+      placeholder: "#NNN"
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation (short)
+      description: Why this matters now. Specific evidence preferred over generic.
+    validations:
+      required: true

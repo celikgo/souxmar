@@ -1,0 +1,35 @@
+name: DCO
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify DCO sign-off on every commit
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          fail=0
+          while IFS= read -r commit; do
+            msg=$(git show -s --format='%B' "$commit")
+            if ! grep -qE '^Signed-off-by: .+ <.+@.+>$' <<<"$msg"; then
+              echo "::error title=Missing DCO sign-off::Commit $commit lacks 'Signed-off-by:' trailer"
+              echo "    Subject: $(git show -s --format='%s' "$commit")"
+              echo "    Author:  $(git show -s --format='%an <%ae>' "$commit")"
+              fail=1
+            fi
+          done < <(git rev-list "$base..$head")
+          if [ "$fail" -ne 0 ]; then
+            echo ""
+            echo "Fix by amending each commit with 'git commit --amend -s' (or 'git rebase -i')."
+            echo "See docs/CONTRIBUTING.md for details."
+            exit 1
+          fi

@@ -1,0 +1,62 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "17 5 * * *"  # 05:17 UTC daily
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite"
+  CMAKE_GENERATOR: Ninja
+
+jobs:
+  sanitizers:
+    name: sanitizers / ${{ matrix.preset }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [asan, tsan]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config curl zip unzip tar
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 17
+          sudo apt-get install -y clang-17
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: ec6fe06e8da05a8157dc8581fa96b36b571c1bd5
+          runVcpkgInstall: false
+
+      - name: Cache vcpkg binary archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-cache
+          key: vcpkg-nightly-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}
+
+      - name: Configure
+        env:
+          CC: clang-17
+          CXX: clang++-17
+          VCPKG_ROOT: ${{ env.VCPKG_ROOT }}
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }} --parallel
+
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }} --output-on-failure
+
+  # Sprint 1+ adds: full-adapters job (with OPENCASCADE/GMSH/VTK/PETSC features),
+  #                 fuzzing, license scan, CVE scan via osv-scanner.

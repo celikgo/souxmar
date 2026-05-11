@@ -1,0 +1,66 @@
+# souxmar code ownership.
+# CODEOWNERS gates merges: changes in an owned path require approval from at
+# least one named owner. Per docs/TEAM_STRUCTURE.md.
+#
+# Replace placeholder team handles (`@souxmar/<team>`) with real ones once the
+# GitHub org is provisioned in Sprint 0.
+
+# Catch-all — until per-area teams exist, founders own everything.
+*                                   @souxmar/founders
+
+# Build, CI, release pipeline, signing
+/CMakeLists.txt                     @souxmar/platform
+/CMakePresets.json                  @souxmar/platform
+/cmake/                             @souxmar/platform
+/vcpkg.json                         @souxmar/platform @souxmar/adapters
+/.github/workflows/                 @souxmar/platform
+/.github/CODEOWNERS                 @souxmar/founders @souxmar/platform
+/.github/ISSUE_TEMPLATE/            @souxmar/dx
+/.github/pull_request_template.md   @souxmar/dx
+/.gitignore                         @souxmar/platform
+/.gitattributes                     @souxmar/platform
+/.editorconfig                      @souxmar/platform
+/.clang-format                      @souxmar/platform
+/.clang-tidy                        @souxmar/platform
+
+# Plugin host + ABI — load-bearing; widest blast radius
+/include/souxmar-c/                 @souxmar/plugin-host @souxmar/founders
+/src/plugin-host/                   @souxmar/plugin-host
+/tests/plugin-conformance/          @souxmar/plugin-host
+
+# Core data model + pipeline
+/include/souxmar/                   @souxmar/core
+/src/core/                          @souxmar/core
+/src/pipeline/                      @souxmar/core
+
+# Adapters and reference plugins
+/src/adapters/                      @souxmar/adapters
+/src/plugins/                       @souxmar/adapters
+
+# CLI and Python
+/src/cli/                           @souxmar/core @souxmar/platform
+/src/bindings/python/               @souxmar/core
+
+# AI integration
+/src/ai/                            @souxmar/ai
+
+# Desktop app
+/src/desktop/                       @souxmar/desktop
+
+# Tests, benchmarks, examples
+/tests/                             @souxmar/core
+/tests/validation/                  @souxmar/adapters
+/tests/determinism/                 @souxmar/platform
+/benchmarks/                        @souxmar/platform
+/examples/                          @souxmar/dx
+
+# Docs and skills
+/docs/                              @souxmar/dx @souxmar/founders
+/docs/adr/                          @souxmar/founders
+/docs/rfcs/                         @souxmar/founders
+/.claude/skills/                    @souxmar/dx
+/README.md                          @souxmar/dx
+/CONTRIBUTING.md                    @souxmar/dx
+/CODE_OF_CONDUCT.md                 @souxmar/founders
+/CHANGELOG.md                       @souxmar/dx @souxmar/platform
+/LICENSE                            @souxmar/founders
