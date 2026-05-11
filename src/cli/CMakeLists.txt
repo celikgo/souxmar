@@ -22,6 +22,8 @@ target_link_libraries(souxmar_cli
     souxmar::plugin
     souxmar::pipeline
     souxmar::ai
+    # Sprint 10 push 6 — `souxmar update check` / `apply --dry-run`.
+    souxmar::update
     souxmar::warnings
     souxmar::sanitizers
     fmt::fmt

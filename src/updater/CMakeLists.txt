@@ -19,6 +19,8 @@ find_package(unofficial-sodium CONFIG REQUIRED)
 add_library(souxmar_update
   manifest.cpp
   verifier.cpp
+  state_machine.cpp
+  update_state.cpp
 )
 
 add_library(souxmar::update ALIAS souxmar_update)

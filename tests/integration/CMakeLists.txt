@@ -5,6 +5,10 @@
 # resolved paths to in-tree plugin builds, so the test does not have to
 # guess where the binary lives.
 
+# Sprint 10 push 6 — `souxmar update check` CLI integration test
+# generates ed25519 signatures at test time via libsodium.
+find_package(unofficial-sodium CONFIG REQUIRED)
+
 # Two-pass generation: configure_file substitutes @CACHE_VAR@ tokens but does
 # not evaluate $<TARGET_FILE:...> generator expressions; file(GENERATE) does
 # the opposite. The cache vars (SOUXMAR_*_DIR, SOUXMAR_CLI_BINARY) themselves
@@ -38,6 +42,8 @@ add_executable(souxmar_integration_tests
   test_cfd_stub.cpp
   # Sprint 8 push 3.
   test_obj_reader.cpp
+  # Sprint 10 push 6.
+  test_update_check_cli.cpp
 )
 
 target_include_directories(souxmar_integration_tests
@@ -50,8 +56,13 @@ target_link_libraries(souxmar_integration_tests
     souxmar::core
     souxmar::plugin
     souxmar::pipeline
+    souxmar::update
     souxmar::warnings
     souxmar::sanitizers
+    # Sprint 10 push 6 — the `update check` integration test signs
+    # its own manifests with libsodium so no fixture .sig file ships
+    # in the tree.
+    unofficial-sodium::sodium
     GTest::gtest
     GTest::gtest_main
 )
