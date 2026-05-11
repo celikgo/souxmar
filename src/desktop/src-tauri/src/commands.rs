@@ -86,6 +86,15 @@ pub fn open_sample_project(which: String) -> Result<String, String> {
     Ok(dst.to_string_lossy().into_owned())
 }
 
+/// Sprint 12 push 2 — exposes the BridgeFeatureSet contract to
+/// the React side. The workbench panels query this once at
+/// startup and gate their "real vs scaffolding" rendering on
+/// the flags. ADR-0016 documents the stability contract.
+#[tauri::command]
+pub fn bridge_feature_set() -> Result<souxmar_bridge::BridgeFeatureSet, String> {
+    Ok(souxmar_bridge::Bridge::new().feature_set())
+}
+
 #[tauri::command]
 pub fn chat_send(message: String, project_id: String) -> Result<String, String> {
     // Sprint 11 push 4 stub. The real implementation routes through

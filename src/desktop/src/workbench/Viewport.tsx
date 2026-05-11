@@ -8,11 +8,14 @@
 // libsouxmar-core via FFI + shared mmap regions. This component
 // renders the "no project loaded yet" state today.
 
+import type { BridgeFeatureSet } from "../tauri/bridge";
+
 interface Props {
   projectId: string;
+  features:  BridgeFeatureSet;
 }
 
-export function Viewport({ projectId }: Props) {
+export function Viewport({ projectId, features }: Props) {
   if (!projectId) {
     return (
       <div style={emptyStyle}>
@@ -26,17 +29,27 @@ export function Viewport({ projectId }: Props) {
       </div>
     );
   }
-  // Project loaded — but the actual renderer isn't wired yet.
-  // Surfacing what's missing honestly is better than rendering a
-  // fake mesh that lies about what souxmar can do.
+  if (!features.viewport_renderer) {
+    return (
+      <div style={emptyStyle}>
+        <p style={{ margin: 0, color: "var(--fg-primary)" }}>
+          Loaded: <code>{projectId}</code>
+        </p>
+        <p style={{ marginTop: "var(--space-2)", color: "var(--fg-tertiary)", fontSize: 12 }}>
+          The viewport renderer is still being wired (souxmar-bridge
+          FFI; viewport_renderer flag off in this build). The chat
+          agent can already read this project's pipeline.
+        </p>
+      </div>
+    );
+  }
+  // viewport_renderer is true — but the Three.js canvas component
+  // hasn't shipped in this push. A future push mounts it here.
   return (
     <div style={emptyStyle}>
       <p style={{ margin: 0, color: "var(--fg-primary)" }}>
-        Loaded: <code>{projectId}</code>
-      </p>
-      <p style={{ marginTop: "var(--space-2)", color: "var(--fg-tertiary)", fontSize: 12 }}>
-        The viewport renderer is still being wired (Sprint 12+).
-        The chat agent can already read this project's pipeline.
+        Viewport renderer flag is on; canvas component not yet
+        in this build.
       </p>
     </div>
   );

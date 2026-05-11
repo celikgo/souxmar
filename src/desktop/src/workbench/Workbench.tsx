@@ -28,26 +28,29 @@ import { useState } from "react";
 import { Chat } from "../chat/Chat";
 import { Viewport } from "./Viewport";
 import { Inspector } from "./Inspector";
+import { useBridgeFeatures } from "../store/features";
 
 export function Workbench() {
-  // The "current project" identifier — empty string == fresh
-  // workbench with no project loaded. The onboarding wizard's
-  // sample-project step sets this; for now we just render the
-  // empty state.
   const [projectId, setProjectId] = useState<string>("");
+  // Sprint 12 push 2 — query the FFI bridge once on mount. Each
+  // panel branches its rendering on the matching flag (per
+  // ADR-0016) instead of inventing its own scaffolding-vs-real
+  // toggle.
+  const features = useBridgeFeatures();
 
   return (
     <div className="workbench" style={shellStyle}>
       <div style={mainStyle}>
         <div style={topLeftStyle}>
-          <Viewport projectId={projectId} />
+          <Viewport projectId={projectId} features={features} />
         </div>
         <div style={bottomLeftStyle}>
-          <Inspector projectId={projectId} onOpenProject={setProjectId} />
+          <Inspector projectId={projectId} features={features}
+                     onOpenProject={setProjectId} />
         </div>
       </div>
       <div style={rightStyle}>
-        <Chat projectId={projectId} />
+        <Chat projectId={projectId} features={features} />
       </div>
     </div>
   );

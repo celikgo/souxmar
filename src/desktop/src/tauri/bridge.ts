@@ -17,7 +17,23 @@ export type CommandName =
   | "byok_test_connection"
   | "open_sample_project"
   // Sprint 11 push 4 — workbench chat.
-  | "chat_send";
+  | "chat_send"
+  // Sprint 12 push 2 — FFI bridge feature-set query.
+  | "bridge_feature_set";
+
+// Sprint 12 push 2 — BridgeFeatureSet mirror of the Rust struct.
+// Renaming or removing fields here without a matching change to
+// src-tauri/souxmar-bridge/src/lib.rs is a breaking change per
+// ADR-0016. Adding a field is non-breaking — the React side will
+// receive `undefined` until both sides ship the new flag.
+export interface BridgeFeatureSet {
+  viewport_renderer:       boolean;
+  pipeline_introspection:  boolean;
+  provider_call:           boolean;
+  keychain_write:          boolean;
+  auto_updater_menu:       boolean;
+  bridge_protocol_version: number;
+}
 
 export async function invokeCommand<T>(
   name: CommandName,
@@ -28,3 +44,15 @@ export async function invokeCommand<T>(
   // first-run path so the wizard is reachable in `vite preview`.
   return invoke<T>(name, args ?? {});
 }
+
+// Default feature set the React side falls back to when the Tauri
+// runtime is absent (vite preview / Playwright). Everything off
+// except keychain_write (consistent with the Rust-side default).
+export const fallbackFeatureSet: BridgeFeatureSet = {
+  viewport_renderer:       false,
+  pipeline_introspection:  false,
+  provider_call:           false,
+  keychain_write:          true,
+  auto_updater_menu:       false,
+  bridge_protocol_version: 1,
+};

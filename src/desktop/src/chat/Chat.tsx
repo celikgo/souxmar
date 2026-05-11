@@ -11,7 +11,7 @@
 // bridge FFI crate arrives (Sprint 12+).
 
 import { useState, useRef, useEffect } from "react";
-import { invokeCommand } from "../tauri/bridge";
+import { invokeCommand, type BridgeFeatureSet } from "../tauri/bridge";
 
 type Role = "user" | "assistant" | "tool" | "system";
 
@@ -23,9 +23,10 @@ interface Message {
 
 interface Props {
   projectId: string;
+  features:  BridgeFeatureSet;
 }
 
-export function Chat({ projectId }: Props) {
+export function Chat({ projectId, features }: Props) {
   const [messages, setMessages] = useState<Message[]>(() => [
     {
       role: "system",
@@ -82,7 +83,9 @@ export function Chat({ projectId }: Props) {
       <header style={headerStyle}>
         <span style={{ fontWeight: 600 }}>Chat</span>
         <span style={{ marginLeft: "auto", color: "var(--fg-tertiary)", fontSize: 12 }}>
-          {projectId ? "scoped to project" : "no project context"}
+          {features.provider_call
+            ? (projectId ? "scoped to project" : "no project context")
+            : "scaffolding (provider not wired)"}
         </span>
       </header>
 

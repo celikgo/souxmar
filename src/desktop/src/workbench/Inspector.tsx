@@ -8,14 +8,15 @@
 // 12+) that streams the pipeline runner's state from libsouxmar-
 // pipeline into the React side.
 
-import { invokeCommand } from "../tauri/bridge";
+import { invokeCommand, type BridgeFeatureSet } from "../tauri/bridge";
 
 interface Props {
   projectId: string;
+  features:  BridgeFeatureSet;
   onOpenProject: (id: string) => void;
 }
 
-export function Inspector({ projectId, onOpenProject }: Props) {
+export function Inspector({ projectId, features, onOpenProject }: Props) {
   const openSample = async () => {
     try {
       const path = await invokeCommand<string>("open_sample_project", {
@@ -46,11 +47,18 @@ export function Inspector({ projectId, onOpenProject }: Props) {
             Project path
           </p>
           <code style={pathStyle}>{projectId}</code>
-          <p style={{ marginTop: "var(--space-4)", color: "var(--fg-tertiary)", fontSize: 12 }}>
-            Pipeline introspection + per-stage result inspection
-            arrives once the souxmar-bridge FFI is wired (Sprint
-            12+).
-          </p>
+          {features.pipeline_introspection ? (
+            <p style={{ marginTop: "var(--space-4)", color: "var(--fg-secondary)", fontSize: 12 }}>
+              pipeline_introspection flag is on; stage-graph rendering
+              not yet in this build.
+            </p>
+          ) : (
+            <p style={{ marginTop: "var(--space-4)", color: "var(--fg-tertiary)", fontSize: 12 }}>
+              Pipeline introspection arrives once the souxmar-bridge
+              FFI is wired (pipeline_introspection flag off in this
+              build).
+            </p>
+          )}
         </div>
       )}
     </div>
