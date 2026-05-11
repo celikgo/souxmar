@@ -334,6 +334,28 @@ This push lands no code under `src/` — it is the contractual moment Sprint 5 h
   - `bindings/python/tests/test_agent_tools.py` mirror catalogue assertion bumped 8 → 9.
 - **Build**: `src/core/CMakeLists.txt` adds `mesh_quality.cpp`; `src/ai/CMakeLists.txt` adds `tools/query_mesh_quality.cpp`; `examples/CMakeLists.txt` adds the new plugin subdirectory; `tests/integration/CMakeLists.txt` depends on `mesh_quality` so the integration suite has the plugin to load.
 
+#### Sprint 6 push 2 — manifest schema validation hardening
+
+- **Stable rejection codes** for every manifest failure mode (`include/souxmar/plugin/manifest.h`):
+  - New `enum class ManifestRejection` with stable string tokens: `ok`, `toml_syntax`, `missing_field`, `wrong_type`, `abi_unsupported`, `empty_capabilities`, `unknown_threading`, `invalid_capability_namespace`, `invalid_plugin_id`, `invalid_version`, `file_io`. Append-only; numeric values are stable so on-disk audit log records keep parsing.
+  - `ParseError` extended with `code`, `column`, `field` (dotted path, e.g. `"plugin.abi"`). Existing brace-init `{message, line}` still compiles — the new fields default — so every call site upstream of the parser keeps working unchanged.
+- **Tighter validation**:
+  - Capability strings must use one of the host-allow-list namespaces (`reader`, `writer`, `mesher`, `element`, `solver`, `postproc`). `garbage.foo` is rejected at parse time rather than silently registered. New `is_allowed_capability(id)` + `allowed_capability_namespaces()` are exposed for tooling.
+  - Plugin id must look like reverse-DNS (at least one `.`, alphanumerics / `.` / `-` / `_`, no whitespace, no path separators). The marketplace publish step tightens further at upload time; this layer catches the obvious classes today.
+  - Version must look like SemVer (`major.minor.patch[-pre][+build]`). "abc" / "1" / "1.2" are rejected.
+  - Malformed-TOML errors now surface both `line` and `column` from toml++.
+- **Additive optional manifest fields** under the ABI v1 soak ratchet (forward-compatible by construction — missing → default):
+  - `plugin.description` (one-line summary) · `plugin.documentation` (URL) · `plugin.tags` (string array for the plugin index) · `plugin.min_souxmar_abi_minor` (plugin declares the minimum minor ABI it needs; the host today recognises it as advisory metadata, with the loader gate landing alongside the first minor bump).
+  - `examples/plugins/mesh-quality/souxmar-plugin.toml` is updated as the canonical example with the new fields populated.
+- **Structured discovery rejections** (`include/souxmar/plugin/discovery.h`): `DiscoveryRejection` gains a `code` enum (`cannot_iterate_search_path` / `manifest_parse_failed` / `binary_not_found` / `binary_unrecognised_extension`) plus an `optional<ManifestRejection> manifest_code` populated when the rejection came from the parser. `{candidate_path, reason}` brace-init still compiles.
+- **`souxmar plugin list` upgrade** (`src/cli/main.cpp`): rejection lines now print as `- <path>: [<discovery_code>/<manifest_code>] <reason>` so log readers can group failures by class without regex-on-message. The loaded-plugin listing also surfaces the new `description` and `tags` fields when present.
+- **Python bindings** (`bindings/python/src/pysouxmar.cpp`): `pysouxmar.ManifestRejection` and `pysouxmar.DiscoveryRejectionCode` enums; the new `Manifest` fields (`description`, `documentation`, `tags`, `min_souxmar_abi_minor`); `DiscoveryRejection.code` + `.manifest_code` properties.
+- **Docs** (`docs/PLUGIN_SDK.md`): manifest example shows the new fields with comments; a short snippet illustrates the `[<code>] <reason>` format `souxmar plugin list` emits.
+- **Tests**:
+  - `tests/unit/test_manifest.cpp` — one assertion per rejection code (missing-field / wrong-type / abi-unsupported / empty-capabilities / unknown-threading / invalid-capability-namespace / invalid-plugin-id / invalid-version / toml-syntax with line+column). Round-trip for the additive fields (parse when present + default when absent). Token-stability assertion for all 11 `to_string(ManifestRejection)` values. New `CapabilityNamespace.AllowList` direct test.
+  - `tests/unit/test_discovery.cpp` — every existing rejection test now asserts on the new `code`; new `BadCapabilityNamespaceManifestRejectedWithStructuredCode` test that walks the full plugin-host stack: bad manifest → discovery → structured rejection.
+- **No frozen-header surface was touched** — `souxmar-c/*` is unchanged. The new structured-rejection surface is all C++; the ABI v1 freeze-candidate soak rolls forward unchanged.
+
 ### Changed
 
 - (None this release.)

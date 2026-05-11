@@ -95,6 +95,8 @@ TEST(Discovery, MissingBinaryRejected) {
   EXPECT_TRUE(report.loaded.empty());
   ASSERT_EQ(report.rejected.size(), 1u);
   EXPECT_NE(report.rejected[0].reason.find("does not exist"), std::string::npos);
+  EXPECT_EQ(report.rejected[0].code,
+            DiscoveryRejectionCode::BinaryNotFound);
 }
 
 TEST(Discovery, InvalidExtensionRejected) {
@@ -103,7 +105,7 @@ TEST(Discovery, InvalidExtensionRejected) {
   fs::create_directories(plugin_dir);
   std::string manifest = R"toml(
 [plugin]
-id = "x"
+id = "dev.example.x"
 name = "x"
 version = "0.1.0"
 abi = 1
@@ -122,6 +124,8 @@ provides = ["mesher.x"]
   EXPECT_TRUE(report.loaded.empty());
   ASSERT_EQ(report.rejected.size(), 1u);
   EXPECT_NE(report.rejected[0].reason.find("extension"), std::string::npos);
+  EXPECT_EQ(report.rejected[0].code,
+            DiscoveryRejectionCode::BinaryUnrecognisedExtension);
 }
 
 TEST(Discovery, MalformedManifestRejectedWithReason) {
@@ -134,6 +138,41 @@ TEST(Discovery, MalformedManifestRejectedWithReason) {
   EXPECT_TRUE(report.loaded.empty());
   ASSERT_EQ(report.rejected.size(), 1u);
   EXPECT_FALSE(report.rejected[0].reason.empty());
+  EXPECT_EQ(report.rejected[0].code,
+            DiscoveryRejectionCode::ManifestParseFailed);
+  ASSERT_TRUE(report.rejected[0].manifest_code.has_value());
+  EXPECT_EQ(*report.rejected[0].manifest_code, ManifestRejection::TomlSyntax);
+}
+
+TEST(Discovery, BadCapabilityNamespaceManifestRejectedWithStructuredCode) {
+  TempDir td;
+  auto plugin_dir = td.path() / "bad-namespace";
+  fs::create_directories(plugin_dir);
+  std::string manifest = R"toml(
+[plugin]
+id = "dev.example.x"
+name = "x"
+version = "0.1.0"
+abi = 1
+license = "MIT"
+
+[plugin.binary]
+file = "x.so"
+
+[plugin.capabilities]
+provides = ["garbage.foo"]
+)toml";
+  write_file(plugin_dir / "souxmar-plugin.toml", manifest);
+  touch(plugin_dir / "x.so");
+
+  auto report = discover_plugins({td.path()});
+  EXPECT_TRUE(report.loaded.empty());
+  ASSERT_EQ(report.rejected.size(), 1u);
+  EXPECT_EQ(report.rejected[0].code,
+            DiscoveryRejectionCode::ManifestParseFailed);
+  ASSERT_TRUE(report.rejected[0].manifest_code.has_value());
+  EXPECT_EQ(*report.rejected[0].manifest_code,
+            ManifestRejection::InvalidCapabilityNamespace);
 }
 
 TEST(Discovery, DirectoryWithoutManifestSilentlyIgnored) {

@@ -6,6 +6,14 @@ abi           = 1
 license       = "Apache-2.0"
 homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/mesh-quality"
 
+# Sprint 6 push 2 additive manifest fields — the host treats these as
+# advisory metadata. Missing values fall back to defaults; no plugin is
+# rejected for omitting them.
+description   = "Per-cell signed volume, edge ratio, and minimum dihedral angle for Tet4/Tri3."
+documentation = "https://souxmar.dev/docs/plugins/mesh-quality"
+tags          = ["postproc", "mesh-qa", "reference"]
+min_souxmar_abi_minor = 0
+
 [plugin.binary]
 file          = "libmesh_quality.so"
 

@@ -281,6 +281,27 @@ PYBIND11_MODULE(_pysouxmar, m) {
       .value("SingleThreaded",   plugin::ThreadingModel::SingleThreaded)
       .value("InternalParallel", plugin::ThreadingModel::InternalParallel);
 
+  // Sprint 6 push 2 — structured rejection codes for manifest + discovery.
+  py::enum_<plugin::ManifestRejection>(m, "ManifestRejection")
+      .value("Ok",                         plugin::ManifestRejection::Ok)
+      .value("TomlSyntax",                 plugin::ManifestRejection::TomlSyntax)
+      .value("MissingField",               plugin::ManifestRejection::MissingField)
+      .value("WrongType",                  plugin::ManifestRejection::WrongType)
+      .value("AbiUnsupported",             plugin::ManifestRejection::AbiUnsupported)
+      .value("EmptyCapabilities",          plugin::ManifestRejection::EmptyCapabilities)
+      .value("UnknownThreading",           plugin::ManifestRejection::UnknownThreading)
+      .value("InvalidCapabilityNamespace", plugin::ManifestRejection::InvalidCapabilityNamespace)
+      .value("InvalidPluginId",            plugin::ManifestRejection::InvalidPluginId)
+      .value("InvalidVersion",             plugin::ManifestRejection::InvalidVersion)
+      .value("FileIo",                     plugin::ManifestRejection::FileIo);
+
+  py::enum_<plugin::DiscoveryRejectionCode>(m, "DiscoveryRejectionCode")
+      .value("Unknown",                     plugin::DiscoveryRejectionCode::Unknown)
+      .value("CannotIterateSearchPath",     plugin::DiscoveryRejectionCode::CannotIterateSearchPath)
+      .value("ManifestParseFailed",         plugin::DiscoveryRejectionCode::ManifestParseFailed)
+      .value("BinaryNotFound",              plugin::DiscoveryRejectionCode::BinaryNotFound)
+      .value("BinaryUnrecognisedExtension", plugin::DiscoveryRejectionCode::BinaryUnrecognisedExtension);
+
   py::class_<plugin::Manifest>(m, "Manifest")
       .def_readonly("id",                  &plugin::Manifest::id)
       .def_readonly("name",                &plugin::Manifest::name)
@@ -293,6 +314,12 @@ PYBIND11_MODULE(_pysouxmar, m) {
       .def_readonly("threading",           &plugin::Manifest::threading)
       .def_readonly("souxmar_version_constraint",
                                            &plugin::Manifest::souxmar_version_constraint)
+      // Sprint 6 push 2 additive fields.
+      .def_readonly("description",         &plugin::Manifest::description)
+      .def_readonly("documentation",       &plugin::Manifest::documentation)
+      .def_readonly("tags",                &plugin::Manifest::tags)
+      .def_readonly("min_souxmar_abi_minor",
+                                           &plugin::Manifest::min_souxmar_abi_minor)
       .def("__repr__", [](const plugin::Manifest& mf) {
         return "Manifest(id='" + mf.id + "', version='" + mf.version + "')";
       });
@@ -304,7 +331,9 @@ PYBIND11_MODULE(_pysouxmar, m) {
 
   py::class_<plugin::DiscoveryRejection>(m, "DiscoveryRejection")
       .def_readonly("candidate_path", &plugin::DiscoveryRejection::candidate_path)
-      .def_readonly("reason",         &plugin::DiscoveryRejection::reason);
+      .def_readonly("reason",         &plugin::DiscoveryRejection::reason)
+      .def_readonly("code",           &plugin::DiscoveryRejection::code)
+      .def_readonly("manifest_code",  &plugin::DiscoveryRejection::manifest_code);
 
   py::class_<plugin::DiscoveryReport>(m, "DiscoveryReport")
       .def_readonly("loaded",   &plugin::DiscoveryReport::loaded)

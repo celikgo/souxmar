@@ -49,17 +49,25 @@ Alongside the binary, ship a `souxmar-plugin.toml`:
 [plugin]
 id            = "com.example.netgen-mesher"
 name          = "Netgen-backed Tetra Mesher"
-version       = "0.3.1"
+version       = "0.3.1"                 # SemVer (major.minor.patch[-pre][+build])
 abi           = 1                       # major souxmar ABI it targets
 license       = "Apache-2.0"
 homepage      = "https://example.com/netgen-mesher"
+
+# Optional metadata (Sprint 6 push 2 — additive). The host treats these
+# as advisory and never gates the load on them.
+description           = "Netgen-backed tetrahedral mesher with feature recovery."
+documentation         = "https://example.com/netgen-mesher/docs"
+tags                  = ["mesher", "tetrahedral"]
+min_souxmar_abi_minor = 0               # require at least this minor ABI
 
 [plugin.binary]
 file          = "libnetgen_mesher.so"   # relative to manifest
 
 [plugin.capabilities]
 provides = [
-  "mesher.tetra.netgen",
+  "mesher.tetra.netgen",                # namespace must be one of: reader, writer,
+                                         # mesher, element, solver, postproc.
 ]
 
 [plugin.threading]
@@ -69,7 +77,17 @@ model = "internal-parallel"             # one of: reentrant, single-threaded, in
 souxmar = ">=1.0,<2.0"
 ```
 
-The host validates the manifest, refuses to load on ABI mismatch, and surfaces the metadata to `souxmar plugin list`.
+The host validates the manifest, refuses to load on ABI mismatch, and surfaces the metadata to `souxmar plugin list`. Every rejection carries a stable code — see `ManifestRejection` in `souxmar/plugin/manifest.h` — so `souxmar plugin list` reports the structured class plus a free-form reason:
+
+```
+2 plugin(s) rejected:
+  - /opt/.../souxmar-plugin.toml: [manifest_parse_failed/invalid_capability_namespace]
+      'plugin.capabilities.provides' has 'garbage.foo' — namespace not in the host allow-list ...
+  - /opt/.../souxmar-plugin.toml: [binary_not_found]
+      declared binary 'libfoo.so' does not exist at ...
+```
+
+Tooling parses the bracketed codes; the rest of the line is for humans.
 
 ## Memory ownership rules
 

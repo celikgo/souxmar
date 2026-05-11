@@ -130,9 +130,20 @@ int cmd_plugin_list(const std::vector<fs::path>& extra_paths) {
     fmt::print("  manifest:    {}\n", d.manifest_path.string());
     fmt::print("  binary:      {}\n", d.binary_path.string());
     fmt::print("  abi:         {}\n", d.manifest.abi);
+    if (!d.manifest.description.empty()) {
+      fmt::print("  description: {}\n", d.manifest.description);
+    }
     fmt::print("  capabilities:\n");
     for (const auto& cap : d.manifest.capabilities) {
       fmt::print("    - {}\n", cap);
+    }
+    if (!d.manifest.tags.empty()) {
+      fmt::print("  tags:        ");
+      for (std::size_t i = 0; i < d.manifest.tags.size(); ++i) {
+        fmt::print("{}{}", d.manifest.tags[i],
+                   i + 1 == d.manifest.tags.size() ? "" : ", ");
+      }
+      fmt::print("\n");
     }
     fmt::print("\n");
   }
@@ -140,7 +151,20 @@ int cmd_plugin_list(const std::vector<fs::path>& extra_paths) {
   if (!report.rejected.empty()) {
     fmt::print(stderr, "{} plugin(s) rejected:\n", report.rejected.size());
     for (const auto& r : report.rejected) {
-      fmt::print(stderr, "  - {}: {}\n", r.candidate_path.string(), r.reason);
+      // Surface the structured code so log parsers can group rejections
+      // by class without grepping the free-form message.
+      if (r.manifest_code.has_value()) {
+        fmt::print(stderr, "  - {}: [{}/{}] {}\n",
+                   r.candidate_path.string(),
+                   souxmar::plugin::to_string(r.code),
+                   souxmar::plugin::to_string(*r.manifest_code),
+                   r.reason);
+      } else {
+        fmt::print(stderr, "  - {}: [{}] {}\n",
+                   r.candidate_path.string(),
+                   souxmar::plugin::to_string(r.code),
+                   r.reason);
+      }
     }
   }
   return kExitOk;

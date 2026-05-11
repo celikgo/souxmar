@@ -24,9 +24,27 @@ struct DiscoveredPlugin {
   Manifest              manifest;
 };
 
+// Reasons a candidate plugin directory / manifest is rejected by
+// discovery. Append-only; the numeric values are stable so audit logs
+// and on-disk reports can rely on them.
+enum class DiscoveryRejectionCode : std::uint16_t {
+  Unknown                     = 0,
+  CannotIterateSearchPath     = 1,
+  ManifestParseFailed         = 2,    // see ManifestRejection in `detail`
+  BinaryNotFound              = 3,
+  BinaryUnrecognisedExtension = 4,
+};
+
+[[nodiscard]] std::string_view to_string(DiscoveryRejectionCode r) noexcept;
+
 struct DiscoveryRejection {
-  std::filesystem::path candidate_path;    // the directory or .toml that was rejected
-  std::string           reason;
+  std::filesystem::path  candidate_path;    // the directory or .toml that was rejected
+  std::string            reason;            // legacy free-form message
+  // Sprint 6 push 2 additions. Brace-init compatibility preserved:
+  // `{candidate_path, reason}` still compiles (the new fields take
+  // their defaults).
+  DiscoveryRejectionCode code           = DiscoveryRejectionCode::Unknown;
+  std::optional<ManifestRejection> manifest_code;  // populated when code == ManifestParseFailed
 };
 
 struct DiscoveryReport {
