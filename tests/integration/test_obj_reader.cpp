@@ -18,6 +18,8 @@
 #include <utility>
 #include <variant>
 
+#include "souxmar/core/mesh.h"
+#include "souxmar/core/tag.h"
 #include "souxmar/pipeline/cache.h"
 #include "souxmar/pipeline/parser.h"
 #include "souxmar/pipeline/registry_dispatcher.h"
@@ -200,6 +202,129 @@ TEST(ObjReaderEndToEnd, QuadFaceFanTriangulatesIntoTwoTris) {
   std::error_code ec;
   fs::remove(obj_path, ec);
   fs::remove(obj_path.parent_path(), ec);
+}
+
+// Sprint 9 push 5 — usemtl groups become per-cell tags. Tag ids
+// are assigned 1, 2, 3, ... in source-file appearance order. Faces
+// emitted before any usemtl directive carry the untagged sentinel
+// (-1); a bare `usemtl` (no argument) reverts subsequent faces to -1.
+constexpr const char* kTriUsemtlObj = R"obj(
+v 0 0 0
+v 1 0 0
+v 0 1 0
+v 1 1 0
+v 0 0 1
+v 1 0 1
+# Two faces before any usemtl — should carry tag -1.
+f 1 2 3
+f 2 4 3
+# Group `inlet` — should carry tag 1.
+usemtl inlet
+f 1 2 5
+# Group `walls` — should carry tag 2.
+usemtl walls
+f 2 6 5
+f 3 4 5
+# Re-using `inlet` — should reuse tag 1, not allocate a new one.
+usemtl inlet
+f 1 3 5
+)obj";
+
+TEST(ObjReaderEndToEnd, UsemtlGroupsBecomePerCellTags) {
+  const fs::path plugins_root =
+      fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
+  const auto discovery = plugin::discover_plugins({plugins_root});
+  plugin::Registry      registry;
+  plugin::PluginLoader  loader(registry, "test-host/0.0.0");
+  auto _obj = load_by_id(loader, discovery, "dev.souxmar.examples.obj-reader");
+
+  const auto obj_path = stage_obj_to_tempdir(
+      "souxmar-obj-usemtl", "usemtl.obj", kTriUsemtlObj);
+
+  std::ostringstream yaml;
+  yaml << "version: 1\n"
+       << "stages:\n"
+       << "  - id: read\n"
+       << "    plugin: reader.obj\n"
+       << "    input:\n"
+       << "      path: " << obj_path.string() << "\n";
+
+  auto p = std::get<pipeline::Pipeline>(pipeline::parse_pipeline(yaml.str()));
+  pipeline::RegistryDispatcher dispatcher(registry);
+  pipeline::Cache              cache;
+  auto run = pipeline::run_pipeline(p, dispatcher, cache);
+  ASSERT_EQ(run.status, pipeline::RunResult::Status::Success);
+
+  const auto* out = static_cast<const pipeline::StageOutput*>(
+      run.outputs["read"].get());
+  ASSERT_NE(out, nullptr);
+  ASSERT_NE(out->mesh, nullptr);
+  ASSERT_EQ(out->mesh->num_cells(), 6u);
+
+  // Source order: 2 untagged, 1 inlet (tag 1), 2 walls (tag 2),
+  // 1 inlet again (tag 1 reused).
+  EXPECT_EQ(out->mesh->cell_tag(core::CellIndex{0}).value, -1);
+  EXPECT_EQ(out->mesh->cell_tag(core::CellIndex{1}).value, -1);
+  EXPECT_EQ(out->mesh->cell_tag(core::CellIndex{2}).value,  1);
+  EXPECT_EQ(out->mesh->cell_tag(core::CellIndex{3}).value,  2);
+  EXPECT_EQ(out->mesh->cell_tag(core::CellIndex{4}).value,  2);
+  EXPECT_EQ(out->mesh->cell_tag(core::CellIndex{5}).value,  1);
+
+  std::error_code ec;
+  fs::remove(obj_path, ec);
+  fs::remove(obj_path.parent_path(), ec);
+}
+
+// Sprint 9 push 5 — the pipe-bend fixture itself is a valid OBJ and
+// produces the expected tag distribution: 2 triangles for the inlet
+// quad (tag 1), 16 triangles for the 8 wall quads (tag 2), 2 triangles
+// for the outlet quad (tag 3).
+TEST(ObjReaderEndToEnd, PipeBendFixtureTagsAreInletWallsOutlet) {
+  const fs::path plugins_root =
+      fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
+  const auto discovery = plugin::discover_plugins({plugins_root});
+  plugin::Registry      registry;
+  plugin::PluginLoader  loader(registry, "test-host/0.0.0");
+  auto _obj = load_by_id(loader, discovery, "dev.souxmar.examples.obj-reader");
+
+  const fs::path obj_path =
+      fs::path(SOUXMAR_TEST_SOURCE_ROOT) / "examples" / "pipe-bend" /
+      "pipe-bend.obj";
+  ASSERT_TRUE(fs::exists(obj_path)) << obj_path;
+
+  std::ostringstream yaml;
+  yaml << "version: 1\n"
+       << "stages:\n"
+       << "  - id: read\n"
+       << "    plugin: reader.obj\n"
+       << "    input:\n"
+       << "      path: " << obj_path.string() << "\n";
+
+  auto p = std::get<pipeline::Pipeline>(pipeline::parse_pipeline(yaml.str()));
+  pipeline::RegistryDispatcher dispatcher(registry);
+  pipeline::Cache              cache;
+  auto run = pipeline::run_pipeline(p, dispatcher, cache);
+  ASSERT_EQ(run.status, pipeline::RunResult::Status::Success);
+
+  const auto* out = static_cast<const pipeline::StageOutput*>(
+      run.outputs["read"].get());
+  ASSERT_NE(out, nullptr);
+  ASSERT_NE(out->mesh, nullptr);
+  EXPECT_EQ(out->mesh->num_nodes(), 12u);    // 12 distinct vertices.
+  EXPECT_EQ(out->mesh->num_cells(), 20u);    // 10 quads × 2 tris/quad.
+
+  std::size_t inlet_cells  = 0;
+  std::size_t walls_cells  = 0;
+  std::size_t outlet_cells = 0;
+  for (std::size_t i = 0; i < out->mesh->num_cells(); ++i) {
+    const std::int32_t t = out->mesh->cell_tag(core::CellIndex{i}).value;
+    if (t == 1) ++inlet_cells;
+    if (t == 2) ++walls_cells;
+    if (t == 3) ++outlet_cells;
+  }
+  EXPECT_EQ(inlet_cells,   2u);   // 1 quad fan-triangulated to 2.
+  EXPECT_EQ(walls_cells,  16u);   // 8 quads → 16 tris.
+  EXPECT_EQ(outlet_cells,  2u);
 }
 
 TEST(ObjReaderEndToEnd, FaceFieldsWithUvAndNormalsParseCleanly) {

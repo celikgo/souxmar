@@ -4,8 +4,8 @@
 //
 // Parses Wavefront OBJ files into a Tri3 surface mesh through the C
 // ABI. Sibling to stl-reader (push 4 of Sprint 6) and to the opt-in
-// blender-reader (this push) which exports .blend → .obj via a
-// Blender subprocess and then hands the .obj here.
+// blender-reader (Sprint 8 push 3) which exports .blend → .obj via
+// a Blender subprocess and then hands the .obj here.
 //
 // Wavefront OBJ is line-oriented:
 //
@@ -20,12 +20,23 @@
 //   o  <name>                         -- object marker (ignored)
 //   g  <name>                         -- group marker (ignored)
 //   s  <smoothing>                    -- smoothing group (ignored)
-//   mtllib / usemtl                   -- material refs (ignored)
+//   mtllib                            -- external material library (ignored)
+//   usemtl <name>                     -- material switch — see below
 //
 // Vertex indices are 1-based. Negative indices count back from the
 // current end of the vertex list — both forms are accepted. Polygons
 // larger than triangles are fan-triangulated into Tri3 cells from the
 // first vertex.
+//
+// Sprint 9 push 5 — `usemtl` preservation. Each unique material name
+// encountered is mapped to a sequential integer tag (1 for the first,
+// 2 for the second, ...) in source-file appearance order. Every Tri3
+// cell read after a `usemtl X` directive carries the integer tag for
+// X as its `souxmar_mesh_cell_tag`. Faces emitted before the first
+// `usemtl` (or in OBJ files with no usemtl directives at all) carry
+// the untagged sentinel (-1). The name → tag-id mapping is documented
+// at the call site for downstream tetrahedralisers (gmsh-mesher) that
+// preserve cell tags as per-face tags on the resulting volume mesh.
 //
 // Capability: `reader.obj`. Declared `reentrant` — the parser keeps no
 // global state.
@@ -39,6 +50,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "souxmar-c/abi.h"
@@ -104,12 +116,20 @@ std::int64_t resolve_index(std::int64_t obj_idx, std::size_t num_verts) noexcept
 
 souxmar_status_t parse_obj(std::istream&                in,
                            std::vector<double>&         flat_coords,
-                           std::vector<std::uint64_t>&  tri_nodes) {
+                           std::vector<std::uint64_t>&  tri_nodes,
+                           std::vector<std::int32_t>&   tri_tags) {
   std::string line;
   std::size_t line_no    = 0;
   std::size_t num_faces  = 0;
   std::vector<std::int64_t> face_indices;
   face_indices.reserve(8);
+
+  // Sprint 9 push 5 — track the active `usemtl` group as a per-cell
+  // integer tag. Names are assigned tags in source-file appearance
+  // order (1, 2, 3, ...); the sentinel -1 is used for faces emitted
+  // before any `usemtl` directive (or for OBJ files with none).
+  std::unordered_map<std::string, std::int32_t> material_tag;
+  std::int32_t                                  current_tag = -1;
 
   while (std::getline(in, line)) {
     ++line_no;
@@ -164,17 +184,39 @@ souxmar_status_t parse_obj(std::istream&                in,
         return souxmar_status_error(SOUXMAR_E_IO,
             "face has fewer than 3 vertices");
       }
-      // Fan-triangulate around face_indices[0].
+      // Fan-triangulate around face_indices[0]; every emitted Tri3
+      // inherits the active usemtl tag (-1 if none active).
       for (std::size_t i = 1; i + 1 < face_indices.size(); ++i) {
         tri_nodes.push_back(static_cast<std::uint64_t>(face_indices[0]));
         tri_nodes.push_back(static_cast<std::uint64_t>(face_indices[i]));
         tri_nodes.push_back(static_cast<std::uint64_t>(face_indices[i + 1]));
+        tri_tags.push_back(current_tag);
       }
       ++num_faces;
       continue;
     }
-    if (head == "o" || head == "g" || head == "s" ||
-        ieq(head, "mtllib") || ieq(head, "usemtl")) {
+    if (ieq(head, "usemtl")) {
+      std::string name;
+      if (!(iss >> name)) {
+        // A bare `usemtl` reverts to untagged — slightly liberal but
+        // matches what some exporters emit when "no material" is meant.
+        current_tag = -1;
+        continue;
+      }
+      auto it = material_tag.find(name);
+      if (it == material_tag.end()) {
+        // First time we've seen this material — assign the next tag
+        // (1, 2, 3, ... in appearance order).
+        const std::int32_t next_tag =
+            static_cast<std::int32_t>(material_tag.size() + 1);
+        material_tag.emplace(name, next_tag);
+        current_tag = next_tag;
+      } else {
+        current_tag = it->second;
+      }
+      continue;
+    }
+    if (head == "o" || head == "g" || head == "s" || ieq(head, "mtllib")) {
       continue;
     }
     // Unknown keyword — silently ignore (OBJ has many vendor-specific
@@ -224,8 +266,9 @@ souxmar_status_t obj_read(const char*                       path,
 
   std::vector<double>        flat_coords;   // 3*N doubles
   std::vector<std::uint64_t> tri_nodes;     // 3*M ids
+  std::vector<std::int32_t>  tri_tags;     // M tags (1:1 with cells)
 
-  const auto parse_status = parse_obj(in, flat_coords, tri_nodes);
+  const auto parse_status = parse_obj(in, flat_coords, tri_nodes, tri_tags);
   if (parse_status.code != SOUXMAR_OK) return parse_status;
 
   const std::size_t num_nodes = flat_coords.size() / 3;
@@ -250,7 +293,7 @@ souxmar_status_t obj_read(const char*                       path,
         tri_nodes[i * 3 + 0],
         tri_nodes[i * 3 + 1],
         tri_nodes[i * 3 + 2]};
-    souxmar_mesh_add_cell(mesh, SOUXMAR_ET_TRI3, nodes, 3, -1, nullptr);
+    souxmar_mesh_add_cell(mesh, SOUXMAR_ET_TRI3, nodes, 3, tri_tags[i], nullptr);
   }
 
   *out_mesh = mesh;

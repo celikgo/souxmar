@@ -1,21 +1,22 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# Pipe-bend CFD — Sprint 8's runnable CFD example. Drives the
-# Sprint 8 capability chain (mesher → CFD solver → writer) against
-# in-tree plugins.
+# Pipe-bend CFD — runnable CFD example. Drives the Sprint 8 capability
+# chain (reader → CFD solver → writer) against in-tree plugins, with
+# real geometry from a triangulated surface mesh (Sprint 9 push 5).
 #
-# What this models (notionally): steady laminar flow through a curved
-# pipe bend, with an axial inlet velocity prescribed by `apply_inlet`-
-# style BC vocabulary and a static-pressure outlet. The hello-mesher
-# placeholder substitutes a unit tet for the actual pipe geometry; a
-# future ratchet swaps in an STL/OBJ reader feeding a real pipe-bend
-# mesh, with the rest of the pipeline unchanged.
+# What this models: steady laminar flow through a 90° L-shaped duct
+# with a square cross-section, inlet at one end and outlet at the
+# other. The geometry is a Tri3 surface mesh read from pipe-bend.obj
+# (this directory) with usemtl-tagged inlet / walls / outlet groups
+# that obj-reader preserves as per-cell tags (Sprint 9 push 5).
 #
 # Default CI: cfd-stub serves `solver.cfd.simple` (uniform velocity
-# field — no PDE solve). Nightly CFD-bearing matrix: openfoam-solver
-# serves the same capability via the Sprint 8 push 2 subprocess
-# adapter, exercising the real Tet4 → polyMesh translator landed in
-# push 6.
+# field on the surface mesh — no PDE solve; the stub is shape-agnostic).
+# Nightly CFD-bearing matrix: a full reader → tetrahedraliser →
+# openfoam-solver pipeline runs once the gmsh-mesher tag-preservation
+# follow-on lands (the openfoam-solver translator requires linear 3D
+# elements; a Tri3 surface mesh alone doesn't form a polyMesh volume).
+# Until then, the openfoam path is documented in README.md.
 #
 # Run:
 #   souxmar run examples/pipe-bend/pipeline.yaml \
@@ -26,21 +27,29 @@
 version: 1
 
 stages:
-  # Stage 1: mesh.
-  # hello-mesher is the placeholder for default CI (unit tet, no
-  # external dependency). The nightly-matrix recipe substitutes
-  # `reader.obj` reading a pipe-bend.obj fixture; the writer and
-  # solver stages stay identical.
+  # Stage 1: read.
+  # reader.obj parses the Tri3 surface mesh from pipe-bend.obj and
+  # preserves the usemtl groups (`inlet`, `walls`, `outlet`) as
+  # integer per-cell tags. Downstream stages see those tags via
+  # souxmar_mesh_cell_tag (and, once a tetrahedraliser is in the
+  # chain, the corresponding tet boundary faces inherit them via
+  # souxmar_mesh_face_tag, ABI v1.3).
   - id: mesh
-    plugin: mesher.tetra.hello
+    plugin: reader.obj
+    input:
+      path: pipe-bend.obj
 
   # Stage 2: CFD solve.
   # solver.cfd.simple is served by:
   #   - cfd-stub (always-on) in default CI — closed-form uniform
-  #     velocity field; runs in microseconds.
+  #     velocity field; runs in microseconds; shape-agnostic so the
+  #     Tri3 surface mesh works directly.
   #   - openfoam-solver (opt-in) on the nightly CFD-bearing matrix —
-  #     simpleFoam invoked via subprocess per ADR-0009; reads BCs
-  #     through the real polyMesh translator (push 6).
+  #     simpleFoam invoked via subprocess per ADR-0009; per-patch BC
+  #     routing engages via the v1.3 per-face-tag ABI (Sprint 9 push 3).
+  #     Requires a Tet4/Hex8/Prism6/Pyramid5 volume mesh — pipe-bend
+  #     fully wires this once gmsh-mesher's tag-preservation lands as
+  #     a separate Sprint 9 push.
   - id: solve
     plugin: solver.cfd.simple
     input:

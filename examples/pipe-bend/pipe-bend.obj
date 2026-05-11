@@ -1,0 +1,58 @@
+# pipe-bend.obj — 90° L-shaped duct, square cross-section.
+#
+# Geometry: two unit cubes sharing the y=1 face. Cube A occupies
+# x∈[0,1], y∈[0,1], z∈[0,1]; cube B occupies x∈[0,1], y∈[1,2],
+# z∈[0,1]. The shared y=1 face is the bend's elbow and is internal
+# to the duct — not present in the OBJ (which describes the duct's
+# external surface only).
+#
+# Named groups (consumed by obj-reader as Tri3 cell tags from
+# Sprint 9 push 5 onward):
+#   * inlet   — single quad at x=0 on cube A   (1 quad  / 2 tris)
+#   * outlet  — single quad at y=2 on cube B   (1 quad  / 2 tris)
+#   * walls   — 8 quads making up the rest     (8 quads / 16 tris)
+#
+# Vertex layout (the four y=1 vertices are shared between cubes):
+#   0=(0,0,0)  1=(1,0,0)  2=(1,1,0)*  3=(0,1,0)*
+#   4=(0,0,1)  5=(1,0,1)  6=(1,1,1)*  7=(0,1,1)*
+#   8=(0,2,0)  9=(1,2,0) 10=(0,2,1)  11=(1,2,1)
+#
+# Face vertex order is CCW when viewed from outside the duct, so
+# normals point outward (the polyMesh convention the openfoam-solver
+# translator expects).
+
+mtllib pipe-bend.mtl
+
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 1.0 1.0 0.0
+v 0.0 1.0 0.0
+v 0.0 0.0 1.0
+v 1.0 0.0 1.0
+v 1.0 1.0 1.0
+v 0.0 1.0 1.0
+v 0.0 2.0 0.0
+v 1.0 2.0 0.0
+v 0.0 2.0 1.0
+v 1.0 2.0 1.0
+
+# Inlet cap (cube A, x=0). Normal -x.
+usemtl inlet
+f 1 5 8 4
+
+# Walls — cube A side / top / bottom / +x faces.
+usemtl walls
+f 2 3 7 6
+f 1 2 6 5
+f 1 4 3 2
+f 5 6 7 8
+
+# Walls — cube B side / top / bottom / +x faces.
+f 4 8 11 9
+f 3 10 12 7
+f 4 3 10 9
+f 8 7 12 11
+
+# Outlet cap (cube B, y=2). Normal +y.
+usemtl outlet
+f 9 11 12 10

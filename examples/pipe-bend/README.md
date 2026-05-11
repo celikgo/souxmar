@@ -16,7 +16,15 @@ YAML  →  parse  →  DAG validate
 
 A three-stage pipeline declaring:
 
-1. `mesh`  — invokes `mesher.tetra.hello` (placeholder unit-tet today).
+1. `mesh`  — invokes `reader.obj` against `pipe-bend.obj` (this directory).
+   The fixture is a 12-vertex L-shaped duct: two unit cubes meeting at
+   y=1, with named `usemtl` groups `inlet` (single quad at x=0),
+   `outlet` (single quad at y=2), and `walls` (the remaining 8 quads).
+   The reader fan-triangulates each quad into 2 Tri3 cells and preserves
+   the `usemtl` material as a per-cell tag (Sprint 9 push 5): cells from
+   the `inlet` group get tag 1, cells from `walls` get tag 2, cells from
+   `outlet` get tag 3 — the tag-id assignment is source-order based and
+   deterministic.
 2. `solve` — invokes `solver.cfd.simple` for a steady inlet-magnitude
    1.5 m/s flow in the +x direction.
 3. `write` — invokes `writer.vtu`, producing `pipe-bend.vtu`.
@@ -33,21 +41,27 @@ between them is a build-time flag — the pipeline YAML doesn't change.
 
 ## What this *is not* (yet)
 
-- **The geometry is a placeholder unit tet.** `mesher.tetra.hello`
-  doesn't read a CAD file. A follow-on push wires `reader.obj` (Sprint 8
-  push 3) to a `pipe-bend.obj` fixture under this directory and swaps
-  the `mesh` stage to consume it. The solver + writer stages stay
-  identical — that's the point of the in-process pipeline contract.
-- **BC routing now respects per-face tags.** As of Sprint 9 push 3 the
-  openfoam-solver groups boundary faces by `souxmar_mesh_face_tag` (the
-  ABI v1.3 surface from ADR-0012) and emits one polyMesh patch per
-  matching BC, with the corresponding `0/U` and `0/p` boundaryField
-  entries. Faces with no tag fall through to a single legacy `walls`
-  patch — so meshes built without per-face tags (the current
-  `mesher.tetra.hello` placeholder is one) keep the Sprint 8 behaviour.
-  The full per-patch path activates once `obj-reader` lands per-face
-  tags from `usemtl` group names (planned alongside the
-  `pipe-bend.obj` fixture in a follow-on push).
+- **The mesh is a surface, not a volume.** `pipe-bend.obj` is a
+  triangulated boundary surface (Tri3 cells); CFD needs a volume mesh
+  (Tet4 / Hex8 / Prism6 / Pyramid5) to run through `openfoam-solver`.
+  The chain is shape-agnostic against `cfd-stub` (the always-on default
+  path — it just writes a uniform velocity at every node) but the
+  nightly OpenFOAM path needs a tetrahedraliser in the chain. The
+  natural choice is `gmsh-mesher` (opt-in via `SOUXMAR_WITH_GMSH=ON`,
+  which embeds Gmsh as a library and exposes `mesher.tetra.gmsh`).
+  The follow-on for full nightly CFD is gmsh-mesher's per-cell-tag →
+  per-face-tag preservation: when Gmsh tetrahedralises the surface,
+  each tet boundary face inherits the `souxmar_mesh_face_tag` of the
+  surface Tri3 cell it descended from. Until that lands, the OpenFOAM
+  matrix runs against synthetic Tet4 fixtures (the Sprint 8 push 2
+  unit-tet path) rather than against real OBJ-driven geometry.
+- **BC routing respects per-face tags end-to-end** (Sprint 9 push 3).
+  The openfoam-solver groups boundary faces by `souxmar_mesh_face_tag`
+  (the ABI v1.3 surface from ADR-0012) and emits one polyMesh patch
+  per matching BC, with the corresponding `0/U` and `0/p` boundaryField
+  entries. Untagged faces fall through to a legacy "walls" patch, so
+  meshes built without per-face tags (or chains that lose the tag
+  info during tetrahedralisation) still produce valid OpenFOAM cases.
 - **The cfd-stub field is uniform.** It does not solve any PDE; it
   just produces `(magnitude · direction)` at every node. Good enough
   for the agent eval suite and for the conformance gate; not good
