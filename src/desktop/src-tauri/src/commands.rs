@@ -86,6 +86,30 @@ pub fn open_sample_project(which: String) -> Result<String, String> {
     Ok(dst.to_string_lossy().into_owned())
 }
 
+#[tauri::command]
+pub fn chat_send(message: String, project_id: String) -> Result<String, String> {
+    // Sprint 11 push 4 stub. The real implementation routes through
+    // the souxmar-bridge FFI crate (queued for Sprint 12+) into
+    // libsouxmar-ai's Provider abstraction (Sprint 10 push 9). For
+    // now we return a deterministic acknowledgement so the chat panel
+    // is exercisable in `tauri dev`.
+    let suffix = if project_id.is_empty() {
+        String::new()
+    } else {
+        format!(" (project: {})", project_id)
+    };
+    if message.trim().is_empty() {
+        return Err("empty message".into());
+    }
+    Ok(format!(
+        "(scaffolding) I received: \"{}\"{}. The real provider call \
+         lands when the souxmar-bridge FFI crate wires this command \
+         to libsouxmar-ai (Sprint 12+).",
+        message.trim(),
+        suffix,
+    ))
+}
+
 fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> std::io::Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {

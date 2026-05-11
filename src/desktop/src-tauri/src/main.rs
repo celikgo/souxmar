@@ -16,6 +16,7 @@ fn main() {
             commands::byok_store_key,
             commands::byok_test_connection,
             commands::open_sample_project,
+            commands::chat_send,
         ])
         .run(tauri::generate_context!())
         .expect("error launching souxmar-desktop");

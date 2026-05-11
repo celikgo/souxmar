@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from "react";
 import { Onboarding } from "./onboarding/Onboarding";
+import { Workbench }  from "./workbench/Workbench";
 import { useAppStore } from "./store/app";
 import { invokeCommand } from "./tauri/bridge";
 
@@ -41,20 +42,5 @@ export function App() {
     return <Onboarding onComplete={() => setOnboardingDone(true)} />;
   }
 
-  return (
-    <main
-      style={{
-        padding: "var(--space-6)",
-        color: "var(--fg-primary)",
-      }}
-    >
-      <h1 style={{ margin: 0, fontSize: 24, fontWeight: 600 }}>
-        Welcome back
-      </h1>
-      <p style={{ color: "var(--fg-secondary)" }}>
-        The main workbench is still landing. For now, this shell exists
-        so the onboarding flow has somewhere to deliver you to.
-      </p>
-    </main>
-  );
+  return <Workbench />;
 }

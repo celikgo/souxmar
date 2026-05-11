@@ -15,7 +15,9 @@ export type CommandName =
   | "onboarding_complete"
   | "byok_store_key"
   | "byok_test_connection"
-  | "open_sample_project";
+  | "open_sample_project"
+  // Sprint 11 push 4 — workbench chat.
+  | "chat_send";
 
 export async function invokeCommand<T>(
   name: CommandName,

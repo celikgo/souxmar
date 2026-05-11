@@ -1,0 +1,86 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// Sprint 11 push 4 — workbench shell.
+//
+// The post-onboarding home of the desktop app. Three panels at this
+// stage:
+//
+//   ┌─────────────────────┬──────────────┐
+//   │                     │              │
+//   │      Viewport       │     Chat     │
+//   │   (Three.js, TBD)   │ (BYOK agent) │
+//   │                     │              │
+//   ├─────────────────────┤              │
+//   │      Inspector      │              │
+//   │  (pipeline / state) │              │
+//   └─────────────────────┴──────────────┘
+//
+// The viewport is a placeholder. Three.js + VTK.js integration lands
+// in a Sprint 12+ push once the FFI bridge (`souxmar-bridge` Rust
+// crate) is ready to stream Mesh + Field handles from
+// libsouxmar-core to the WebGL side. The inspector reads from the
+// in-process pipeline state (also via FFI; same Sprint 12+
+// dependency). The chat panel is the most wired-up surface today —
+// it talks to the Provider abstraction (Sprint 10 push 9) through
+// the Tauri bridge.
+
+import { useState } from "react";
+import { Chat } from "../chat/Chat";
+import { Viewport } from "./Viewport";
+import { Inspector } from "./Inspector";
+
+export function Workbench() {
+  // The "current project" identifier — empty string == fresh
+  // workbench with no project loaded. The onboarding wizard's
+  // sample-project step sets this; for now we just render the
+  // empty state.
+  const [projectId, setProjectId] = useState<string>("");
+
+  return (
+    <div className="workbench" style={shellStyle}>
+      <div style={mainStyle}>
+        <div style={topLeftStyle}>
+          <Viewport projectId={projectId} />
+        </div>
+        <div style={bottomLeftStyle}>
+          <Inspector projectId={projectId} onOpenProject={setProjectId} />
+        </div>
+      </div>
+      <div style={rightStyle}>
+        <Chat projectId={projectId} />
+      </div>
+    </div>
+  );
+}
+
+const shellStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 400px",
+  height: "100%",
+  background: "var(--bg-canvas)",
+  color: "var(--fg-primary)",
+};
+
+const mainStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateRows: "1fr 280px",
+  borderRight: "1px solid var(--border-subtle)",
+};
+
+const topLeftStyle: React.CSSProperties = {
+  background: "var(--bg-canvas)",
+  borderBottom: "1px solid var(--border-subtle)",
+  overflow: "hidden",
+  position: "relative",
+};
+
+const bottomLeftStyle: React.CSSProperties = {
+  background: "var(--bg-panel)",
+  overflow: "auto",
+};
+
+const rightStyle: React.CSSProperties = {
+  background: "var(--bg-panel)",
+  display: "flex",
+  flexDirection: "column",
+};
