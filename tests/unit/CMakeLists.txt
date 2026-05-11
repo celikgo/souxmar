@@ -50,6 +50,8 @@ add_executable(souxmar_unit_tests
   test_ai_provider.cpp
   # Sprint 11 push 1.
   test_crypto_primitives.cpp
+  # Sprint 11 push 2.
+  test_update_fetcher.cpp
 )
 
 target_link_libraries(souxmar_unit_tests

@@ -49,6 +49,7 @@
 // Push 8 adds the embedded release trust store.
 #include "souxmar/update/apply.h"
 #include "souxmar/update/embedded_trust.h"
+#include "souxmar/update/fetcher.h"
 #include "souxmar/update/install_layout.h"
 #include "souxmar/update/manifest.h"
 #include "souxmar/update/rollback_log.h"
@@ -92,6 +93,7 @@ void print_usage() {
       "  souxmar update apply       (same flags as `check`)\n"
       "                             --artifact <path> --target-root <dir> [--dry-run]\n"
       "  souxmar update rollback    --target-root <dir> [--state <path>] [--json]\n"
+      "  souxmar update fetch       --manifest-url <https-url> [--out-dir <dir>] [--insecure]\n"
       "  souxmar version\n"
       "  souxmar help\n"
       "\n"
@@ -609,6 +611,10 @@ struct UpdateFlags {
   // Sprint 10 push 7 — apply / rollback specific.
   fs::path                                   artifact_path;
   fs::path                                   target_root;
+  // Sprint 11 push 2 — fetch specific.
+  std::string                                manifest_url;
+  fs::path                                   out_dir;
+  bool                                       insecure = false;
 };
 
 std::string read_file_to_string(const fs::path& p, std::string& err) {
@@ -1001,6 +1007,72 @@ int cmd_update_apply(const UpdateFlags& f) {
   }
 }
 
+// Sprint 11 push 2 — HTTPS fetch of the manifest + its detached
+// signature. Lands them under <out-dir>/{manifest.toml,manifest.toml.sig}
+// so the user can immediately follow with `souxmar update apply
+// --manifest <out>/manifest.toml --signature <out>/manifest.toml.sig
+// --artifact <separately-downloaded-bytes>`. The artifact bytes
+// themselves are fetched lazily — `apply` reads `--artifact <path>`
+// today, so the fetch flow stops at the manifest. A future push
+// (Sprint 12+) can grow `souxmar update fetch --include-artifact`
+// once the apply state machine drives the artifact URL discovery
+// itself.
+int cmd_update_fetch(const UpdateFlags& f) {
+  using namespace souxmar::update;
+  if (f.manifest_url.empty()) {
+    fmt::print(stderr,
+        "error: `souxmar update fetch` requires --manifest-url <https-url>\n");
+    return kExitUsage;
+  }
+  const fs::path out_dir = f.out_dir.empty() ? fs::current_path() : f.out_dir;
+  std::error_code ec;
+  fs::create_directories(out_dir, ec);
+
+  FetcherOptions opts;
+  opts.require_https = !f.insecure;
+
+  const auto man_result = fetch_to_memory(f.manifest_url, opts);
+  if (auto* err = std::get_if<FetchError>(&man_result)) {
+    fmt::print(stderr, "fetch manifest failed: {} ({})\n",
+               to_string(err->kind), err->message);
+    return kExitInputData;
+  }
+  const auto& man = std::get<FetchedBytes>(man_result);
+  const fs::path man_path = out_dir / "manifest.toml";
+  {
+    std::ofstream sink(man_path, std::ios::binary | std::ios::trunc);
+    sink.write(reinterpret_cast<const char*>(man.bytes.data()),
+               static_cast<std::streamsize>(man.bytes.size()));
+  }
+  fmt::print("fetched manifest: {} ({} bytes, {}ms)\n",
+             man_path.string(), man.bytes.size(), man.duration.count());
+
+  const auto sig_result = fetch_to_memory(f.manifest_url + ".sig", opts);
+  if (auto* err = std::get_if<FetchError>(&sig_result)) {
+    fmt::print(stderr, "fetch signature failed: {} ({})\n",
+               to_string(err->kind), err->message);
+    return kExitInputData;
+  }
+  const auto& sig = std::get<FetchedBytes>(sig_result);
+  const fs::path sig_path = out_dir / "manifest.toml.sig";
+  {
+    std::ofstream sink(sig_path, std::ios::binary | std::ios::trunc);
+    sink.write(reinterpret_cast<const char*>(sig.bytes.data()),
+               static_cast<std::streamsize>(sig.bytes.size()));
+  }
+  fmt::print("fetched signature: {} ({} bytes, {}ms)\n",
+             sig_path.string(), sig.bytes.size(), sig.duration.count());
+
+  // Print the suggested follow-up so the user has a copy-paste path
+  // from `fetch` to `apply`. The artifact URL lives in the
+  // manifest; we don't parse it here (parsing happens during
+  // apply / check), but the user knows what to do.
+  fmt::print("next: souxmar update check "
+             "--manifest {} --signature {}\n",
+             man_path.string(), sig_path.string());
+  return kExitOk;
+}
+
 int cmd_update_rollback(const UpdateFlags& f) {
   using namespace souxmar::update;
 
@@ -1204,6 +1276,16 @@ int main(int argc, char** argv) {
       auto v = pop_value(args, i, "--target-root");
       if (!v) return kExitUsage;
       update_flags.target_root = *v;
+    } else if (args[i] == "--manifest-url") {
+      auto v = pop_value(args, i, "--manifest-url");
+      if (!v) return kExitUsage;
+      update_flags.manifest_url = *v;
+    } else if (args[i] == "--out-dir") {
+      auto v = pop_value(args, i, "--out-dir");
+      if (!v) return kExitUsage;
+      update_flags.out_dir = *v;
+    } else if (args[i] == "--insecure") {
+      update_flags.insecure = true;
     } else if (!args[i].empty() && args[i].front() == '-') {
       fmt::print(stderr, "error: unknown flag '{}'\n", args[i]);
       print_usage();
@@ -1266,6 +1348,9 @@ int main(int argc, char** argv) {
     }
     if (positionals[0] == "rollback") {
       return cmd_update_rollback(update_flags);
+    }
+    if (positionals[0] == "fetch") {
+      return cmd_update_fetch(update_flags);
     }
     fmt::print(stderr, "error: unknown update action '{}'\n",
                positionals[0]);
