@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Sprint 10 push 11 — mesh-comparison study pipeline (grid variant).
+# See README.md for the study purpose; differs from pipeline-gmsh.yaml
+# in exactly one line (the mesher plugin id).
+version: 1
+stages:
+  - id: read_geom
+    plugin: reader.step
+    input:
+      path: cube.step
+
+  - id: mesh
+    plugin: mesher.tetra.grid
+    input:
+      geometry:    { from: read_geom }
+      target_size: 0.20
+      element_order: 1
+
+  - id: quality
+    plugin: postproc.mesh_quality
+    input:
+      mesh: { from: mesh }
+
+  - id: write
+    plugin: writer.vtu
+    input:
+      mesh:  { from: mesh }
+      field: { from: quality }
+      path:  cube_grid.vtu
