@@ -16,6 +16,26 @@
 find_package(tomlplusplus     CONFIG REQUIRED)
 find_package(unofficial-sodium CONFIG REQUIRED)
 
+# Sprint 10 push 8 — embedded trust store. The release pipeline
+# injects the official release ed25519 public key via
+# -DSOUXMAR_RELEASE_PUBKEY_HEX=... + -DSOUXMAR_RELEASE_PUBKEY_ID=...
+# Non-release builds fall back to the souxmar-dev-key — a real but
+# disposable keypair whose private half ships in
+# scripts/release/dev-signing-key.txt for local-dev convenience.
+# See docs/SECURITY.md § "Release signing key rotation".
+set(SOUXMAR_RELEASE_PUBKEY_ID  "souxmar-dev-key" CACHE STRING
+    "ed25519 key id of the release public key embedded in this build")
+set(SOUXMAR_RELEASE_PUBKEY_HEX
+    "5e1b9d2f6c4a08b3a8f0e7d9c5b2a16f4d8e0c1b3a5d7f9e1c3b5d7f9a1b3c5d"
+    CACHE STRING
+    "ed25519 release public key (64 lowercase hex chars)")
+
+configure_file(
+  ${CMAKE_SOURCE_DIR}/include/souxmar/update/embedded_trust.h.in
+  ${CMAKE_BINARY_DIR}/generated/include/souxmar/update/embedded_trust.h
+  @ONLY
+)
+
 add_library(souxmar_update
   manifest.cpp
   verifier.cpp
@@ -26,6 +46,8 @@ add_library(souxmar_update
   install_layout.cpp
   rollback_log.cpp
   apply.cpp
+  # Sprint 10 push 8 — embedded trust store.
+  embedded_trust.cpp
 )
 
 add_library(souxmar::update ALIAS souxmar_update)

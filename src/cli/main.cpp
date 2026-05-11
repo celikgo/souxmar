@@ -46,7 +46,9 @@
 #include "souxmar/plugin/registry.h"
 // Sprint 10 push 6 — `souxmar update check` / `apply` subcommands.
 // Push 7 adds install_layout / rollback_log / apply / rollback.
+// Push 8 adds the embedded release trust store.
 #include "souxmar/update/apply.h"
+#include "souxmar/update/embedded_trust.h"
 #include "souxmar/update/install_layout.h"
 #include "souxmar/update/manifest.h"
 #include "souxmar/update/rollback_log.h"
@@ -672,11 +674,11 @@ struct UpdatePreflight {
 int update_preflight(const UpdateFlags& f, UpdatePreflight* out) {
   using namespace souxmar::update;
 
-  if (f.manifest_path.empty() || f.signature_path.empty() ||
-      f.trusted_keys.empty()) {
+  if (f.manifest_path.empty() || f.signature_path.empty()) {
     fmt::print(stderr,
-        "error: this `souxmar update` subcommand requires --manifest, "
-        "--signature, and at least one --trusted-key <id>=<hex>\n");
+        "error: this `souxmar update` subcommand requires --manifest "
+        "and --signature; pass --trusted-key <id>=<hex> to override "
+        "the embedded release trust store\n");
     return kExitUsage;
   }
 
@@ -718,12 +720,27 @@ int update_preflight(const UpdateFlags& f, UpdatePreflight* out) {
   }
   if (any_error) return kExitInputData;
 
-  for (const auto& [id, hex] : f.trusted_keys) {
-    if (!out->trust.add_hex(id, hex)) {
+  if (f.trusted_keys.empty()) {
+    // Fall back to the embedded release trust store. Dev / unsigned
+    // builds carry the placeholder souxmar-dev-key; the release CI
+    // pipeline injects the real release-2026 key at configure time
+    // and asserts build_uses_dev_key() == false before publishing.
+    out->trust = embedded_trust_store();
+    if (build_uses_dev_key()) {
       fmt::print(stderr,
-          "error: --trusted-key {}=... rejected (id empty or hex pubkey "
-          "is not 32 bytes / not lowercase hex)\n", id);
-      return kExitUsage;
+          "note: using the in-tree development trust key "
+          "(souxmar-dev-key); pass --trusted-key to override or rebuild "
+          "with -DSOUXMAR_RELEASE_PUBKEY_ID=... for a release-trust "
+          "configuration\n");
+    }
+  } else {
+    for (const auto& [id, hex] : f.trusted_keys) {
+      if (!out->trust.add_hex(id, hex)) {
+        fmt::print(stderr,
+            "error: --trusted-key {}=... rejected (id empty or hex pubkey "
+            "is not 32 bytes / not lowercase hex)\n", id);
+        return kExitUsage;
+      }
     }
   }
 
