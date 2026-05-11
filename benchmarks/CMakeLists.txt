@@ -26,3 +26,8 @@ endfunction()
 souxmar_add_benchmark(bench_mesh_construction
   bench_mesh_construction.cpp
 )
+
+# Sprint 7 push 3 — mmap vs heap buffer round-trip (ADR-0006 v2).
+souxmar_add_benchmark(bench_mmap_buffer
+  bench_mmap_buffer.cpp
+)

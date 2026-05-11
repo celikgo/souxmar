@@ -459,6 +459,27 @@ This closes Sprint 6 cleanly. Six pushes landed:
 - **Build**: `examples/CMakeLists.txt` adds `plugins/elasticity-stub` unconditionally; `plugins/fenicsx-solver` only when `SOUXMAR_WITH_FENICSX=ON`. `tests/integration/CMakeLists.txt` depends on `elasticity_stub`.
 - **No frozen-header surface was touched.** Both new plugins build against the existing `souxmar-c/solver.h`. ABI v1.1 stays locked; no ratchet marker needed.
 
+#### Sprint 7 push 3 — out-of-core mesh streaming (mmap-backed buffer v2, ABI v1.2 ratchet)
+
+- **[ABI v1.2 — additive minor ratchet event]** `SOUXMAR_ABI_VERSION_MINOR` bumped **1 → 2**. The first post-freeze ratchet event; lands the `souxmar_buffer_t` v2 backing per ADR-0006. The commit carries the `Ratchet: additive minor surface (ADR-0008)` marker, exercising the CI gate that landed in Sprint 7 push 1.
+- **New entry points in `souxmar-c/buffer.h`**:
+  - `souxmar_buffer_new_mmap(path, size_bytes, flags)` — opens a file-backed mapping. `flags == 0` is "open existing RW file"; `SOUXMAR_BUFFER_FLAG_READONLY` opens read-only and uses the file's natural size when `size_bytes == 0`; `SOUXMAR_BUFFER_FLAG_CREATE` creates+truncates the file (RW only — `READONLY | CREATE` is rejected with NULL).
+  - `souxmar_buffer_is_mmap(buffer)` — explicit kind discriminator for tooling. Returns 1 for both RW and RO mappings, 0 for heap-backed (the v1 path) and NULL inputs.
+  - The existing v1 accessor surface (`souxmar_buffer_new` / `_free` / `_data` / `_data_const` / `_size` / `_alignment`) is unchanged; plugins that only use those work on a v1.2 host without recompilation, and they continue to return heap-backed buffers when called.
+- **Implementation in `src/core/c_abi_buffer.cpp`**:
+  - The `BufferHeader::reserved` field that ADR-0006 explicitly reserved for this exact purpose is now the `kind` discriminator. v1 zero-initialised it (→ `KindHeap`) so the v1 binary layout is **byte-identical** — no consumer of the v1 ABI shifts. Mmap-backed headers add a small set of trailing fields (mmap address, length, fd/HANDLE) used only by `souxmar_buffer_free` to unmap and close.
+  - POSIX path: `open` + optional `ftruncate` + `mmap(MAP_SHARED)`. Windows path: `CreateFileA` + `SetEndOfFile` + `CreateFileMappingA` + `MapViewOfFile`. Both paths funnel through the same `BufferHeader` and the same `souxmar_buffer_free` cleanup.
+  - `souxmar_buffer_data(rw_mapping)` returns the mmap address; `souxmar_buffer_data(ro_mapping)` returns NULL (callers use `_data_const`). The asymmetry surfaces an obvious bug class — a plugin writing to a read-only mapping — at the API boundary rather than via SIGSEGV.
+- **`souxmar_mesh_from_buffers` works unchanged.** The bulk mesh ingest reads buffers through `souxmar_buffer_data_const`, which transparently returns either the heap data slot or the mmap region. **Out-of-core mesh ingest is operational with zero changes to `c_abi_mesh.cpp` or any caller** — that's the whole point of the v1 → v2 forward-compatibility plan.
+- **[ADR-0006 v2 section]** Documents the v2 implementation, the ratchet that lifted minor 1 → 2, and the still-deferred subprocess shared-fd path (Sprint 8+ alongside the OpenFOAM subprocess plugin). v1 plugins that call only `souxmar_buffer_new` keep working unchanged.
+- **Tests** (`tests/unit/test_c_abi_buffer.cpp`):
+  - `IsMmapFalseForHeapBacked` — v1 buffers correctly self-report.
+  - `RoundTripRwThenReadOnly` — write 4 KiB pattern through an RW mapping → free → reopen RO → byte-by-byte verify.
+  - `NullPathRejected`, `ReadOnlyAndCreateAreMutuallyExclusive`, `MissingFileReadOnlyFails` — error paths.
+  - `BulkMeshIngestThroughMmapBuffers` — the integration claim: build a full 5-node / 2-tet mesh whose four bulk buffers (coords/types/conn/offsets) are all mmap-backed; `souxmar_mesh_from_buffers` ingests them transparently.
+- **Benchmark** (`benchmarks/bench_mmap_buffer.cpp`): heap-roundtrip vs mmap-create-write vs mmap-reopen-readonly across 1 / 16 / 64 / 256 MiB sizes. The CI baseline carries the expected ratio (≤ 1.2× heap path at 64 MiB+); the perf-nightly workflow tracks it.
+- **No load-bearing v1 surface changed.** Every v1 function signature is byte-identical; every v1 struct layout is byte-identical (the `reserved → kind` rename is a comment-level change with identical semantics for zero-init). The ratchet marker the commit carries is the additive-minor variant, which the CI gate accepts as exactly the case it was designed to permit.
+
 ### Changed
 
 - (None this release.)

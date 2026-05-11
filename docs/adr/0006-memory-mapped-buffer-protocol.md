@@ -1,6 +1,6 @@
 # ADR-0006: Memory-mapped large-buffer protocol for ABI mesh transfer
 
-- **Status:** Accepted (v1 implemented; mmap backing reserved for v2)
+- **Status:** Accepted (v1 + v2 implemented as of Sprint 7 push 3)
 - **Date:** 2026-05-11
 - **Author:** souxmar core team
 - **Deciders:** core, plugin-host
@@ -78,22 +78,64 @@ monotonic, per-cell node count matches its element type, node indices
 in range) before touching the data. `out_status` carries a structured
 reason on failure.
 
-### v2 rollout (future, post-freeze)
+### v2 implementation (Sprint 7 push 3 — ABI minor v1.2)
 
-The accessor surface above does not change. The implementation grows
-an alternative backing:
+The first additive-minor ratchet event post-freeze. ABI v1.1 → v1.2.
+The accessor surface from v1 is unchanged; new entries are added
+alongside:
 
-1. `SOUXMAR_BUFFER_FLAG_SHARED` flag accepted by `souxmar_buffer_new` →
-   the buffer is mmap'd into a temporary file rather than the heap.
-2. New accessor `souxmar_buffer_share(buf, &fd_or_handle)` → returns
-   the underlying file descriptor (POSIX) or `HANDLE` (Windows) so a
-   subprocess plugin can map the same region.
-3. The backing flag is stored in the existing `BufferHeader::reserved`
-   field (currently 0) — already structurally reserved for this exact
-   purpose.
+```c
+#define SOUXMAR_BUFFER_FLAG_READONLY  ((uint32_t)1u << 0)
+#define SOUXMAR_BUFFER_FLAG_CREATE    ((uint32_t)1u << 1)
 
-v1 plugins that use only `souxmar_buffer_new` / `_free` / `_data` work
-unchanged in v2.
+souxmar_buffer_t* souxmar_buffer_new_mmap(const char* path,
+                                          size_t      size_bytes,
+                                          uint32_t    flags);
+
+int               souxmar_buffer_is_mmap(const souxmar_buffer_t*);
+```
+
+`flags == 0` is the common "open existing RW file" path. `READONLY`
+opens for read-only mapping (and `souxmar_buffer_data` returns NULL
+— callers use `_data_const`). `CREATE | flags` creates the file if
+missing; the host `ftruncate`s the file to `size_bytes` so the
+mapping lands a full region of writable bytes.
+
+Backing detection: the kind discriminator lives in the
+`BufferHeader::reserved` field (renamed `kind` internally) — v1
+zero-initialised it, so the v1 binary layout is unchanged. Plugins
+that consume a buffer through `_data` / `_data_const` cannot tell
+the difference; `_is_mmap` is the explicit hook for tooling that
+wants to know.
+
+`souxmar_buffer_free` detects the kind and either:
+- heap-backed → `free()` the malloc base (v1 behaviour, unchanged), or
+- mmap-backed → `munmap()` (or `UnmapViewOfFile`) + `close()` (or
+  `CloseHandle`) for the underlying fd / HANDLE.
+
+The forward-compatibility contract from v1 holds: a v1.1 plugin that
+only ever calls `souxmar_buffer_new` keeps working unchanged on a v1.2
+host. A v1.2 plugin that calls `_new_mmap` against a v1.1 host fails
+cleanly at symbol resolution time (conformance check C004).
+
+### v2 mesh-ingest integration
+
+`souxmar_mesh_from_buffers` (ADR-0006 v1) reads buffer data via
+`souxmar_buffer_data_const`, which transparently returns either the
+heap data slot or the mmap region. The bulk-mesh ingest path is
+out-of-core capable without a single line of change — that's the
+whole point of the v1 → v2 forward-compatibility plan.
+
+### Deferred to a later sprint
+
+- `souxmar_buffer_share(buf, &fd_or_handle)` — exposing the underlying
+  file descriptor (POSIX) or `HANDLE` (Windows) so a subprocess plugin
+  can map the same region. Subprocess plugins aren't a Sprint 7
+  deliverable; this lands when the OpenFOAM adapter does in Sprint 8+.
+- POSIX `shm_open` / Windows anonymous mappings for in-memory shared
+  buffers between cooperating in-process plugins. The current v2 path
+  always backs onto a real file; an anonymous-mapping flag is the
+  natural next ratchet.
 
 ## Alternatives considered
 
@@ -187,3 +229,7 @@ abstraction is the right shape to start with.
 
 - 2026-05-11: Proposed, accepted (Sprint 5 push 4). v1 heap-backed
   implementation lands. v2 mmap-backed deferred to a post-freeze sprint.
+- 2026-05-11 (Sprint 7 push 3): v2 mmap-backed implementation lands as
+  the first post-freeze additive-minor ratchet event. ABI v1.1 → v1.2.
+  Subprocess fd/HANDLE sharing deferred to Sprint 8+ alongside the
+  OpenFOAM subprocess plugin work.

@@ -1,18 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Unit tests for the Sprint 5 push 4 buffer ABI + souxmar_mesh_from_buffers.
+// Unit tests for the Sprint 5 push 4 buffer ABI + souxmar_mesh_from_buffers,
+// extended in Sprint 7 push 3 with the mmap-backed buffer round-trip
+// (ABI minor v1.2, ADR-0006 v2).
 
 #include <gtest/gtest.h>
 
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <memory>
+#include <random>
 #include <vector>
 
 #include "souxmar-c/buffer.h"
 #include "souxmar-c/mesh.h"
 #include "souxmar-c/status.h"
+
+namespace {
+std::filesystem::path mmap_tmp_path(const char* tag) {
+  std::random_device rd;
+  return std::filesystem::temp_directory_path() /
+         (std::string{"souxmar-mmap-test-"} + tag + "-" + std::to_string(rd()));
+}
+}
 
 namespace {
 
@@ -349,6 +362,146 @@ TEST(MeshFromBuffers, BulkAndIncrementalProduceIdenticalShape) {
   souxmar_buffer_free(b_conn);
   souxmar_buffer_free(b_off);
   souxmar_buffer_free(b_tags);
+}
+
+// ============================================================================
+// Sprint 7 push 3 — mmap-backed buffer (ADR-0006 v2)
+// ============================================================================
+
+TEST(SouxmarBufferMmap, IsMmapFalseForHeapBacked) {
+  auto* b = souxmar_buffer_new(64);
+  ASSERT_NE(b, nullptr);
+  EXPECT_EQ(souxmar_buffer_is_mmap(b), 0);
+  souxmar_buffer_free(b);
+}
+
+TEST(SouxmarBufferMmap, RoundTripRwThenReadOnly) {
+  const auto path = mmap_tmp_path("rw-then-ro");
+  constexpr std::size_t kBytes = 4096;
+
+  // Create + map RW.
+  auto* w = souxmar_buffer_new_mmap(path.string().c_str(), kBytes,
+                                    SOUXMAR_BUFFER_FLAG_CREATE);
+  ASSERT_NE(w, nullptr) << "create+map failed for " << path;
+  EXPECT_EQ(souxmar_buffer_is_mmap(w), 1);
+  EXPECT_EQ(souxmar_buffer_size(w),    kBytes);
+
+  // Write a recognisable pattern.
+  auto* w_data = static_cast<std::uint8_t*>(souxmar_buffer_data(w));
+  ASSERT_NE(w_data, nullptr);
+  for (std::size_t i = 0; i < kBytes; ++i) w_data[i] = static_cast<std::uint8_t>(i & 0xFF);
+  souxmar_buffer_free(w);   // unmap + close; data persists in `path`
+
+  // Re-open read-only and verify the bytes round-trip.
+  auto* r = souxmar_buffer_new_mmap(path.string().c_str(), /*size_bytes=*/0,
+                                    SOUXMAR_BUFFER_FLAG_READONLY);
+  ASSERT_NE(r, nullptr) << "RO open failed";
+  EXPECT_EQ(souxmar_buffer_is_mmap(r), 1);
+  EXPECT_EQ(souxmar_buffer_size(r),    kBytes);
+
+  // souxmar_buffer_data on a RO mapping returns NULL — callers use _data_const.
+  EXPECT_EQ(souxmar_buffer_data(r), nullptr);
+  const auto* r_data = static_cast<const std::uint8_t*>(
+      souxmar_buffer_data_const(r));
+  ASSERT_NE(r_data, nullptr);
+  for (std::size_t i = 0; i < kBytes; ++i) {
+    ASSERT_EQ(r_data[i], static_cast<std::uint8_t>(i & 0xFF))
+        << "byte " << i << " did not round-trip through the file mapping";
+  }
+  souxmar_buffer_free(r);
+
+  std::error_code ec;
+  std::filesystem::remove(path, ec);
+}
+
+TEST(SouxmarBufferMmap, NullPathRejected) {
+  EXPECT_EQ(souxmar_buffer_new_mmap(nullptr, 64, SOUXMAR_BUFFER_FLAG_CREATE),
+            nullptr);
+}
+
+TEST(SouxmarBufferMmap, ReadOnlyAndCreateAreMutuallyExclusive) {
+  const auto path = mmap_tmp_path("ro-create");
+  // Combining READONLY | CREATE is documented as undefined — the host
+  // rejects it cleanly (returns NULL) so the contract is "explicit error
+  // rather than silent file truncation."
+  auto* b = souxmar_buffer_new_mmap(
+      path.string().c_str(), 64,
+      SOUXMAR_BUFFER_FLAG_READONLY | SOUXMAR_BUFFER_FLAG_CREATE);
+  EXPECT_EQ(b, nullptr);
+}
+
+TEST(SouxmarBufferMmap, MissingFileReadOnlyFails) {
+  const auto path = mmap_tmp_path("missing");
+  auto* b = souxmar_buffer_new_mmap(path.string().c_str(), 0,
+                                    SOUXMAR_BUFFER_FLAG_READONLY);
+  EXPECT_EQ(b, nullptr);
+}
+
+TEST(SouxmarBufferMmap, BulkMeshIngestThroughMmapBuffers) {
+  // The whole point of v2: souxmar_mesh_from_buffers consumes mmap-backed
+  // buffers transparently. The ingest path reads `_data_const`, which
+  // returns the mmap region; the host can't tell the difference.
+  //
+  // We build a 5-node / 2-tet mesh entirely through mmap'd buffers,
+  // then verify the resulting Mesh carries the expected shape.
+  const auto path_coords = mmap_tmp_path("ingest-coords");
+  const auto path_types  = mmap_tmp_path("ingest-types");
+  const auto path_conn   = mmap_tmp_path("ingest-conn");
+  const auto path_off    = mmap_tmp_path("ingest-off");
+
+  const std::vector<double> coords = {
+      0, 0, 0,  1, 0, 0,  0, 1, 0,  0, 0, 1,  1, 1, 1,
+  };
+  const std::vector<std::uint16_t> types = {SOUXMAR_ET_TET4, SOUXMAR_ET_TET4};
+  const std::vector<std::uint64_t> conn  = {0, 1, 2, 3, 1, 2, 3, 4};
+  const std::vector<std::uint64_t> off   = {0, 4, 8};
+
+  auto write_bytes = [](const std::filesystem::path& p,
+                        const void* src, std::size_t n) {
+    auto* b = souxmar_buffer_new_mmap(p.string().c_str(), n,
+                                      SOUXMAR_BUFFER_FLAG_CREATE);
+    if (!b) return false;
+    std::memcpy(souxmar_buffer_data(b), src, n);
+    souxmar_buffer_free(b);
+    return true;
+  };
+  ASSERT_TRUE(write_bytes(path_coords, coords.data(), coords.size() * sizeof(double)));
+  ASSERT_TRUE(write_bytes(path_types,  types.data(),  types.size()  * sizeof(std::uint16_t)));
+  ASSERT_TRUE(write_bytes(path_conn,   conn.data(),   conn.size()   * sizeof(std::uint64_t)));
+  ASSERT_TRUE(write_bytes(path_off,    off.data(),    off.size()    * sizeof(std::uint64_t)));
+
+  auto* b_coords = souxmar_buffer_new_mmap(path_coords.string().c_str(), 0,
+                                           SOUXMAR_BUFFER_FLAG_READONLY);
+  auto* b_types  = souxmar_buffer_new_mmap(path_types.string().c_str(), 0,
+                                           SOUXMAR_BUFFER_FLAG_READONLY);
+  auto* b_conn   = souxmar_buffer_new_mmap(path_conn.string().c_str(), 0,
+                                           SOUXMAR_BUFFER_FLAG_READONLY);
+  auto* b_off    = souxmar_buffer_new_mmap(path_off.string().c_str(), 0,
+                                           SOUXMAR_BUFFER_FLAG_READONLY);
+  ASSERT_NE(b_coords, nullptr);
+  ASSERT_NE(b_types,  nullptr);
+  ASSERT_NE(b_conn,   nullptr);
+  ASSERT_NE(b_off,    nullptr);
+
+  souxmar_mesh_buffers_t spec{
+      b_coords, 5, b_types, b_conn, b_off, 2, /*cell_tags=*/nullptr};
+  souxmar_status_t status{};
+  souxmar_mesh_t* m = souxmar_mesh_from_buffers(&spec, &status);
+  ASSERT_NE(m, nullptr) << "code " << status.code << " msg "
+                        << (status.message ? status.message : "");
+  EXPECT_EQ(souxmar_mesh_num_nodes(m), 5u);
+  EXPECT_EQ(souxmar_mesh_num_cells(m), 2u);
+
+  souxmar_mesh_free(m);
+  souxmar_buffer_free(b_coords);
+  souxmar_buffer_free(b_types);
+  souxmar_buffer_free(b_conn);
+  souxmar_buffer_free(b_off);
+  std::error_code ec;
+  std::filesystem::remove(path_coords, ec);
+  std::filesystem::remove(path_types,  ec);
+  std::filesystem::remove(path_conn,   ec);
+  std::filesystem::remove(path_off,    ec);
 }
 
 }  // namespace

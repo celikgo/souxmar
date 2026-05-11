@@ -54,6 +54,49 @@ size_t souxmar_buffer_size(const souxmar_buffer_t* buffer);
  * want to write SIMD vectors without an unaligned-store path. */
 size_t souxmar_buffer_alignment(void);
 
+/* ---- v2: memory-mapped backing (Sprint 7 push 3, ABI minor v1.2) ----
+ *
+ * Out-of-core mesh streaming. A file-backed buffer pages data in/out
+ * through the OS page cache rather than holding the working set in
+ * RAM. The accessor surface (souxmar_buffer_data, _size, _alignment)
+ * is identical to the heap-backed v1; plugins that consume a buffer
+ * cannot tell which backing it has, which is the whole point.
+ *
+ * Memory model:
+ *   - SOUXMAR_BUFFER_FLAG_READONLY   : open the file read-only;
+ *     souxmar_buffer_data() returns NULL (use _data_const).
+ *   - SOUXMAR_BUFFER_FLAG_CREATE     : create the file if missing
+ *     (RW only); otherwise an existing file is required.
+ *   - flags == 0 ⇒ RW, file must already exist, mapped at file size.
+ *
+ * On success returns a handle whose lifetime mirrors heap-backed
+ * buffers: free via souxmar_buffer_free, which unmaps and closes
+ * the underlying fd.
+ *
+ * Alignment: the OS page-aligned map is already a superset of
+ * souxmar_buffer_alignment(), so the same guarantee holds.
+ *
+ * Errors return NULL. The plugin gets no structured error from this
+ * call directly — the host's surrounding ABI bridge (e.g.
+ * souxmar_mesh_from_buffers) is the appropriate place to wrap a
+ * souxmar_status_t around the operation.
+ */
+
+#define SOUXMAR_BUFFER_FLAG_READONLY  ((uint32_t)1u << 0)
+#define SOUXMAR_BUFFER_FLAG_CREATE    ((uint32_t)1u << 1)
+
+souxmar_buffer_t* souxmar_buffer_new_mmap(const char* path,
+                                          size_t      size_bytes,
+                                          uint32_t    flags);
+
+/* Returns 1 if the buffer's data comes from a file mapping (created
+ * by souxmar_buffer_new_mmap), 0 if it's heap-backed (the v1 path),
+ * and 0 for NULL. Plugins generally don't need to ask — the data
+ * pointer behaves the same either way — but the conformance suite
+ * and the bulk-ingest validator use it to distinguish "this buffer
+ * is OS-paged" from "this buffer is fully resident." */
+int souxmar_buffer_is_mmap(const souxmar_buffer_t* buffer);
+
 SOUXMAR_C_END
 
 #endif /* SOUXMAR_C_BUFFER_H */

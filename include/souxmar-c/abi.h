@@ -38,11 +38,13 @@
 /* MINOR bumps record additive surface additions. The history:
  *   v1.0  Sprint 5 push 6 — initial freeze-candidate surface.
  *   v1.1  Sprint 6 push 4 — `reader.*` capability + souxmar-c/reader.h.
+ *   v1.2  Sprint 7 push 3 — `souxmar_buffer_new_mmap` + flag constants;
+ *                            v2 of ADR-0006 (mmap-backed buffer backing).
  *
  * Future minor bumps land via ADR plus the
  * `Ratchet: additive minor surface (ADR-0008)` commit marker checked
  * by scripts/check-frozen-headers.sh. */
-#define SOUXMAR_ABI_VERSION_MINOR 1
+#define SOUXMAR_ABI_VERSION_MINOR 2
 
 /* ---- Symbol export ---------------------------------------------------- */
 
