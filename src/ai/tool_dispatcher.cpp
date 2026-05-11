@@ -4,9 +4,11 @@
 
 #include "souxmar/ai/audit_log.h"
 #include "souxmar/pipeline/cache.h"   // hash_inputs / ContentHash
+#include "souxmar/plugin/heap_accountant.h"
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <exception>
 #include <string_view>
 #include <utility>
@@ -72,11 +74,13 @@ std::string outcome_token(const ToolResult& r) {
   return "fail";  // INVALID_ARGUMENT / PLUGIN_NOT_FOUND / INTERNAL / NOT_AVAILABLE / ...
 }
 
-void record_audit(ToolContext&            ctx,
-                  std::string_view        tool_name,
-                  const pipeline::Value&  inputs,
-                  const ToolResult&       result,
-                  std::chrono::milliseconds duration) {
+void record_audit(ToolContext&              ctx,
+                  std::string_view          tool_name,
+                  const pipeline::Value&    inputs,
+                  const ToolResult&         result,
+                  std::chrono::milliseconds duration,
+                  std::int64_t              heap_bytes_delta,
+                  bool                      heap_supported) {
   if (ctx.audit_log == nullptr) return;
   AuditLog::Entry e;
   e.tool_name = std::string(tool_name);
@@ -89,6 +93,8 @@ void record_audit(ToolContext&            ctx,
   e.input_hash = pipeline::hash_inputs(ctx_key, inputs, {}).hex();
   e.duration   = duration;
   e.budget     = ctx.budget;
+  e.heap_bytes_delta = heap_bytes_delta;
+  e.heap_supported   = heap_supported;
   ctx.audit_log->append(e);
 }
 
@@ -110,7 +116,11 @@ ToolResult dispatch_tool(const ToolRegistry&     registry,
     auto r = make_error("NOT_FOUND",
         "no tool named '" + std::string(tool_name) + "' is registered",
         "call `souxmar agent list` (or ToolRegistry.list()) to see available tools");
-    record_audit(context, tool_name, inputs, r, elapsed());
+    // Early-exit paths don't invoke a handler, so the heap delta is
+    // omitted from the audit entry (heap_supported=false). Recording a
+    // 0 here would muddy the leak-detection signal.
+    record_audit(context, tool_name, inputs, r, elapsed(),
+                 /*heap_bytes_delta=*/0, /*heap_supported=*/false);
     return r;
   }
 
@@ -129,14 +139,16 @@ ToolResult dispatch_tool(const ToolRegistry&     registry,
             "was supplied",
             "either set ConfirmationPolicy.prompter or add an override mapping "
             "this tool to Confirmation::Auto");
-        record_audit(context, tool_name, inputs, r, elapsed());
+        record_audit(context, tool_name, inputs, r, elapsed(),
+                     /*heap_bytes_delta=*/0, /*heap_supported=*/false);
         return r;
       }
       const bool approved = policy.prompter(*tool, inputs);
       if (!approved) {
         auto r = make_error("DENIED",
             "user declined to run '" + tool->name + "'");
-        record_audit(context, tool_name, inputs, r, elapsed());
+        record_audit(context, tool_name, inputs, r, elapsed(),
+                     /*heap_bytes_delta=*/0, /*heap_supported=*/false);
         return r;
       }
       if (required == Confirmation::ConfirmOnce) {
@@ -144,6 +156,13 @@ ToolResult dispatch_tool(const ToolRegistry&     registry,
       }
     }
   }
+
+  // Sprint 9 push 9 — bracket the handler call with a HeapAccountant
+  // snapshot pair. The delta lands in the audit log on platforms where
+  // accounting is supported (Linux + glibc ≥ 2.33 today). Cheap enough
+  // (< 1 µs on the reference hardware; pinned by bench_heap_accountant)
+  // to leave always-on.
+  const auto heap_before = ::souxmar::plugin::HeapAccountant::snapshot();
 
   // Invoke handler. Catch every exception type to keep the agent
   // runtime from ever seeing a raw throw — model recovery only works
@@ -158,7 +177,11 @@ ToolResult dispatch_tool(const ToolRegistry&     registry,
     result = make_error("INTERNAL",
         "tool '" + tool->name + "' threw an unknown exception");
   }
-  record_audit(context, tool_name, inputs, result, elapsed());
+
+  const std::int64_t heap_delta =
+      ::souxmar::plugin::HeapAccountant::delta_since(heap_before);
+  record_audit(context, tool_name, inputs, result, elapsed(),
+               heap_delta, heap_before.supported);
   return result;
 }
 

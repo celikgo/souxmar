@@ -104,7 +104,7 @@ souxmar caches the static parts of the prompt aggressively to keep BYOK costs do
 - **Per-session token budget.** Default $1.00 / 200K tokens. Configurable. The chat shows a small running total and warns at 80%.
 - **Per-tool runtime budget.** A `solve` tool that is going to take 30 minutes will not be silently launched; the model is required to surface its estimate, and the user confirms.
 - **Model selector.** The user can pin a model (Claude Sonnet 4.6, GPT-5-mini, etc.) globally or per project. The default leans cheap-and-fast; the user can opt into the heavy-and-slow tier for harder problems.
-- **Audit log.** `.souxmar/chat/audit.log` records every tool invocation with input hash, runtime, and (for managed AI) token cost. `souxmar audit show` summarises a project's spend.
+- **Audit log.** `.souxmar/chat/audit.log` records every tool invocation with input hash, runtime, (for managed AI) token cost, and — on platforms where the host can query process-wide heap usage (Linux + glibc ≥ 2.33 today, via `mallinfo2`) — a per-call `heap_bytes_delta` field that surfaces tool-side memory growth. Useful as a leak indicator: a session with steadily growing deltas points at a plugin that owns memory it isn't releasing. The accounting is process-wide, so it's most accurate in single-threaded sessions (`max_workers=1`); multi-threaded runs surface aggregate deltas that mix sibling-thread allocations. `souxmar audit show` summarises a project's spend.
 
 ## Privacy and data flow
 

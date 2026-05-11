@@ -14,6 +14,8 @@ add_library(souxmar_plugin
   # Sprint 8 push 1 — subprocess harness for OpenFOAM + Blender + future
   # GPL-isolated adapters.
   subprocess.cpp
+  # Sprint 9 push 9 — per-plugin heap accounting (mallinfo2 on glibc).
+  heap_accountant.cpp
 )
 
 # POSIX needs libdl for dlopen(); Windows uses kernel32 implicitly.

@@ -170,6 +170,13 @@ void AuditLog::append(const Entry& entry) {
        << ", max_total: "    << entry.budget->max_total_tokens
        << "}";
   }
+  if (entry.heap_supported) {
+    // Signed int — net-freeing tools (e.g. clear() in a future
+    // catalogue) read out as negative. Only emitted when the
+    // platform's accounting is supported so absent fields aren't
+    // confused with a zero reading.
+    os << ", heap_bytes_delta: " << entry.heap_bytes_delta;
+  }
   if (!entry.summary.empty()) {
     os << ", summary: " << quote_yaml(entry.summary);
   }

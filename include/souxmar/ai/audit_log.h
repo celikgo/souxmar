@@ -98,6 +98,14 @@ class AuditLog {
     std::string                 input_hash;     // hex SHA-256 over inputs
     std::chrono::milliseconds   duration{};
     const SessionBudget*        budget = nullptr;  // optional snapshot
+
+    // Sprint 9 push 9 — net change in process-wide in-use heap bytes
+    // across this tool's dispatch (via `souxmar::plugin::HeapAccountant`).
+    // Signed: negative for net-freeing tools. Defaults to 0; the
+    // dispatcher populates it on platforms where HeapAccountant is
+    // supported and skips serialising the field otherwise.
+    std::int64_t                heap_bytes_delta = 0;
+    bool                        heap_supported   = false;
   };
 
   // Append one entry. Failure to write is silently ignored — the audit

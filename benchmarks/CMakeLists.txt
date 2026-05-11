@@ -43,3 +43,10 @@ souxmar_add_benchmark(bench_face_tag
 souxmar_add_benchmark(bench_plugin_dispatch
   bench_plugin_dispatch.cpp
 )
+
+# Sprint 9 push 9 — per-plugin heap accountant overhead. Pins the
+# always-on cost of the mallinfo2 snapshot pair the tool dispatcher
+# wraps every handler call with.
+souxmar_add_benchmark(bench_heap_accountant
+  bench_heap_accountant.cpp
+)

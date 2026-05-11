@@ -8,6 +8,40 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
+#### Sprint 9 push 9 — per-plugin heap accounting (the audit log grows a leak indicator)
+
+Closes the Plugin-Host-team named SPRINT_PLAN.md story for Sprint 9 ("Per-plugin heap accounting; report leaks via instrumentation"). The agent tool dispatcher now brackets every handler call with a heap snapshot pair from the new `souxmar::plugin::HeapAccountant`; the delta lands in the audit log alongside the existing duration / outcome / budget fields, surfacing tool-side memory growth at the granularity the agent UI and `souxmar audit show` consume. **No frozen-header surface touched** — new utility + new audit-log field + new test + new benchmark; ABI v1.3 stands.
+
+- **`include/souxmar/plugin/heap_accountant.h` + `src/plugin-host/heap_accountant.cpp`** — new utility under `souxmar::plugin`. Three static methods:
+  - `Sample snapshot()` — process-wide in-use heap bytes via `mallinfo2().uordblks` on glibc ≥ 2.33; returns `{0, supported=false}` on macOS / Windows / older glibc. The compile-time predicate (`__GLIBC__` + `__GLIBC_MINOR__` ≥ 33) deliberately excludes the legacy `mallinfo()` path — its `int` fields silently truncate above ~2 GiB and would misreport industrial-scale meshes as having freed memory. Better to surface "unsupported" than to ship wrong numbers.
+  - `bool is_supported()` — runtime query; matches what `snapshot()` will return.
+  - `std::int64_t delta_since(const Sample&)` — signed delta; returns 0 if either side reports `supported=false` so the audit-log field stays unambiguous (absent vs. zero are different signals).
+  Accuracy caveat documented in the header: `mallinfo2` is process-wide, so deltas in multi-threaded sessions also capture sibling-thread allocations. For leak-detection use (the primary motivation) the recommended audit configuration is `max_workers=1`.
+- **`include/souxmar/ai/audit_log.h` Entry growth.** Two new fields: `std::int64_t heap_bytes_delta` and `bool heap_supported`. Default 0 / false so existing callers compile unchanged. `src/ai/audit_log.cpp` serialises `heap_bytes_delta: <int>` after the `budget: {...}` block when `heap_supported` is true — absent on platforms without accounting so absence is not confused with a zero reading.
+- **`src/ai/tool_dispatcher.cpp` integration.** `dispatch_tool` takes a heap snapshot immediately before invoking the tool handler and computes the delta after; `record_audit` threads both through to the audit log. Early-exit paths (NOT_FOUND, NOT_CONFIRMED, DENIED) don't run a handler, so they record `heap_supported=false` instead of a misleading zero. The handler-invocation path always records the real reading — including when the handler throws (the snapshot pair sits outside the `try` block so a thrown exception still gets accounted for).
+- **`tests/unit/test_heap_accountant.cpp`** — eight tests across two tiers. Tier-1 (every platform): `is_supported()` agrees with `snapshot().supported`; `delta_since(unsupported)` returns 0; two consecutive snapshots on a quiet thread differ by less than 1 MiB. Tier-2 (Linux + glibc ≥ 2.33, guarded by the same compile-time predicate as the impl): a deliberate 1 MiB `std::malloc` shows up as ≥ 1 MiB delta; matched alloc+free returns to near-zero (within 1 MiB tolerance for glibc's per-arena caching); an 8 MiB `std::vector<double>` shows up as ≥ 8 MiB delta. Tier-2 tests `GTEST_SKIP` on non-glibc platforms — the unit suite stays green on the full CI matrix.
+- **`benchmarks/bench_heap_accountant.cpp`** — three Google Benchmark workloads: `BM_HeapAccountant_Snapshot` (one snapshot per iteration), `BM_HeapAccountant_DeltaPair` (snapshot + delta_since pair, mirrors what the tool dispatcher does on every call), `BM_HeapAccountant_IsSupported` (cold-path sanity). Units forced to `kNanosecond` so the report column is human-readable against the < 1 µs target the accountant needs to hit to be safe always-on. Wired into the benchmark suite via `benchmarks/CMakeLists.txt`, the Perf workflow's run loop, and the baselines coverage table.
+- **`docs/AI_INTEGRATION.md` § Cost and budget controls** — Audit log bullet updated to name the new `heap_bytes_delta` field, the supporting-platform list (Linux + glibc ≥ 2.33 today), and the leak-detection use case + single-threaded recommendation.
+- **`src/plugin-host/CMakeLists.txt`** — `heap_accountant.cpp` joins the `souxmar_plugin` source list. No new external dependency (`<malloc.h>` is glibc-stdlib).
+
+What the audit log looks like now (line-by-line YAML; the new field surfaces only on supported platforms):
+
+```yaml
+{ts: 2026-05-11T14:23:01Z, tool: mesh, outcome: ok, duration_ms: 184, input_hash: "abc...", budget: {in: 1240, out: 320, total: 1560, max_total: 200000}, heap_bytes_delta: 4194304, summary: "meshed 50000 cells"}
+```
+
+Reviewers can grep `heap_bytes_delta:` across a session log and sum / sort by tool to find the heaviest allocators or spot a tool whose delta grows monotonically across repeated calls. The push-8 dashboard's per-binary cards don't render audit deltas directly (the audit log is per-session, not per-benchmark), but `bench_heap_accountant` keeps the *accountant itself* under the 5% perf gate so the always-on cost stays bounded.
+
+The Sprint 9 perf-coverage roster now reads:
+
+| Benchmark binary           | Surface                                              | Named budget                                  |
+| -------------------------- | ---------------------------------------------------- | --------------------------------------------- |
+| `bench_mesh_construction`  | Per-element vs. bulk mesh construction               | (no named budget — relative gate only)        |
+| `bench_mmap_buffer`        | Heap vs. mmap buffer round-trip (ADR-0006 v2)        | (no named budget — relative gate only)        |
+| `bench_face_tag`           | Per-face-tag sparse map (ADR-0012, ABI v1.3)         | constant-time vs. mesh size (push 6)          |
+| `bench_plugin_dispatch`    | `RegistryDispatcher` hot path                        | < 20 µs warm (`ENGINEERING_PRACTICES.md`)     |
+| `bench_heap_accountant`    | `mallinfo2` snapshot + delta pair                    | < 1 µs to keep always-on accounting cheap     |
+
 #### Sprint 9 push 8 — benchmark dashboard published per release
 
 Closes the DX-team named SPRINT_PLAN.md story for Sprint 9 ("Benchmark dashboard published per release"). The push 6 gate now produces a human-readable artifact alongside the machine-readable JSON: a self-contained HTML report that release notes can link to directly. Engineers reviewing a perf-regression PR get a one-page dashboard with red / green badges per binary instead of trawling through three JSON files in the artifact bundle. **No frozen-header surface touched** — new tool + workflow step; ABI v1.3 stands.
