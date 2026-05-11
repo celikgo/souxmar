@@ -1,0 +1,197 @@
+# Sprint 7 push 6 — release workflow.
+#
+# Triggered by tags matching `v*` (typically `v0.9.0-beta1` for this
+# release, `v1.0.0` for the eventual stable). Builds three artefacts:
+#
+#   * source tarball — git-archive of the tagged tree (reproducible).
+#   * Linux x86_64 CLI tarball — souxmar / souxmar-conformance /
+#     souxmar-eval binaries built against the project's pinned vcpkg
+#     manifest, plus the in-tree example plugins.
+#   * Python sdist — `pip install pysouxmar==<version>` source dist.
+#
+# Each artefact is attached to a GitHub release (draft, so a release
+# maintainer can review before publishing). SHA-256 sums are computed
+# and attached as a separate `SHA256SUMS` file.
+#
+# Signed installers (Tauri auto-update manifests, macOS notarisation,
+# Windows EV-signed `.msi`) are NOT part of this workflow yet — the
+# desktop app surface lands in Sprint 8+, and the corresponding
+# release-pipeline extension lands with it.
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write    # required to create / attach to a GitHub release
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite"
+  CMAKE_GENERATOR: Ninja
+
+jobs:
+  # ---- 1. Source tarball -----------------------------------------
+  source-tarball:
+    name: source tarball
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute version from tag
+        id: compute
+        run: |
+          # Strip the leading `v` from the git tag.
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building artefacts for version: $VERSION"
+
+      - name: git archive
+        run: |
+          mkdir -p artefacts
+          git archive --format=tar.gz --prefix=souxmar-${{ steps.compute.outputs.version }}/ \
+            -o artefacts/souxmar-${{ steps.compute.outputs.version }}-source.tar.gz \
+            HEAD
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-tarball
+          path: artefacts/
+
+  # ---- 2. Linux x86_64 CLI binary tarball -----------------------
+  linux-cli:
+    name: linux-x86_64 CLI tarball
+    runs-on: ubuntu-22.04
+    needs: source-tarball
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang-17 lld-17
+
+      - name: Set up vcpkg
+        run: |
+          git clone --depth 1 https://github.com/microsoft/vcpkg "$HOME/vcpkg"
+          "$HOME/vcpkg/bootstrap-vcpkg.sh"
+          echo "VCPKG_ROOT=$HOME/vcpkg" >> "$GITHUB_ENV"
+
+      - name: Cache vcpkg binary archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-cache
+          key: release-vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            release-vcpkg-
+
+      - name: Configure (Release, with examples + CLI tools)
+        run: |
+          cmake --preset ci-linux-clang \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSOUXMAR_BUILD_EXAMPLES=ON \
+            -DSOUXMAR_BUILD_CLI=ON \
+            -DSOUXMAR_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build --preset ci-linux-clang
+
+      - name: Stage tarball
+        run: |
+          VERSION="${{ needs.source-tarball.outputs.version }}"
+          STAGE="souxmar-${VERSION}-linux-x86_64"
+          mkdir -p "${STAGE}/bin" "${STAGE}/plugins"
+
+          cp build/ci-linux-clang/src/cli/souxmar               "${STAGE}/bin/"
+          cp build/ci-linux-clang/tools/conformance/souxmar-conformance "${STAGE}/bin/"
+          cp build/ci-linux-clang/tools/eval/souxmar-eval       "${STAGE}/bin/"
+
+          # In-tree reference plugins: ship as a sibling `plugins/` dir
+          # so SOUXMAR_PLUGIN_PATH=<install>/plugins is a one-liner for
+          # the user. Each plugin gets its own subdir (manifest + .so).
+          for d in build/ci-linux-clang/examples/plugins/*/; do
+            name=$(basename "$d")
+            mkdir -p "${STAGE}/plugins/${name}"
+            cp "$d"*.so "${STAGE}/plugins/${name}/" 2>/dev/null || true
+            cp "$d"souxmar-plugin.toml "${STAGE}/plugins/${name}/" 2>/dev/null || true
+          done
+
+          cp README.md LICENSE CHANGELOG.md "${STAGE}/"
+
+          mkdir -p artefacts
+          tar czf "artefacts/${STAGE}.tar.gz" "${STAGE}"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-cli
+          path: artefacts/
+
+  # ---- 3. Python sdist -------------------------------------------
+  python-sdist:
+    name: pysouxmar sdist
+    runs-on: ubuntu-22.04
+    needs: source-tarball
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build sdist
+        run: |
+          cd bindings/python
+          python -m pip install --upgrade build
+          python -m build --sdist
+          mkdir -p ../../artefacts
+          cp dist/*.tar.gz ../../artefacts/
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-sdist
+          path: artefacts/
+
+  # ---- 4. Compose the release ------------------------------------
+  publish:
+    name: publish GitHub release
+    runs-on: ubuntu-22.04
+    needs: [source-tarball, linux-cli, python-sdist]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artefacts
+
+      - name: Compute SHA256 sums
+        run: |
+          cd artefacts
+          find . -type f -name '*.tar.gz' -exec sha256sum {} \; | tee SHA256SUMS
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Draft so a release maintainer pastes in the
+          # docs/RELEASE_NOTES_TEMPLATE.md body before publishing.
+          draft: true
+          prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-rc') || contains(github.ref, '-alpha') }}
+          name: souxmar ${{ needs.source-tarball.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          body_path: docs/RELEASE_NOTES_TEMPLATE.md
+          files: |
+            artefacts/**/*.tar.gz
+            artefacts/SHA256SUMS

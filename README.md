@@ -27,26 +27,30 @@ The free tier is the full product. You bring your own Anthropic / OpenAI / local
 
 ## Status
 
-Pre-alpha — Sprint 7 push 1 (2026-05-11). **Plugin C ABI v1 is frozen FINAL at v1.1.** The soak ran cleanly across Sprint 6 with one additive ratchet event (the `reader.*` namespace bumped minor 0 → 1) and zero breaks; Sprint 7 push 1 closes the soak, removes the `SOUXMAR_ABI_FREEZE_CANDIDATE` macro, and locks the v1 surface for the entire 1.x release series. See [ADR-0008](docs/adr/0008-abi-v1-final-freeze.md) for the binding declaration and the `scripts/check-frozen-headers.sh` CI gate that enforces the ratchet.
+**First public pre-release — `v0.9.0-beta1` tagged 2026-05-11.** Source, Linux x86_64 CLI tarball, and Python sdist are attached to the [GitHub release](https://github.com/souxmar/souxmar/releases/tag/v0.9.0-beta1). Plugin C ABI is **frozen FINAL at v1.2** ([ADR-0008](docs/adr/0008-abi-v1-final-freeze.md)). The desktop app, hosted services, and OpenFOAM adapter are explicitly **not** in this release — see the Sprint 7 retro ([`docs/retros/sprint-07.md`](docs/retros/sprint-07.md)) and the SPRINT_PLAN.md roadmap for their target sprints.
+
+The ABI v1 soak ran cleanly across Sprint 6 + Sprint 7 with two additive ratchet events — the `reader.*` namespace (v1.0 → v1.1, Sprint 6 push 4) and the mmap-backed buffer protocol (v1.1 → v1.2, Sprint 7 push 3) — and zero breaks. The freeze is permanent for the entire 1.x release series; `scripts/check-frozen-headers.sh` enforces the ratchet on every PR.
 
 Runnable today:
 
-- **CLI**: `souxmar run <pipeline.yaml>`, `souxmar plugin list`, `souxmar agent {list,invoke}` (with `--audit-log`, `--budget-config`, `--yes`), `souxmar-conformance <dir>`.
-- **Python**: `pip install ./bindings/python` → `pysouxmar` (parser, registry, loader, runner, cache, 12 agent tools, audit log, first-class `SessionBudget.on_threshold` callback, `.souxmar/budget.toml` loader).
-- **Plugin SDK**: stable C ABI v1.1 across six capability namespaces (`reader.*`, `mesher.*`, `solver.*`, `writer.*`, `postproc.*`, plus the bulk-buffer ingest path); `souxmar_add_plugin` CMake macro; conformance suite gating the index; structured `ManifestRejection` codes for tooling.
-- **Eight in-tree reference plugins**: hello-mesher, grid-mesher, hello-writer, vtu-writer, heat-solver, scalar-magnitude, mesh-quality, stl-reader.
-- **Two opt-in external adapters**: `occt-reader` (`-DSOUXMAR_WITH_OPENCASCADE=ON`, STEP / IGES via OpenCASCADE) and `gmsh-mesher` (`-DSOUXMAR_WITH_GMSH=ON`, tetrahedralisation via Gmsh's C++ API).
+- **CLI**: `souxmar run <pipeline.yaml>`, `souxmar plugin list`, `souxmar agent {list,invoke}` (with `--audit-log`, `--budget-config`, `--yes`), `souxmar-conformance <dir>`, `souxmar-eval <evals-dir>`.
+- **Python**: `pip install pysouxmar` → parser, registry, loader, runner, cache, 12 agent tools, audit log, first-class `SessionBudget.on_threshold` callback, `.souxmar/budget.toml` loader.
+- **Plugin SDK**: **frozen-final C ABI v1.2** across six capability namespaces (`reader.*`, `mesher.*`, `solver.*`, `writer.*`, `postproc.*`, plus the bulk-buffer ingest path); `souxmar_add_plugin` CMake macro; conformance suite + CI lockdown gate; structured `ManifestRejection` codes for tooling.
+- **Nine in-tree reference plugins**: hello-mesher, grid-mesher, hello-writer, vtu-writer, heat-solver, elasticity-stub, scalar-magnitude, mesh-quality, stl-reader.
+- **Three opt-in external adapters**: `occt-reader` (`-DSOUXMAR_WITH_OPENCASCADE=ON`, STEP / IGES via OpenCASCADE), `gmsh-mesher` (`-DSOUXMAR_WITH_GMSH=ON`, tetrahedralisation via Gmsh), `fenicsx-solver` (`-DSOUXMAR_WITH_FENICSX=ON`, FEM Poisson via DOLFINx + FFCx).
 - **Three runnable examples**: `examples/cantilever-beam/`, `examples/thermal-fin/`, `examples/stl-cube/`. Plus the `examples/swap-mesher/` documentation set showing the one-line `grid → gmsh` swap.
+- **Out-of-core mesh streaming**: mmap-backed `souxmar_buffer_t` v2 (Sprint 7 push 3). `souxmar_mesh_from_buffers` ingests through `_data_const` and routes transparently to heap or mmap — datasets that don't fit in RAM page through the OS cache.
 - **Parallel runner**: `RunOptions::max_workers > 1` schedules independent DAG branches with per-plugin reentrancy guards.
-- **Agent tool surface v1**: 12 tools, structured audit log, per-project token budget config, threshold callbacks fired at 50% / 80% / 100% of each axis.
-- **Perf-nightly CI** + bulk-vs-incremental mesh-construction benchmark.
+- **Agent tool surface v1**: 12 tools, structured audit log, per-project token budget config, threshold callbacks fired at 50% / 80% / 100% of each axis. **30-task agent eval suite** runs nightly.
+- **Perf-nightly CI** + bulk-vs-incremental mesh-construction benchmark + heap-vs-mmap buffer benchmark.
 
-Not yet done — deliberately scoped out of Phase 0:
+Not yet done — deliberately scoped out of `0.9.0-beta1`:
 
-- No Tauri desktop app yet (Sprint 8+); CLI and Python only.
-- No FEM solver yet — the in-tree `solver.heat.linear` is a demonstrative analytical solver; the real FEM heat / elasticity solvers land with the FEniCSx adapter in Sprint 7+.
-- BYOK AI provider client (Anthropic / OpenAI / Ollama) lands alongside the desktop app. The budget / audit plumbing is in place today; tools that talk to a real provider will hook into it.
-- Out-of-core mesh streaming (mmap-backed buffer flow) is Sprint 7; today every mesh is in-memory.
+- **No Tauri desktop app yet** (Sprint 8+); CLI and Python only.
+- **No CFD solver yet** — the OpenFOAM adapter is design-locked in [ADR-0009](docs/adr/0009-openfoam-process-isolation.md) and ships in Sprint 8 push 1.
+- **No production-grade FEM solver yet** — the in-tree `solver.heat.linear` + `solver.elasticity.linear` are demonstrative closed-form solutions; the FEniCSx adapter (opt-in, Poisson only in v1) handles the real case when `-DSOUXMAR_WITH_FENICSX=ON`. Full elasticity + structured BC arrays land via additive minor ratchet in Sprint 8+.
+- **No BYOK AI provider client yet** (Anthropic / OpenAI / Ollama). The budget / audit / tool-dispatch plumbing is fully in place; the eval suite scripts the same dispatch path. The first real LLM-driven session lands alongside the desktop app.
+- **No signed installers / auto-update** yet — `release.yml` ships source + Linux CLI tarball + Python sdist; macOS notarisation + Windows EV signing + Tauri auto-update manifests land with the desktop app.
 
 ## Building
 

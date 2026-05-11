@@ -2,9 +2,35 @@
 
 All notable changes to souxmar are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The plugin C ABI version is tracked separately and is independent of the project version. ABI v1 is frozen for the entire 1.x series; see [ADR-0001](docs/adr/0001-c-abi-for-plugins.md).
+The plugin C ABI version is tracked separately and is independent of the project version. **ABI v1 is frozen final at v1.1**; see [ADR-0008](docs/adr/0008-abi-v1-final-freeze.md). The release-stamping ritual is described in [`docs/RELEASE_NOTES_TEMPLATE.md`](docs/RELEASE_NOTES_TEMPLATE.md).
 
 ## [Unreleased]
+
+### Added
+
+- (Nothing yet — `0.9.0-beta1` was just cut.)
+
+### Changed
+
+- (None this release.)
+
+### Fixed
+
+- (None this release.)
+
+### Removed
+
+- (None this release.)
+
+### Security
+
+- (None this release.)
+
+---
+
+## [0.9.0-beta1] - 2026-05-11
+
+First public pre-release. Source + Linux CLI tarball + Python sdist are published as a GitHub release. **Tag:** `v0.9.0-beta1`. **ABI:** v1.1 frozen (ADR-0008). The desktop app, hosted services, and OpenFOAM adapter are explicitly not part of this release; the SPRINT_PLAN.md roadmap names their target sprints.
 
 ### Added
 
@@ -516,6 +542,24 @@ Closes the Sprint 7 plan's "OpenFOAM legal/process-isolation ADR finalised (prec
 - **Risk register** (`docs/SPRINT_PLAN.md`): R-003 likelihood downgraded High → Med now that the design contract is in place; closure deferred to the Sprint 8 push 1 implementation landing.
 - **Plugin host surface unchanged.** The OpenFOAM plugin will expose the standard `solver.*` C ABI to the host (`souxmar_solver_vtable_t`); the GPL boundary lives entirely below that vtable. The plugin's manifest declares Apache-2.0 (the *plugin*'s license, since it links nothing GPL'd); the OpenFOAM binary it `exec`s remains the operator's separate install.
 - **Pre-mortem one year out**: the most likely failure mode is the agent fumbling case-file authoring (LLMs without targeted training data write plausible-but-wrong `fvSchemes` / `fvSolution` dictionaries). The ADR names this explicitly + lists the leading indicators (CFD-bucket failure rate in the agent eval suite ≥ 30% is the trigger to revisit the agent surface, not the adapter).
+
+#### Sprint 7 push 6 — `v0.9.0-beta1` release scaffolding + sprint close-out
+
+Closes Sprint 7. **First public pre-release tagged `v0.9.0-beta1`.**
+
+- **`VERSION` bump 0.0.1 → 0.9.0.** CMake's `project(VERSION ...)` reads through; the SemVer pre-release suffix (`-beta1`) lives in the git tag, not the `VERSION` file (CMake's project version is required strict `MAJOR.MINOR.PATCH`).
+- **CHANGELOG release-stamping ritual.** The entire `[Unreleased]` block from Sprint 1 through Sprint 7 push 5 is promoted to `[0.9.0-beta1] - 2026-05-11`. A fresh `[Unreleased]` block opens at the top with the five empty sub-sections per `docs/RELEASE_NOTES_TEMPLATE.md`.
+- **`.github/workflows/release.yml`** — triggered by tags matching `v*`. Builds three artefacts in parallel:
+  - **source tarball** via `git archive` (reproducible by construction).
+  - **Linux x86_64 CLI tarball** — Release-build `souxmar` + `souxmar-conformance` + `souxmar-eval` binaries plus the in-tree example plugins staged as a sibling `plugins/` directory (so `SOUXMAR_PLUGIN_PATH=<install>/plugins` is a one-liner).
+  - **Python sdist** via `python -m build --sdist` against `bindings/python/`.
+  Composes a **draft** GitHub release (a release maintainer pastes in the body from `docs/RELEASE_NOTES_TEMPLATE.md` and publishes); attaches a `SHA256SUMS` file alongside. The workflow auto-detects pre-release tags (`-alpha` / `-beta` / `-rc`) and marks the release accordingly.
+- **`docs/RELEASE_NOTES_TEMPLATE.md`** — pre-fills the structure: tag, ABI version, what landed, what's deliberately not here, ABI ratchet history, downloads + SHA-256 table, install snippets, known issues, contributors. Future release maintainers fill it in once per release.
+- **`docs/retros/sprint-07.md`** — keep / fix / one ADR-worthy decision artefacts per `docs/SPRINT_PLAN.md` § Retro practice. Names the candidate decision (subprocess plugins as a first-class category, surfaced by ADR-0009) deferred to a future ADR-0010. Capacity for Sprint 8 revised down from 71 pts (85% of 84) to ~55 pts based on Sprint 7's measured rate.
+- **README** — banner header announcing the `v0.9.0-beta1` tag + GitHub release link; runnable-today + not-yet-done sections refreshed to reflect Sprint 7's full delivery (9 in-tree plugins, 3 opt-in adapters, `souxmar-eval` CLI, frozen-final ABI v1.2, out-of-core mesh streaming, ADR-0009).
+- **No frozen-header surface touched.** Pure release-ritual scaffolding. No ratchet marker needed.
+
+This release is the contractual moment Sprints 5–7 have been building toward: every plugin author can now target a stable ABI with a published version number and a downloadable SDK. Sprint 8 starts on the OpenFOAM adapter + the Blender importer + the agent tool catalogue 12 → 18.
 
 ### Changed
 
