@@ -8,6 +8,34 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
+- (None this release — `[Unreleased]` reopens after the v0.9.0-beta3 cut below.)
+
+### Changed
+
+- (None this release.)
+
+### Fixed
+
+- (None this release.)
+
+### Removed
+
+- (None this release.)
+
+### Security
+
+- (None this release.)
+
+---
+
+## [0.9.0-beta3] - 2026-05-11
+
+Third public pre-release. Source + Linux CLI tarball + Python sdist published as a GitHub release. **Tag:** `v0.9.0-beta3`. **ABI:** v1.3 frozen (per-face-tag surface from ADR-0012 — the third additive minor in the 1.x line, after the Sprint 6 push 4 `reader.*` v1.0 → v1.1 and the Sprint 7 push 3 mmap-buffer v1.1 → v1.2 ratchets). **Tool contract:** v1 frozen final at 18 tools (ADR-0011, supersedes the freeze-candidate ADR-0010).
+
+Sprint 9 closes here. Everything below this header was the `[Unreleased]` block as of beta2 → beta3; it now snapshots what shipped in this release. Per-push prose is preserved verbatim from the development-time `[Unreleased]` entries — release notes link to the matching `docs/retros/sprint-09.md` for the keep/fix/one-ADR-worthy-decision narrative + risk-register diff + Sprint 10 capacity forecast.
+
+### Added
+
 #### Sprint 9 push 10 — AI BYOK latency budget enters the eval suite
 
 Closes the AI-team named SPRINT_PLAN.md story for Sprint 9 ("Latency budget enforcement: p95 first-token < 800 ms BYOK direct"). The Sprint 7 push 4 eval runner now captures per-step wall-clock latency, aggregates p50 / p95 / p99 / mean / max across every dispatched step in every task, writes the result to a JSON the perf dashboard renders, and optionally fails the run on a p95 threshold. The scripted-eval surface today measures dispatcher overhead (microseconds); the same measurement carries first-token latency once the LLM provider integration lands and the 800 ms budget from `ENGINEERING_PRACTICES.md` kicks in. **No frozen-header surface touched** — eval tool + workflow + doc change; ABI v1.3 stands.

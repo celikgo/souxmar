@@ -27,18 +27,20 @@ The free tier is the full product. You bring your own Anthropic / OpenAI / local
 
 ## Status
 
-**Second public pre-release — `v0.9.0-beta2` tagged 2026-05-11.** Source, Linux x86_64 CLI tarball, and Python sdist are attached to the [GitHub release](https://github.com/souxmar/souxmar/releases/tag/v0.9.0-beta2). Plugin C ABI is **frozen FINAL at v1.3** ([ADR-0008](docs/adr/0008-abi-v1-final-freeze.md) for the freeze, [ADR-0012](docs/adr/0012-per-face-tag-c-abi-ratchet.md) for the current minor ratchet — per-face-tag surface, Sprint 9 push 2). Agent tool contract is **frozen FINAL at v1** with 18 tools ([ADR-0011](docs/adr/0011-tool-contract-v1-final-freeze.md), superseding the freeze-candidate ADR-0010) as of Sprint 9 push 1. The desktop app and hosted services are still explicitly **not** in this release — see the Sprint 8 retro ([`docs/retros/sprint-08.md`](docs/retros/sprint-08.md)) and the SPRINT_PLAN.md roadmap.
+**Third public pre-release — `v0.9.0-beta3` tagged 2026-05-11.** Source, Linux x86_64 CLI tarball, and Python sdist are attached to the [GitHub release](https://github.com/souxmar/souxmar/releases/tag/v0.9.0-beta3). Plugin C ABI is **frozen FINAL at v1.3** ([ADR-0008](docs/adr/0008-abi-v1-final-freeze.md) for the freeze, [ADR-0012](docs/adr/0012-per-face-tag-c-abi-ratchet.md) for the per-face-tag minor ratchet — Sprint 9 push 2). Agent tool contract is **frozen FINAL at v1** with 18 tools ([ADR-0011](docs/adr/0011-tool-contract-v1-final-freeze.md), superseding the freeze-candidate ADR-0010 — Sprint 9 push 1). The desktop app and hosted services are still explicitly **not** in this release — see the Sprint 9 retro ([`docs/retros/sprint-09.md`](docs/retros/sprint-09.md)) and the SPRINT_PLAN.md roadmap.
 
-What changed since beta1 (Sprint 8 in full):
+What changed since beta2 (Sprint 9 in full):
 
-- **Subprocess plugin harness** — `souxmar::plugin::run_subprocess` with cross-platform crash isolation, mandatory timeouts, stream-capped capture. Foundation for every external-binary plugin going forward.
-- **OpenFOAM CFD adapter** (opt-in) per [ADR-0009](docs/adr/0009-openfoam-process-isolation.md) — `simpleFoam` / `pimpleFoam` / `interFoam` invoked via subprocess only, never linked. **Closes R-003.** Real Tet4 → polyMesh translator (face dedup + owner/neighbour bookkeeping + boundary patch extraction) lands in push 6.
-- **Blender (.blend) importer** (opt-in) — `blender -b --python-expr "bpy.ops.wm.obj_export"` via the same subprocess harness; round-trips .blend → OBJ → Tri3.
-- **Wavefront OBJ reader** (always-on) — all four `f` field forms supported, polygon faces fan-triangulated.
-- **CFD-aware agent vocabulary** — `apply_inlet` / `apply_wall` / `apply_outlet` siblings of `set_bc`; `propose_cfd_setup` heuristic planner; `validate_bcs` sanity check. Catalogue 12 → 18 tools.
-- **Always-on `cfd-stub` solver** + the `examples/pipe-bend/` example wiring the full mesh → CFD → write chain.
+- **Tool contract v1 frozen FINAL** ([ADR-0011](docs/adr/0011-tool-contract-v1-final-freeze.md), Sprint 9 push 1). The candidate-period soak from ADR-0010 cleared every gate; 18 tools locked across categories Read / Mesh / BC / CFD / Material / Solve / Field / Pipeline / Discovery / Export / UI; `scripts/check-tool-contract.sh` flipped blocking-by-default; new `tool-contract-v1-lockdown` CI job mirrors the ABI lockdown.
+- **ABI v1.2 → v1.3 ratchet** ([ADR-0012](docs/adr/0012-per-face-tag-c-abi-ratchet.md), Sprint 9 push 2). Three new declarations in `souxmar-c/mesh.h` for per-face tags (`souxmar_mesh_cell_face_count`, `souxmar_mesh_face_tag`, `souxmar_mesh_set_face_tag`) + `SOUXMAR_FACE_UNTAGGED`. Sparse-map storage means untagged meshes pay zero bytes for the feature; tagged meshes cost O(N) for N tagged faces.
+- **Per-patch BC routing in `openfoam-solver`** (Sprint 9 push 3). Boundary faces grouped by `souxmar_mesh_face_tag`; one polyMesh patch per matched BC; matching `0/U` + `0/p` boundaryField entries. Untagged faces fall through to the legacy "walls" patch — non-breaking.
+- **Mixed-element polyMesh translator** (Sprint 9 push 4). Tet4 + Hex8 + Prism6 + Pyramid5 first-class, including arbitrarily-mixed meshes. Higher-order variants rejected with a clean diagnostic.
+- **`pipe-bend.obj` fixture + `usemtl` preservation in `obj-reader`** (Sprint 9 push 5). The pipe-bend example now reads a real 12-vertex L-shaped duct with `inlet` / `walls` / `outlet` groups; obj-reader maps each unique `usemtl` to a sequential integer per-cell tag.
+- **Perf-regression gate hardened to the ENGINEERING_PRACTICES.md target** (Sprint 9 pushes 6–8). Threshold 10 % → 5 %; full suite (5 binaries) runs per-PR; new `compare.py` directory mode; new `bench_face_tag` + `bench_plugin_dispatch` (the < 20 µs warm budget) + `bench_heap_accountant` (the < 1 µs always-on accountant). Per-release HTML dashboard via `tools/perf-compare/dashboard.py` ships with every artifact bundle.
+- **Per-plugin heap accounting in the audit log** (Sprint 9 push 9). New `souxmar::plugin::HeapAccountant` brackets every tool dispatch; `AuditLog::Entry` carries `heap_bytes_delta` on supported platforms (Linux + glibc ≥ 2.33).
+- **AI BYOK latency budget infrastructure in the eval suite** (Sprint 9 push 10). `souxmar-eval --latency-output` writes per-tool + aggregate p50/p95/p99/mean/max JSON; `--max-p95-ms` gate gives the perf workflow a distinct exit code for latency regressions.
 
-The ABI v1 soak that ran across Sprints 5–7 stayed clean through Sprint 8 — zero ratchet events that sprint, frozen-header surface untouched. The freeze is permanent for the entire 1.x release series; `scripts/check-frozen-headers.sh` enforces the ABI ratchet on every PR, and the new `tool-contract-v1-lockdown` CI job (Sprint 9 push 1, ADR-0011) enforces the matching agent-tool-contract ratchet via `scripts/check-tool-contract.sh`. Both surfaces are now under blocking lockdown.
+The ABI v1 soak that ran across Sprints 5–7 picked up its third additive minor ratchet in Sprint 9 push 2 (per-face tags, v1.2 → v1.3) — handled cleanly via the `Ratchet: additive minor surface (ADR-0008)` marker, no breaking changes. The freeze is permanent for the entire 1.x release series; `scripts/check-frozen-headers.sh` enforces the ABI ratchet and `scripts/check-tool-contract.sh` enforces the matching agent-tool-contract ratchet (Sprint 9 push 1 flipped that gate blocking-by-default). Both surfaces are under blocking lockdown on every PR.
 
 Runnable today:
 
@@ -51,9 +53,11 @@ Runnable today:
 - **Out-of-core mesh streaming**: mmap-backed `souxmar_buffer_t` v2. `souxmar_mesh_from_buffers` routes transparently to heap or mmap.
 - **Parallel runner**: `RunOptions::max_workers > 1` schedules independent DAG branches with per-plugin reentrancy guards.
 - **Agent tool surface v1 (frozen final, ADR-0011)**: 18 tools across categories Read / Mesh / BC / CFD / Material / Solve / Field / Pipeline / Discovery / Export / UI. Structured audit log, per-project token budget config. **30-task agent eval suite** runs nightly; per-provider scores (Anthropic 94 %, OpenAI 92 %, Ollama 89 %) cleared the freeze gate.
-- **Perf-nightly CI** + bulk-vs-incremental mesh-construction benchmark + heap-vs-mmap buffer benchmark.
+- **Perf-regression CI at 5 % per-PR** ([`ENGINEERING_PRACTICES.md`](docs/ENGINEERING_PRACTICES.md) § Performance budgets matched). Five benchmark binaries: `bench_mesh_construction`, `bench_mmap_buffer`, `bench_face_tag`, `bench_plugin_dispatch` (< 20 µs warm dispatch budget), `bench_heap_accountant` (< 1 µs always-on accounting). Self-contained HTML dashboard generated per release.
+- **Eval suite v1 latency capture**: `souxmar-eval --latency-output` emits per-tool + aggregate p50/p95/p99/mean/max JSON; `--max-p95-ms` gate carries the future BYOK first-token budget (< 800 ms p95 per ENGINEERING_PRACTICES.md).
+- **Audit log carries heap deltas** on Linux + glibc ≥ 2.33 — per-tool `heap_bytes_delta` field surfaces leak indicators and per-call cost in the agent UI.
 
-Not yet done — deliberately scoped out of `0.9.0-beta2`:
+Not yet done — deliberately scoped out of `0.9.0-beta3`:
 
 - **No Tauri desktop app yet** (Sprint 11+ per the revised plan); CLI and Python only.
 - **No per-patch CFD BC routing yet** — `apply_inlet`/`apply_wall`/`apply_outlet` stage BCs but `openfoam-solver` writes a single "walls" patch. Per-face-tag exposure on the C ABI lands as an additive-minor v1.3 ratchet in Sprint 9.
