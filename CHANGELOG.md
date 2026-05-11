@@ -8,6 +8,38 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
+- (None this release — `[Unreleased]` reopens after the v0.9.0-beta4 cut below.)
+
+### Changed
+
+- (None this release.)
+
+### Fixed
+
+- (None this release.)
+
+### Removed
+
+- (None this release.)
+
+### Security
+
+- (None this release.)
+
+---
+
+## [0.9.0-beta4] - 2026-05-11
+
+Fourth public pre-release. Source + Linux CLI tarball + Python sdist published as a GitHub release; macOS notarised `.dmg` + Windows EV-signed `.zip` newly attached this release (push 8 wired the release workflow). **Tag:** `v0.9.0-beta4`. **ABI:** v1.3 frozen (unchanged). **Tool contract:** v1 frozen final at 18 tools (unchanged).
+
+Sprint 10 closes here. Release notes link to `docs/retros/sprint-10.md` for the keep/fix/one-ADR-worthy-decision narrative + risk-register diff + Sprint 11 capacity forecast.
+
+The auto-updater XL story (ADR-0013) closes across pushes 4-8 in this release. The plugin marketplace v0 surfaces (data model + search + publication workflow) close in pushes 2-3. The AI Provider abstraction + OllamaProvider land in push 9. The desktop onboarding wizard scaffolds in push 10. The fourth in-tree example lands in push 11.
+
+The desktop app is still not user-facing beyond onboarding — the workbench shell is empty. Sprint 11 (internal alpha; dogfooding) is the next exit criterion.
+
+### Added
+
 #### Sprint 10 push 4 — auto-updater foundation: signed manifest format + parser + validator (ADR-0013)
 
 Opens Platform's "Auto-updater across all 3 OSes; signed manifest pipeline; rollback protocol" XL story (`docs/SPRINT_PLAN.md` § Sprint 10). This is the foundation push: the on-disk format and the parser/validator that the verifier (push 5), state machine (push 6), and rollback log (push 7) will all key off. The whole-story design decisions are locked in by ADR-0013, so subsequent pushes can focus on behaviour rather than re-litigating the data model. **No frozen-header surface touched, no new third-party dependency** — re-uses tomlplusplus from the existing manifest/index parsers; libsodium is deferred to push 5 where the verifier actually needs it.
@@ -132,9 +164,46 @@ Risk register diff:
 
 - **R-011 (perf gate has empty baselines)** — **closed.** Closes the open window flagged in the Sprint 9 retro between push 10 of Sprint 9 and this push.
 
+#### Sprint 10 push 5 — ed25519 detached-signature verifier (libsodium)
+
+Continues ADR-0013. Adds `souxmar::update::TrustStore` + `verify_manifest_signature()` returning a typed `SignatureStatus` (7 discrete values; the state machine in push 6 branches on the enum, the rollback log in push 7 records it verbatim). libsodium is scoped PRIVATE to `souxmar_update` — every other module stays sodium-free. 27 unit tests; the fixture generates keypairs via `crypto_sign_seed_keypair` so the suite is deterministic without a `/dev/urandom` dependency.
+
+#### Sprint 10 push 6 — update state machine + `souxmar update check` / `apply --dry-run` CLI
+
+The pre-flight decision layer. Pure logic; no I/O, no syscalls beyond `timegm`. `apply_gate(manifest, install, clock)` returns either `UpdateApply{artifact, version}` or `UpdateRefusal{reason}` — 9 discrete reasons, documented step-ordering locked in by 5 precedence tests. Per-user state file at `~/.local/state/souxmar/update-state.toml` (et al.) carrying `current_installed_version` + `max_version_ever_seen` (the replay-defence floor). `TimeSource` abstraction lets the test suite pin the clock. `--as-of` flag exposes the override to integration tests so the `expires_at` gate is testable hermetically. Closes the push-6-flagged replay-defence gap noted in push 6's commit message via state-file writes added to `check` itself.
+
+#### Sprint 10 push 7 — install layout + atomic apply/rollback + `souxmar update apply` / `rollback` CLI
+
+The filesystem half. `<target_root>/{current.txt, previous.txt, versions/<v>/payload, staging/, rollback.log}` — marker-file approach (vs. symlink) keeps the cross-OS code path identical on POSIX + NTFS. `apply_update(ctx)` orchestrator: re-runs gate (defense in depth), verifies sha256 + size against the artifact bytes, stages, atomic-switches via `rename()` of `current.txt`, appends the rollback-log event, bumps the per-user state, GCs stale version directories. Rollback flips `current.txt` back and deliberately preserves `max_version_ever_seen` (replay-defence floor never drops). Append-only rollback log refuses to overwrite a corrupt existing log — defends the audit history against a local actor truncating it.
+
+#### Sprint 10 push 8 — release-signing automation + embedded trust store (closes ADR-0013)
+
+The release-side stack. `scripts/release/notarize-macos.sh` (notarytool with bounded retry + 5-minute heartbeat — Apple's queue p99 stalls badly during release windows). `scripts/release/sign-windows.ps1` (signtool against an EV cert in the Windows runner's certificate store). `scripts/release/sign-manifest.sh` (PyNaCl wrapper around the same libsodium the verifier uses). `scripts/release/build-release.sh` orchestrator. Build-time embedded trust store (`SOUXMAR_RELEASE_PUBKEY_HEX` cache var; release CI overrides + the workflow refuses to publish when `build_uses_dev_key() == true`). `docs/SECURITY.md` from scratch (trust-boundary table + signing-flow walkthrough + the three-mechanism story). `docs/adr/0014-release-signing-key-rotation.md` (yearly cadence, T-90/T-60/T-30/T+0 procedure, emergency-collapse rule, four-eyes destruction).
+
+#### Sprint 10 push 9 — Provider abstraction + OllamaProvider + souxmar-eval-llm runner
+
+Opens AI's "Local-Ollama provider verified across Llama-3.x, Qwen-2.x, Mistral" L story. `souxmar::ai::Provider` interface — synchronous `chat_completion()` returning `variant<ChatResponse, ProviderError>`. Two concrete implementations: `StubProvider` (programmable reply table for CI) + `OllamaProvider` (talks to `localhost:11434/api/chat` via curl-as-subprocess; reuses Sprint 8 push 1's harness so libsouxmar-ai doesn't link an HTTP client). Hand-rolled JSON request encoder; yaml-cpp parses the response. New `souxmar-eval-llm` binary — separate from `souxmar-eval` so the scripted CI gate's stability doesn't tangle with the LLM-driven compatibility-matrix's. `docs/ai-providers/ollama-compatibility.md` with per-model pass-rate matrix.
+
+#### Sprint 10 push 10 — desktop onboarding wizard + Tauri 2 scaffold
+
+Opens Desktop's "Onboarding flow: first-launch wizard, BYOK key entry, sample project" L story. `src/desktop/` from scratch: Tauri 2 Rust shell + React 18 + TS + Vite frontend. Four-step wizard (Welcome / BYOK / SampleProject / Done) with token-driven dim-theme styling. Five `#[tauri::command]` entry points: `onboarding_status`, `onboarding_complete`, `byok_store_key` (writes via the `keyring` crate to OS keychain), `byok_test_connection`, `open_sample_project` (copies `examples/<which>` to `~/souxmar-projects/<which>`). UX rationale documented in `docs/DESKTOP_APP.md` § "First-run experience"; visual-regression process referenced; explicit "what's still scaffolding" section names the stubs the Sprint 11 dogfood week will replace.
+
+#### Sprint 10 push 11 — mesh-algorithm comparison study (fourth in-tree example)
+
+Closes DX's "Fourth example: mesh-algorithm comparison study (uses two meshers)" M story. `examples/mesh-comparison/` runs both `mesher.tetra.grid` (always-on) and `mesher.tetra.gmsh` (opt-in) against the same `cube.step`, hand-parses per-cell quality DataArrays out of the resulting VTUs (no vtk-python dep — a stock-Python user can run this), renders `report.md` with inline-PNG histograms (matplotlib optional, ASCII-bar fallback). Sets up the plugin-marketplace "does this mesher actually deliver?" evidence shape — a Sprint 11+ extension parameterises the study so any third-party `mesher.tetra.*` plugin slots in without rewriting `compare.py`.
+
+#### Sprint 10 push 12 — Sprint 10 retro + v0.9.0-beta4 release (this commit)
+
+Closes Sprint 10. `docs/retros/sprint-10.md` follows the Sprint 8/9 retro shape (keep / fix / one-ADR-worthy-decision / risk-register diff / capacity forecast). One ADR-worthy decision queued: **extract `libsouxmar-crypto`** from the auto-updater's verifier + trust-store surfaces before plugin marketplace (Sprint 16) + cloud sync (Sprint 15) each grow their own crypto surface (ADR-0015 candidate; Sprint 11 push 1). `README.md` Status banner refreshed to `v0.9.0-beta4`; "What changed since" rewritten from the Sprint 9 list to a Sprint 10 list.
+
+Risk register diff:
+
+- **R-011 (perf gate has empty baselines)** — stays closed (push 1).
+- **R-012 (desktop app has zero visual-regression coverage)** — **opens** with push 10. Mitigation queued for Sprint 11 push 1.
+
 ### Changed
 
-- (None this release.)
+- (None this release — `[Unreleased]` reopens after the v0.9.0-beta4 cut below.)
 
 ### Fixed
 
