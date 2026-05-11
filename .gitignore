@@ -1,0 +1,41 @@
+# Build output
+build/
+build-*/
+out/
+cmake-build-*/
+
+# Dependencies
+node_modules/
+target/
+.pnpm-store/
+vcpkg_installed/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Generated
+*.pyc
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local
+.env
+.env.local
+*.log
+.souxmar/cache/
+.souxmar/chat/
+
+# Tauri
+src-tauri/target/
+
+# Coverage
+coverage/
+*.gcda
+*.gcno
+*.profraw
