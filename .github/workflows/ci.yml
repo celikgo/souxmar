@@ -130,3 +130,22 @@ jobs:
           # the patterns themselves (e.g. ENGINEERING_PRACTICES.md, AI_INTEGRATION.md).
           patterns='(sk-[A-Za-z0-9_-]{20,}|xoxb-[0-9]{10,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36})'
           ! git grep -nE "$patterns" -- ':!docs/' ':!.claude/skills/' ':!.github/workflows/'
+
+  # Sprint 7 push 1 — ABI v1 lockdown gate. Per ADR-0008 every header
+  # under include/souxmar-c/ is pinned for the entire 1.x release
+  # series. Edits land via the ratchet (additive minor surface / bug
+  # fix) markers or a Tier-3 ADR; everything else is rejected here.
+  abi-v1-lockdown:
+    name: abi-v1-lockdown
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check frozen-header diff against ratchet rules
+        run: |
+          scripts/check-frozen-headers.sh \
+            "origin/${{ github.base_ref }}" \
+            "${{ github.event.pull_request.head.sha }}"

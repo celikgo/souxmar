@@ -6,23 +6,26 @@
  * built against it. See ADR-0001 for the rationale and docs/PLUGIN_SDK.md
  * for the consumer-facing reference.
  *
- * The ABI version is independent of the souxmar release version. ABI v1 is
- * frozen for the entire 1.x release series; binary-breaking changes require
- * a major bump per docs/GOVERNANCE.md.
+ * ======================================================================
+ * STATUS: ABI v1 frozen FINAL (Sprint 7 push 1, 2026-05-11).
  *
- * ----------------------------------------------------------------------
- * STATUS: ABI v1 frozen-candidate (Sprint 5 push 6, 2026-05-11).
+ * Every header in include/souxmar-c/ is locked for the entire 1.x
+ * release series. Binary-breaking changes require a major version bump
+ * (souxmar 2.0) with a one-major-overlap deprecation cycle. See
+ * docs/adr/0008-abi-v1-final-freeze.md for the binding declaration +
+ * the inventory of headers under lock.
  *
- * Two-sprint soak period; formal freeze target 2026-06-08. During soak:
- * additive minor surfaces are allowed (these bump SOUXMAR_ABI_VERSION_MINOR);
- * breaking changes to any v1 surface cancel the candidacy and reset the
- * soak. See docs/adr/0007-abi-v1-freeze-candidate.md for the full
- * mechanics + the list of headers under freeze.
+ * Post-freeze rules (the ratchet, unchanged from the soak period):
+ *   - Additive minor surfaces are allowed and bump
+ *     SOUXMAR_ABI_VERSION_MINOR monotonically.
+ *   - Bug fixes to comments/docs/non-load-bearing details are allowed.
+ *   - Anything else requires a Tier-3 ADR per docs/GOVERNANCE.md.
  *
- * Plugin authors targeting ABI v1: it is safe to build now. The candidate
- * surface will not break before formal freeze — additive minor changes
- * are forward-compatible by construction (zero-init of unknown fields).
- * ----------------------------------------------------------------------
+ * Plugin authors targeting v1: this is the contract. Build against the
+ * abi_version_minor floor you need; the host advertises its minor in
+ * host_info.abi_version_minor. Conformance check C004 catches every
+ * "v1.N plugin on a v1.M host where M < N" case.
+ * ======================================================================
  */
 
 #ifndef SOUXMAR_ABI_H
@@ -32,25 +35,14 @@
 #include <stddef.h>
 
 #define SOUXMAR_ABI_VERSION_MAJOR 1
-/* MINOR was bumped 0 → 1 at Sprint 6 push 4 (2026-05-11+) when the
- * additive `reader.*` capability surface (souxmar-c/reader.h +
- * souxmar_registry_add_reader) landed during the v1 freeze-candidate
- * soak. This is the soak's first ratchet event; per ADR-0007, additive
- * minor surfaces are forward-compatible by construction (a v1.0 plugin
- * keeps loading on a v1.1 host because every new symbol is opt-in, and
- * a v1.1 plugin on a v1.0 host fails registration at the `add_reader`
- * symbol resolution — caught by C004 of the conformance suite).
+/* MINOR bumps record additive surface additions. The history:
+ *   v1.0  Sprint 5 push 6 — initial freeze-candidate surface.
+ *   v1.1  Sprint 6 push 4 — `reader.*` capability + souxmar-c/reader.h.
  *
- * Bumps lift the floor advertised to plugins via host_info.abi_version_minor;
- * the freeze-candidate ratchet permits monotonic increments only. */
+ * Future minor bumps land via ADR plus the
+ * `Ratchet: additive minor surface (ADR-0008)` commit marker checked
+ * by scripts/check-frozen-headers.sh. */
 #define SOUXMAR_ABI_VERSION_MINOR 1
-
-/* Set during the freeze-candidate soak; removed at formal freeze. Host
- * tooling and plugin authors can branch on this macro to surface
- * "you're building against an un-frozen candidate" warnings if useful.
- *
- * Target removal date: 2026-06-08 (unless soak is cancelled). */
-#define SOUXMAR_ABI_FREEZE_CANDIDATE 1
 
 /* ---- Symbol export ---------------------------------------------------- */
 

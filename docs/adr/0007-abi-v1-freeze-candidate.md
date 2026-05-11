@@ -1,6 +1,6 @@
 # ADR-0007: ABI v1 freeze-candidate declaration
 
-- **Status:** Accepted (soak in progress)
+- **Status:** Superseded by [ADR-0008](0008-abi-v1-final-freeze.md) — soak completed cleanly, freeze declared formal in Sprint 7 push 1.
 - **Date:** 2026-05-11
 - **Author:** souxmar core team
 - **Deciders:** core, plugin-host, AI, DX

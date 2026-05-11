@@ -429,6 +429,20 @@ This closes Sprint 6 cleanly. Six pushes landed:
 5. Second tetrahedral mesher: grid-mesher (always-on) + Gmsh adapter (opt-in). Swap-test exit criterion met.
 6. Cost-meter close-out: first-class `SessionBudget.on_threshold` from Python + `.souxmar/budget.toml` loader.
 
+#### Sprint 7 push 1 — ABI v1 frozen FINAL
+
+- **[ABI v1.1 FROZEN]** ADR-0007's two-sprint soak completed cleanly. Conformance was green across Sprint 6 for all 8 in-tree plugins; ASAN/TSAN nightly clean; perf-nightly within threshold; one additive ratchet event landed (the `reader.*` surface, Sprint 6 push 4) and behaved exactly as the ratchet predicted. **The v1 ABI is now immutable for the entire 1.x release series.**
+- **`SOUXMAR_ABI_FREEZE_CANDIDATE` removed** from `include/souxmar-c/abi.h`. The status comment is rewritten to name [ADR-0008](docs/adr/0008-abi-v1-final-freeze.md) as the binding declaration; the new wording lists the post-freeze ratchet rules and points at the CI gate. Plugin authors that branched on the candidate macro during soak can now drop the conditional — the contract is permanent.
+- **[ADR-0008]** [docs/adr/0008-abi-v1-final-freeze.md](docs/adr/0008-abi-v1-final-freeze.md) — the binding declaration. Inventory of locked headers, post-freeze ratchet rules (additive minor / bug-fix), CI enforcement, the path to a hypothetical v2 (one-major-overlap deprecation). Supersedes ADR-0007, which is now closed.
+- **CI lockdown gate** — new `scripts/check-frozen-headers.sh` + an `abi-v1-lockdown` job in `.github/workflows/ci.yml`. PRs that touch any header in the v1 inventory must carry one of two commit-message markers in the PR range:
+  - `Ratchet: additive minor surface (ADR-0008)` — new declarations / new headers / new `SOUXMAR_X_*` macros under a fresh prefix.
+  - `Ratchet: bug-fix (ADR-0008) — <reason>` — comments / docs / declaration restorations. The Sprint 5 push 4 `souxmar_value_t` typedef fix is the documented precedent.
+  Anything else fails the gate. The escape hatch is a Tier-3 ADR per `docs/GOVERNANCE.md` — in practice the trigger for a v2 ABI conversation.
+- **`docs/PLUGIN_SDK.md`** — "Current freeze status" section rewritten to **frozen FINAL at v1.1**. Documents the ratchet markers and tells plugin authors the candidate macro is gone.
+- **`README.md` § Status** — Sprint 7 push 1 marker; ADR-0008 reference; "frozen FINAL" language.
+- **The commit landing this entry is tagged `abi-v1-frozen`** (annotated, signed by a release maintainer). Per `docs/GOVERNANCE.md` § ABI freeze process, this is the State 2 → State 3 transition: candidate → formally frozen. The two-maintainer-approval bar that gates Tier-3 changes was met before merge.
+- **No frozen-header surface was modified.** The freeze IS the contract — we did not change a single function signature or struct layout in this push. We removed exactly one declaration (`SOUXMAR_ABI_FREEZE_CANDIDATE`), which was explicitly designated for removal at this milestone by ADR-0007, and rewrote the status comment. The ABI binary surface is byte-identical to v1.1 at end-of-Sprint-6.
+
 ### Changed
 
 - (None this release.)

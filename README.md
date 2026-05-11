@@ -27,7 +27,7 @@ The free tier is the full product. You bring your own Anthropic / OpenAI / local
 
 ## Status
 
-Pre-alpha — Sprint 6 closed (2026-05-11). **Plugin C ABI is in frozen-candidate state at v1.1**; formal v1 freeze target is 2026-06-08. The 0 → 1 minor bump landed in Sprint 6 push 4 (added the `reader.*` namespace) — additive, forward-compatible by construction, so the soak window rolls forward unchanged. See [ADR-0007](docs/adr/0007-abi-v1-freeze-candidate.md) for the soak rules.
+Pre-alpha — Sprint 7 push 1 (2026-05-11). **Plugin C ABI v1 is frozen FINAL at v1.1.** The soak ran cleanly across Sprint 6 with one additive ratchet event (the `reader.*` namespace bumped minor 0 → 1) and zero breaks; Sprint 7 push 1 closes the soak, removes the `SOUXMAR_ABI_FREEZE_CANDIDATE` macro, and locks the v1 surface for the entire 1.x release series. See [ADR-0008](docs/adr/0008-abi-v1-final-freeze.md) for the binding declaration and the `scripts/check-frozen-headers.sh` CI gate that enforces the ratchet.
 
 Runnable today:
 

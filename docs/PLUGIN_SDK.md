@@ -126,17 +126,17 @@ Reader plugins consume a path on disk + a value-bag of options and produce **eit
 
 The `reader.*` surface landed as the **first additive minor ratchet event** during the v1 freeze-candidate soak — `SOUXMAR_ABI_VERSION_MINOR` bumped 0 → 1. A v1.0 plugin keeps loading on a v1.1 host (every new symbol is opt-in); a v1.1 plugin attempting to register a reader against a v1.0 host fails at symbol resolution time, which conformance check C004 catches.
 
-## Current freeze status: **frozen-candidate v1** (since 2026-05-11)
+## Current freeze status: **frozen FINAL at v1.1** (since Sprint 7 push 1, 2026-05-11)
 
-The v1 ABI is in its **two-sprint soak period**. Formal freeze target: **2026-06-08**.
+The C ABI surface in `include/souxmar-c/` is locked for the entire 1.x release series. The binding declaration lives in [ADR-0008](adr/0008-abi-v1-final-freeze.md); the commit landing that ADR is tagged `abi-v1-frozen`.
 
-During soak:
+Post-freeze rules — the ratchet, unchanged from the soak period:
 
-- The `SOUXMAR_ABI_FREEZE_CANDIDATE` macro is defined in `souxmar-c/abi.h`. It will be removed at formal freeze.
-- Plugin authors **can build against the candidate now** — additive minor surfaces are forward-compatible by construction; breaking changes cancel the candidacy and reset the soak rather than ship a broken contract.
-- The full list of headers under freeze + the cancellation rules live in [ADR-0007](adr/0007-abi-v1-freeze-candidate.md).
+- **Additive minor surfaces** (new headers, new function declarations, new constants under a fresh prefix, new optional fields appended to forward-compatible structs) are allowed and bump `SOUXMAR_ABI_VERSION_MINOR`. PRs that touch a frozen header in an additive way must carry the `Ratchet: additive minor surface (ADR-0008)` marker in the commit message — `scripts/check-frozen-headers.sh` enforces it in CI.
+- **Bug fixes** to comments, docs, or non-load-bearing declaration details are allowed under the `Ratchet: bug-fix (ADR-0008) — <reason>` marker. The Sprint 5 push 4 `souxmar_value_t` typedef restoration is the precedent.
+- **Anything else** requires a Tier-3 ADR per [`docs/GOVERNANCE.md`](GOVERNANCE.md) and is in practice the trigger for a v2 ABI conversation.
 
-A formal `abi-v1-frozen` release tag lands when soak completes cleanly. See [`docs/GOVERNANCE.md`](GOVERNANCE.md) § ABI freeze process for the mechanics.
+The `SOUXMAR_ABI_FREEZE_CANDIDATE` macro is **gone**. Plugin authors that branched on it during soak can now drop the conditional — the freeze is permanent.
 
 ## Plugin discovery
 
