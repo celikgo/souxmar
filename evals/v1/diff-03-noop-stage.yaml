@@ -1,0 +1,13 @@
+id: diff-03-noop-stage
+description: apply_pipeline_diff with no changes returns a noop summary, not an error.
+category: diff
+steps:
+  - tool: apply_pipeline_diff
+    inputs:
+      diff: []
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: changes_applied
+    value: 0

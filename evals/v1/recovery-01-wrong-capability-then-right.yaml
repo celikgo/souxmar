@@ -1,0 +1,17 @@
+id: recovery-01-wrong-capability-then-right
+description: After a missing-capability error, the agent retries with the right id.
+category: recovery
+steps:
+  - tool: mesh
+    inputs:
+      capability_id: mesher.tetra.nope
+  - tool: mesh
+    inputs:
+      capability_id: mesher.tetra.hello
+assertions:
+  - kind: step_outcome
+    index: 0
+    value: fail
+  - kind: step_outcome
+    index: 1
+    value: ok

@@ -1,0 +1,15 @@
+id: export-02-missing-format
+description: export_results refuses with a clear error when format is missing.
+category: export
+steps:
+  - tool: mesh
+    inputs:
+      capability_id: mesher.tetra.hello
+  - tool: export_results
+    inputs:
+      path: /tmp/souxmar-eval-export-02.out
+assertions:
+  - kind: tool_outcome
+    value: fail
+  - kind: error_code_contains
+    value: MISSING_INPUT

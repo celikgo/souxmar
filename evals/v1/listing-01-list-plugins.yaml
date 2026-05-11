@@ -1,0 +1,12 @@
+id: listing-01-list-plugins
+description: list_plugins enumerates the loaded discovery report.
+category: listing
+steps:
+  - tool: list_plugins
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_contains
+    path: plugins
+    value: hello-mesher

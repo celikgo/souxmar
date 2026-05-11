@@ -1,0 +1,24 @@
+id: cfd-03-validate-bcs-missing-outlet
+description: validate_bcs flags a duct with inlet + walls but no outlet.
+category: cfd
+steps:
+  - tool: mesh
+    inputs:
+      capability_id: mesher.tetra.grid
+      target_size: 0.5
+  - tool: apply_inlet
+    inputs:
+      patch: inlet
+      velocity: [1.0, 0.0, 0.0]
+  - tool: apply_wall
+    inputs:
+      patch: walls
+      kind: no_slip
+  - tool: validate_bcs
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_contains
+    path: issues
+    value: missing-outlet

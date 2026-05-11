@@ -1,0 +1,24 @@
+id: recovery-02-bad-input-no-cascade
+description: A bad input on one step doesn't poison the session state for the next.
+category: recovery
+steps:
+  - tool: mesh
+    inputs:
+      capability_id: mesher.tetra.hello
+  - tool: set_bc
+    inputs: {}
+  - tool: query_field
+    inputs:
+      field: temperature
+assertions:
+  - kind: step_outcome
+    index: 0
+    value: ok
+  - kind: step_outcome
+    index: 1
+    value: fail
+  # query_field can still see the mesh and explain why temperature
+  # isn't there yet — it doesn't silently inherit the BC failure.
+  - kind: step_outcome
+    index: 2
+    value: ok

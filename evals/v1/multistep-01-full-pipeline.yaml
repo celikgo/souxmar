@@ -1,0 +1,30 @@
+id: multistep-01-full-pipeline
+description: Mesh -> material -> BC -> solve -> query -> export, end-to-end agent flow.
+category: multistep
+steps:
+  - tool: mesh
+    inputs:
+      capability_id: mesher.tetra.hello
+  - tool: set_material
+    inputs:
+      material: thermal_conductivity_default
+  - tool: set_bc
+    inputs:
+      kind: dirichlet
+      value: 300
+  - tool: solve
+    inputs:
+      capability_id: solver.heat.linear
+  - tool: query_field
+    inputs:
+      field: temperature
+  - tool: export_results
+    inputs:
+      format: vtu
+      path: /tmp/souxmar-eval-multistep-01.vtu
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_contains
+    path: artifacts
+    value: temperature

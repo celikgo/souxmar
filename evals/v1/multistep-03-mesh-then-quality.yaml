@@ -1,0 +1,17 @@
+id: multistep-03-mesh-then-quality
+description: Mesh -> query_mesh_quality returns non-empty metrics.
+category: multistep
+steps:
+  - tool: mesh
+    inputs:
+      capability_id: mesher.tetra.grid
+      target_size: 0.5
+  - tool: query_mesh_quality
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_field_exists
+    path: jacobian
+  - kind: tool_data_field_exists
+    path: aspect_ratio

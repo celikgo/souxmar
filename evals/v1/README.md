@@ -1,12 +1,19 @@
-# Agent eval suite v1
+# Agent eval suite v1 (extended in Sprint 11 push 3)
 
-Sprint 7 push 4. Thirty canonical agent-tool tasks the eval runner (`tools/eval/`) executes nightly. Each task is one YAML file; pass criteria are deterministic checks on tool outputs.
+Sprint 7 push 4 shipped the first thirty canonical tasks; Sprint 11
+push 3 expanded the catalogue toward the SPRINT_PLAN.md § Sprint 11
+target of 60 tasks total with a **≥ 90 % pass-rate gate** (see
+`--min-pass-rate` in `souxmar-eval --help`). Each task is one YAML
+file; pass criteria are deterministic checks on tool outputs.
 
-This is the **scripted** eval surface: each task runs the same dispatch path a real LLM would drive, but the steps are pre-staged in YAML rather than chosen by a model. The BYOK provider integration that lets an actual model drive the same task catalogue lands in Sprint 8+ alongside the desktop app. The contract here is the foundation; the LLM is the next layer.
+This is the **scripted** eval surface: each task runs the same
+dispatch path a real LLM would drive, but the steps are pre-staged
+in YAML rather than chosen by a model. The LLM-driven counterpart
+lives under `evals/v1-llm/` and is exercised by `souxmar-eval-llm`
+(Sprint 10 push 9); the two surfaces share the task vocabulary but
+have different stability promises.
 
-## Why 30
-
-The Sprint 7 plan target. The catalogue is grouped so every v1 agent tool is exercised:
+## Catalogue
 
 | Category   | Tasks | Tools covered                                           |
 | ---------- | ----- | ------------------------------------------------------- |
@@ -19,8 +26,20 @@ The Sprint 7 plan target. The catalogue is grouped so every v1 agent tool is exe
 | quality    | 3     | `query_mesh_quality`                                    |
 | postproc   | 3     | `compute_field`                                         |
 | pipeline   | 2     | `propose_pipeline`                                      |
-| diff       | 2     | `apply_pipeline_diff`                                   |
-| **Total**  | **30** | **all 12 v1 tools**                                    |
+| diff       | 3     | `apply_pipeline_diff` (incl. noop diff path)            |
+| export     | 2     | `export_results`                                        |
+| listing    | 2     | `list_plugins`                                          |
+| cfd        | 3     | `propose_cfd_setup`, `validate_bcs`, `apply_*` chain    |
+| multistep  | 3     | Chained tool sequences (mesh → BC → solve → query → export) |
+| recovery   | 2     | Session-state-after-error patterns                      |
+| screenshot | 1     | `screenshot_viewport`                                    |
+| **Total**  | **43** | **all 18 v1 tools**                                    |
+
+Sprint 11 push 3 lands 13 new tasks against the 60-task target. The
+remaining 17 ride into Sprint 12 (public alpha) as the catalogue
+stabilises against external dogfood feedback. The gate today is
+**≥ 90 % pass-rate** across the 43 tasks; tightening to 100 % is a
+Sprint 13+ ratchet decision.
 
 ## Task schema
 

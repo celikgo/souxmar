@@ -1,0 +1,24 @@
+id: cfd-01-propose-inlet-wall-outlet
+description: propose_cfd_setup names the three canonical patch types for a duct.
+category: cfd
+setup:
+  session_state:
+    geometry:
+      num_vertices: 12
+      patches: [inlet, walls, outlet]
+steps:
+  - tool: propose_cfd_setup
+    inputs:
+      flow_regime: incompressible_steady
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_contains
+    path: bc_plan
+    value: apply_inlet
+  - kind: tool_data_contains
+    path: bc_plan
+    value: apply_wall
+  - kind: tool_data_contains
+    path: bc_plan
+    value: apply_outlet

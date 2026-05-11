@@ -62,6 +62,7 @@ constexpr int kExitTaskFailed    = 1;
 constexpr int kExitUsage         = 2;
 constexpr int kExitNoTasks       = 3;
 constexpr int kExitLatencyFailed = 4;  // Sprint 9 push 10 — p95 gate breach
+constexpr int kExitPassRateGate  = 5;  // Sprint 11 push 3 — --min-pass-rate breach
 
 void print_usage() {
   fmt::print(stderr,
@@ -74,6 +75,7 @@ void print_usage() {
       "    [--quiet]\n"
       "    [--latency-output <path>]   write per-step latency summary JSON\n"
       "    [--max-p95-ms <number>]     fail if aggregate p95 > this many ms\n"
+      "    [--min-pass-rate <0..1>]    fail if tasks_passed / tasks_total < this\n"
       "\n"
       "Each YAML under <evals-dir> is one task. The runner loads every\n"
       "discoverable plugin, runs each task's steps through dispatch_tool,\n"
@@ -439,6 +441,11 @@ int main(int argc, char** argv) {
   bool                         quiet = false;
   std::optional<fs::path>      latency_output;       // --latency-output <path>
   std::optional<double>        max_p95_ms;           // --max-p95-ms <N>
+  // Sprint 11 push 3 — pass-rate gate. The aggregate pass rate
+  // (tasks_passed / tasks_total) must be ≥ this fraction or the
+  // runner exits with kExitPassRateGate. The default soft target
+  // (90 %) matches the Sprint 11 exit criterion in SPRINT_PLAN.md.
+  std::optional<double>        min_pass_rate;        // --min-pass-rate <N>, e.g. 0.90
 
   for (std::size_t i = 0; i < args.size(); ++i) {
     const auto& a = args[i];
@@ -465,6 +472,24 @@ int main(int argc, char** argv) {
         max_p95_ms = std::stod(args[++i]);
       } catch (...) {
         fmt::print(stderr, "error: --max-p95-ms takes a numeric value\n");
+        return kExitUsage;
+      }
+    } else if (a == "--min-pass-rate") {
+      if (i + 1 >= args.size()) {
+        fmt::print(stderr, "error: --min-pass-rate requires a value\n");
+        return kExitUsage;
+      }
+      try {
+        const double v = std::stod(args[++i]);
+        if (v < 0.0 || v > 1.0) {
+          fmt::print(stderr,
+              "error: --min-pass-rate must be in [0.0, 1.0] (got {})\n", v);
+          return kExitUsage;
+        }
+        min_pass_rate = v;
+      } catch (...) {
+        fmt::print(stderr,
+            "error: --min-pass-rate takes a numeric value in [0.0, 1.0]\n");
         return kExitUsage;
       }
     } else if (!a.empty() && a.front() == '-') {
@@ -642,6 +667,25 @@ int main(int argc, char** argv) {
     // Combined failure: surface both, but the latency exit code wins
     // (correctness is still reported above).
     return kExitLatencyFailed;
+  }
+
+  // --min-pass-rate: Sprint 11 push 3 soft gate. Allows the eval
+  // workflow to ratchet a "≥ X% pass" target without flipping
+  // every-task-must-pass. The Sprint 11 exit criterion in
+  // SPRINT_PLAN.md is 90%; the workflow can tighten over time.
+  // Distinct exit code (kExitPassRateGate = 5) lets CI tell the
+  // routes apart.
+  if (min_pass_rate && total > 0) {
+    const double rate = static_cast<double>(passed) /
+                        static_cast<double>(total);
+    if (rate < *min_pass_rate) {
+      fmt::print(stderr,
+          "\nERROR: pass rate {:.1%} below gate {:.1%} ({} / {} passed)\n",
+          rate, *min_pass_rate, passed, total);
+      return kExitPassRateGate;
+    }
+    fmt::print("  pass-rate gate: {:.1%} ≥ {:.1%} (ok)\n",
+               rate, *min_pass_rate);
   }
 
   return passed == total ? kExitOk : kExitTaskFailed;

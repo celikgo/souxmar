@@ -1,0 +1,27 @@
+id: export-01-vtu
+description: export_results writes a VTU after a heat solve.
+category: export
+steps:
+  - tool: mesh
+    inputs:
+      capability_id: mesher.tetra.hello
+  - tool: set_material
+    inputs:
+      material: thermal_conductivity_default
+  - tool: set_bc
+    inputs:
+      kind: dirichlet
+      value: 300
+  - tool: solve
+    inputs:
+      capability_id: solver.heat.linear
+  - tool: export_results
+    inputs:
+      format: vtu
+      path: /tmp/souxmar-eval-export-01.vtu
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: format
+    value: vtu

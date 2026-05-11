@@ -1,0 +1,14 @@
+id: listing-02-list-plugins-empty
+description: list_plugins reports cleanly when no plugins are loaded.
+category: listing
+setup:
+  empty_plugin_path: true
+steps:
+  - tool: list_plugins
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: plugin_count
+    value: 0

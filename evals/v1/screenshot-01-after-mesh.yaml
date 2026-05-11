@@ -1,0 +1,18 @@
+id: screenshot-01-after-mesh
+description: screenshot_viewport produces a placeholder path after a mesh stage.
+category: screenshot
+auto_confirm: true   # screenshot_viewport is ConfirmOnce by default
+steps:
+  - tool: mesh
+    inputs:
+      capability_id: mesher.tetra.hello
+  - tool: screenshot_viewport
+    inputs:
+      view: iso
+      path: /tmp/souxmar-eval-screenshot-01.png
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: path
+    value: /tmp/souxmar-eval-screenshot-01.png

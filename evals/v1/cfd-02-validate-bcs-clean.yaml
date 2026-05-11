@@ -1,0 +1,28 @@
+id: cfd-02-validate-bcs-clean
+description: validate_bcs returns no issues for a properly-set duct.
+category: cfd
+steps:
+  - tool: mesh
+    inputs:
+      capability_id: mesher.tetra.grid
+      target_size: 0.5
+  - tool: apply_inlet
+    inputs:
+      patch: inlet
+      velocity: [1.0, 0.0, 0.0]
+  - tool: apply_wall
+    inputs:
+      patch: walls
+      kind: no_slip
+  - tool: apply_outlet
+    inputs:
+      patch: outlet
+      pressure: 0.0
+  - tool: validate_bcs
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: issue_count
+    value: 0

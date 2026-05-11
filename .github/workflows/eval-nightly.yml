@@ -88,8 +88,13 @@ jobs:
           for d in build/ci-linux-clang/examples/plugins/*/; do
             PLUGIN_ARGS+=(--plugin-path "$d")
           done
+          # Sprint 11 push 3 — --min-pass-rate gate. SPRINT_PLAN.md
+          # § Sprint 11 exit criterion #3 is "Agent eval suite passes
+          # 90 %." We pin to 0.90 here; ratcheting up as the catalogue
+          # stabilises is a future-sprint concern.
           build/ci-linux-clang/tools/eval/souxmar-eval evals/v1 "${PLUGIN_ARGS[@]}" \
             --latency-output eval-latency.json \
+            --min-pass-rate  0.90 \
             | tee eval-report.txt
 
       - name: Upload eval report + latency JSON
