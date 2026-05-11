@@ -26,6 +26,10 @@ add_library(souxmar_ai
   tools/list_plugins.cpp
   tools/apply_pipeline_diff.cpp
   tools/export_results.cpp
+  # Sprint 8 push 4 — CFD-aware BC vocabulary.
+  tools/apply_inlet.cpp
+  tools/apply_wall.cpp
+  tools/apply_outlet.cpp
 )
 add_library(souxmar::ai ALIAS souxmar_ai)
 

@@ -446,15 +446,16 @@ TEST(ValueYaml, StageRefShorthand) {
 
 TEST(AiDefaultTools_v2, RegistryNowContainsEightTools) {
   auto r = ai::default_v1_tools();
-  // Sprint 6 push 3: catalogue 9 → 12 (added set_material, list_plugins,
-  // apply_pipeline_diff, export_results).
-  EXPECT_EQ(r.list().size(), 12u);
+  // Sprint 8 push 4: catalogue 13 → 16 (added apply_inlet, apply_wall,
+  // apply_outlet — CFD-aware BC vocabulary; siblings of set_bc).
+  EXPECT_EQ(r.list().size(), 16u);
   for (const auto* expected : {
       "read_geometry_summary", "mesh", "set_bc", "solve",
       "screenshot_viewport", "query_field", "compute_field",
       "propose_pipeline",
       "query_mesh_quality",
-      "set_material", "list_plugins", "apply_pipeline_diff", "export_results"}) {
+      "set_material", "list_plugins", "apply_pipeline_diff", "export_results",
+      "apply_inlet", "apply_wall", "apply_outlet"}) {
     EXPECT_NE(r.find(expected), nullptr) << "missing tool: " << expected;
   }
 }
@@ -880,6 +881,233 @@ TEST_F(AuditLogTest, DispatchWritesOneEntryPerCall) {
   EXPECT_NE(contents.find("tool: no_such_tool"),  std::string::npos);
   EXPECT_NE(contents.find("outcome: not_found"),  std::string::npos);
   EXPECT_NE(contents.find("tool: read_geometry_summary"), std::string::npos);
+}
+
+// ============================================================================
+// Sprint 8 push 4 — CFD-aware BC tools (apply_inlet / apply_wall / apply_outlet)
+// ============================================================================
+
+TEST(AiTools_ApplyInlet, ScalarVelocityAppendsInletBc) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["apply_inlet"] = ai::Confirmation::Auto;
+
+  auto input = pl::Value::map({
+      {"tag",      pl::Value::string("in_face")},
+      {"velocity", pl::Value::number(2.5)},
+  });
+  auto out = ai::dispatch_tool(r, "apply_inlet", input, ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << out.summary;
+
+  const auto* bcs = session.find("boundary_conditions");
+  ASSERT_NE(bcs, nullptr);
+  ASSERT_EQ(bcs->kind(), pl::Value::Kind::List);
+  ASSERT_EQ(bcs->as_list().size(), 1u);
+  const auto& bc = bcs->as_list()[0];
+  EXPECT_EQ(bc.find("type")->as_string(),     "inlet");
+  EXPECT_EQ(bc.find("tag")->as_string(),      "in_face");
+  EXPECT_EQ(bc.find("velocity")->as_number(), 2.5);
+}
+
+TEST(AiTools_ApplyInlet, VectorVelocityAppendsInletBc) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["apply_inlet"] = ai::Confirmation::Auto;
+
+  auto input = pl::Value::map({
+      {"tag",                  pl::Value::string("in_face")},
+      {"velocity",             pl::Value::list({pl::Value::number(1.0),
+                                                pl::Value::number(0.0),
+                                                pl::Value::number(0.0)})},
+      {"pressure",             pl::Value::number(101325.0)},
+      {"turbulence_intensity", pl::Value::number(0.05)},
+  });
+  auto out = ai::dispatch_tool(r, "apply_inlet", input, ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << out.summary;
+
+  const auto& bc = session.find("boundary_conditions")->as_list()[0];
+  EXPECT_EQ(bc.find("velocity")->kind(), pl::Value::Kind::List);
+  EXPECT_EQ(bc.find("velocity")->as_list().size(), 3u);
+  EXPECT_EQ(bc.find("pressure")->as_number(), 101325.0);
+  EXPECT_EQ(bc.find("turbulence_intensity")->as_number(), 0.05);
+}
+
+TEST(AiTools_ApplyInlet, RejectsWrongShapeVelocity) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["apply_inlet"] = ai::Confirmation::Auto;
+
+  auto input = pl::Value::map({
+      {"tag",      pl::Value::string("in_face")},
+      {"velocity", pl::Value::list({pl::Value::number(1.0),
+                                    pl::Value::number(0.0)})},  // 2-vector
+  });
+  auto out = ai::dispatch_tool(r, "apply_inlet", input, ctx, policy);
+  ASSERT_TRUE(out.error.has_value());
+  EXPECT_EQ(out.error->code, "INVALID_ARGUMENT");
+}
+
+TEST(AiTools_ApplyInlet, RejectsMissingTag) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["apply_inlet"] = ai::Confirmation::Auto;
+
+  auto input = pl::Value::map({
+      {"velocity", pl::Value::number(1.5)},
+  });
+  auto out = ai::dispatch_tool(r, "apply_inlet", input, ctx, policy);
+  ASSERT_TRUE(out.error.has_value());
+  EXPECT_EQ(out.error->code, "INVALID_ARGUMENT");
+}
+
+TEST(AiTools_ApplyWall, DefaultsToNoSlip) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["apply_wall"] = ai::Confirmation::Auto;
+
+  auto input = pl::Value::map({
+      {"tag", pl::Value::string("pipe_wall")},
+  });
+  auto out = ai::dispatch_tool(r, "apply_wall", input, ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << out.summary;
+
+  const auto& bc = session.find("boundary_conditions")->as_list()[0];
+  EXPECT_EQ(bc.find("type")->as_string(),      "wall");
+  EXPECT_EQ(bc.find("condition")->as_string(), "no_slip");
+}
+
+TEST(AiTools_ApplyWall, AcceptsWallFunctionWithTemperatureAndRoughness) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["apply_wall"] = ai::Confirmation::Auto;
+
+  auto input = pl::Value::map({
+      {"tag",         pl::Value::string("hot_wall")},
+      {"condition",   pl::Value::string("wall_function")},
+      {"temperature", pl::Value::number(353.15)},
+      {"roughness",   pl::Value::number(2e-5)},
+  });
+  auto out = ai::dispatch_tool(r, "apply_wall", input, ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << out.summary;
+
+  const auto& bc = session.find("boundary_conditions")->as_list()[0];
+  EXPECT_EQ(bc.find("condition")->as_string(),  "wall_function");
+  EXPECT_EQ(bc.find("temperature")->as_number(), 353.15);
+  EXPECT_EQ(bc.find("roughness")->as_number(),   2e-5);
+}
+
+TEST(AiTools_ApplyWall, RejectsUnknownCondition) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["apply_wall"] = ai::Confirmation::Auto;
+
+  auto input = pl::Value::map({
+      {"tag",       pl::Value::string("wall")},
+      {"condition", pl::Value::string("teflon")},
+  });
+  auto out = ai::dispatch_tool(r, "apply_wall", input, ctx, policy);
+  ASSERT_TRUE(out.error.has_value());
+  EXPECT_EQ(out.error->code, "INVALID_ARGUMENT");
+}
+
+TEST(AiTools_ApplyOutlet, PressureOutletRequiresPressure) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["apply_outlet"] = ai::Confirmation::Auto;
+
+  // Missing pressure → rejected.
+  auto missing = pl::Value::map({
+      {"tag", pl::Value::string("out")},
+  });
+  auto out = ai::dispatch_tool(r, "apply_outlet", missing, ctx, policy);
+  ASSERT_TRUE(out.error.has_value());
+  EXPECT_EQ(out.error->code, "INVALID_ARGUMENT");
+
+  // With pressure → accepted.
+  auto ok = pl::Value::map({
+      {"tag",      pl::Value::string("out")},
+      {"pressure", pl::Value::number(0.0)},
+  });
+  out = ai::dispatch_tool(r, "apply_outlet", ok, ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << out.summary;
+  const auto& bc = session.find("boundary_conditions")->as_list()[0];
+  EXPECT_EQ(bc.find("type")->as_string(),      "outlet");
+  EXPECT_EQ(bc.find("condition")->as_string(), "pressure_outlet");
+  EXPECT_EQ(bc.find("pressure")->as_number(),  0.0);
+}
+
+TEST(AiTools_ApplyOutlet, OutflowDoesNotRequirePressure) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["apply_outlet"] = ai::Confirmation::Auto;
+
+  auto input = pl::Value::map({
+      {"tag",       pl::Value::string("out")},
+      {"condition", pl::Value::string("outflow")},
+  });
+  auto out = ai::dispatch_tool(r, "apply_outlet", input, ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << out.summary;
+  EXPECT_EQ(session.find("boundary_conditions")->as_list()[0]
+                .find("condition")->as_string(), "outflow");
+}
+
+// Three CFD-aware tools chained together build a complete pipe-flow BC
+// set on a single session — the canonical pipe-bend pattern push 6 will
+// run end-to-end via the cfd-stub plugin.
+TEST(AiTools_CfdBcChain, InletWallOutletCoexistOnOneSession) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["apply_inlet"]  = ai::Confirmation::Auto;
+  policy.overrides["apply_wall"]   = ai::Confirmation::Auto;
+  policy.overrides["apply_outlet"] = ai::Confirmation::Auto;
+
+  ASSERT_FALSE(ai::dispatch_tool(r, "apply_inlet",
+      pl::Value::map({{"tag",      pl::Value::string("in")},
+                      {"velocity", pl::Value::number(1.0)}}),
+      ctx, policy).error.has_value());
+  ASSERT_FALSE(ai::dispatch_tool(r, "apply_wall",
+      pl::Value::map({{"tag", pl::Value::string("walls")}}),
+      ctx, policy).error.has_value());
+  ASSERT_FALSE(ai::dispatch_tool(r, "apply_outlet",
+      pl::Value::map({{"tag",      pl::Value::string("out")},
+                      {"pressure", pl::Value::number(0.0)}}),
+      ctx, policy).error.has_value());
+
+  const auto& bcs = session.find("boundary_conditions")->as_list();
+  ASSERT_EQ(bcs.size(), 3u);
+  EXPECT_EQ(bcs[0].find("type")->as_string(), "inlet");
+  EXPECT_EQ(bcs[1].find("type")->as_string(), "wall");
+  EXPECT_EQ(bcs[2].find("type")->as_string(), "outlet");
 }
 
 }  // namespace

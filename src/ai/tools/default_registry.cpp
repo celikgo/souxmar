@@ -20,11 +20,15 @@ Tool make_compute_field_tool();
 Tool make_propose_pipeline_tool();
 // Sprint 6 push 1 — catalogue 8 → 9.
 Tool make_query_mesh_quality_tool();
-// Sprint 6 push 3 — catalogue 9 → 12.
+// Sprint 6 push 3 — catalogue 9 → 13.
 Tool make_set_material_tool();
 Tool make_list_plugins_tool();
 Tool make_apply_pipeline_diff_tool();
 Tool make_export_results_tool();
+// Sprint 8 push 4 — CFD-aware BC tools. Catalogue 13 → 16.
+Tool make_apply_inlet_tool();
+Tool make_apply_wall_tool();
+Tool make_apply_outlet_tool();
 
 ToolRegistry default_v1_tools() {
   ToolRegistry r;
@@ -45,6 +49,10 @@ ToolRegistry default_v1_tools() {
   r.add(make_list_plugins_tool());
   r.add(make_apply_pipeline_diff_tool());
   r.add(make_export_results_tool());
+  // Sprint 8 push 4 — CFD-aware BC vocabulary.
+  r.add(make_apply_inlet_tool());
+  r.add(make_apply_wall_tool());
+  r.add(make_apply_outlet_tool());
   return r;
 }
 

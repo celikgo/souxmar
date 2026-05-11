@@ -8,6 +8,18 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
+#### Sprint 8 push 4 — CFD-aware BC tools (catalogue 13 → 16)
+
+Three new agent tools — `apply_inlet`, `apply_wall`, `apply_outlet` — extending the `set_bc` general-purpose surface with CFD vocabulary. Same staging contract as `set_bc` (append to `session_state.boundary_conditions`); the value of the trio is that each entry carries `type: 'inlet' | 'wall' | 'outlet'` plus the canonical CFD inputs, so downstream solvers (cfd-stub, openfoam-solver) can pattern-match on `type` instead of parsing free-form Dirichlet/Neumann bags. **No frozen-header surface touched** — `souxmar-c/*` unchanged; ABI v1.1 stands.
+
+Background: until this push, an LLM driving a CFD case had to lower an inlet condition to `{type:'dirichlet', value:[1,0,0]}` via `set_bc`, with no schema hint that the value was a velocity (vs. e.g. a temperature in the same Dirichlet shape). The agent eval suite (Sprint 7 push 4) showed model error rates climbed sharply on CFD prompts where the tool list spoke only FEM vocabulary. These three tools land a CFD-shaped vocabulary that maps to the same downstream BC list — `set_bc` still works (and is preferred for FEM flows).
+
+- **`tools/apply_inlet.cpp`** — `{tag, velocity, pressure?, turbulence_intensity?, hydraulic_diameter?}`. `velocity` accepts a scalar magnitude (inlet-normal) or a 3-vector. Optional turbulence + pressure carry through unchanged to the staged BC. Category `"CFD"`; ConfirmOnce confirmation tier (matches `set_bc`); rejects wrong-shape velocity (e.g. 2-vector) with `INVALID_ARGUMENT`.
+- **`tools/apply_wall.cpp`** — `{tag, condition?, temperature?, roughness?}` with `condition ∈ {"no_slip", "slip", "wall_function"}` (default `"no_slip"`). Optional temperature for fixed-temp walls; optional Nikuradse-equivalent roughness for the `wall_function` family. Unknown conditions rejected with `INVALID_ARGUMENT`.
+- **`tools/apply_outlet.cpp`** — `{tag, condition?, pressure?}` with `condition ∈ {"pressure_outlet", "outflow", "fully_developed"}` (default `"pressure_outlet"`). `pressure_outlet` requires `pressure`; the other two conditions accept any pressure value (or none) since the solver imposes velocity-side conditions instead.
+- **`tools/default_registry.cpp` + `src/ai/CMakeLists.txt`** — three new factory functions + sources, registered after the Sprint 6 push 3 batch. Order is alphabetical-by-namespace which matches `ToolRegistry::list()`'s sort.
+- **Tests** (`tests/unit/test_ai_tools.cpp`): scalar-velocity inlet → staged with `type == "inlet"`; vector-velocity inlet → `velocity` round-trips as a 3-list; wrong-shape velocity rejected; missing tag rejected; wall defaults to `no_slip`; wall accepts wall_function + temperature + roughness; unknown wall condition rejected; pressure_outlet missing `pressure` rejected, with pressure accepted; outflow doesn't require pressure; chained `apply_inlet → apply_wall → apply_outlet` on one session produces three coexistent BCs in order. Registry-count assertion updated `12 → 16` and stale comment refreshed.
+
 #### Sprint 8 push 3 — concept-geometry readers (OBJ always-on, Blender opt-in)
 
 Second use of the Sprint 8 push 1 subprocess harness. Lands the always-on / opt-in pair that gets concept-geometry meshes into souxmar — Wavefront OBJ directly, .blend through a Blender subprocess. **No frozen-header surface touched** — `souxmar-c/*` is unchanged; ABI v1.1 stands.
