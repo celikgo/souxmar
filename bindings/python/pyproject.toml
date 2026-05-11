@@ -1,0 +1,70 @@
+# pysouxmar — Python bindings for the souxmar CAE platform.
+#
+# Built with scikit-build-core so `pip install .` invokes CMake and
+# produces a manylinux/macOS/Windows wheel for the in-tree pybind11
+# extension. The C++ libraries are linked statically into the extension
+# module so end users do not need a separate libsouxmar-* on their path.
+
+[build-system]
+requires = ["scikit-build-core>=0.9", "pybind11>=2.11.1"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "pysouxmar"
+version = "0.0.1"
+description = "Python bindings for souxmar — open-source CAE platform"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+  { name = "souxmar contributors" }
+]
+keywords = ["cae", "fem", "fea", "mesh", "cad", "simulation"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=7.4",
+]
+
+[project.urls]
+Homepage      = "https://souxmar.dev"
+Documentation = "https://souxmar.dev/docs"
+Repository    = "https://github.com/souxmar/souxmar"
+
+[tool.scikit-build]
+# Build the souxmar libraries + the binding alongside the in-source repo.
+# CMakeLists.txt at the package root drives this; it walks up two levels
+# (../..) to add the souxmar source tree as a subdirectory with examples,
+# tests, and the CLI all turned off.
+cmake.version = ">=3.25"
+cmake.build-type = "Release"
+build-dir = "build/{wheel_tag}"
+wheel.packages = ["pysouxmar"]
+wheel.expand-macos-universal-tags = true
+
+[tool.scikit-build.cmake.define]
+SOUXMAR_BUILD_PYTHON     = "ON"
+SOUXMAR_BUILD_TESTS      = "OFF"
+SOUXMAR_BUILD_EXAMPLES   = "OFF"
+SOUXMAR_BUILD_CLI        = "OFF"
+SOUXMAR_BUILD_BENCHMARKS = "OFF"
+# Tell vcpkg (when present) to install the python feature alongside the base
+# manifest deps. No-op if the user is not using vcpkg.
+VCPKG_MANIFEST_FEATURES  = "python"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"

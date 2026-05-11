@@ -129,6 +129,33 @@ The plugin C ABI version is tracked separately and is independent of the project
   - `tests/unit/test_pipeline_cache` extended — SHA-256 stability check (digest fills all 32 bytes, identical inputs produce identical digests), `DiskCache` round-trip / missing-key / empty-blob / `default_dir` honors override.
   - `tests/integration/test_cli_smoke` — invokes the real CLI binary via `std::system` against the cantilever-beam example. Asserts: `plugin list` enumerates in-tree plugins, `run` produces a well-formed VTU on disk, second `run` with the same `--cache-dir` marks the writer stage `[CACHED]`.
 
+#### Sprint 4 push 1 — pysouxmar Python bindings
+
+- New top-level subdirectory `bindings/python/` shipping the `pysouxmar` Python package.
+  - `bindings/python/src/pysouxmar.cpp` — pybind11 module wrapping the C++ surface (parser, registry, loader, runner, cache).
+  - `bindings/python/pysouxmar/__init__.py` — Python facade re-exporting the extension's symbols and documenting the API.
+  - `bindings/python/pyproject.toml` — scikit-build-core build backend; `pip install ./bindings/python` produces a self-contained wheel with the souxmar libraries linked statically into the extension.
+  - `bindings/python/CMakeLists.txt` — single CMakeLists that detects in-tree vs standalone (`pip install`) builds. Standalone bootstraps by adding the souxmar repo root with examples/tests/CLI/benchmarks off.
+- **[pipeline-format v1]** Pipeline `Value` tree ↔ Python conversion in both directions:
+  - `Null/Bool/Number/String/StageRef/List/Map` map to `None/bool/float/str/StageRef/list/dict`.
+  - The `{from: stage_id}` YAML shorthand round-trips as a `pysouxmar.StageRef`. A plain dict `{"from": "stage_id"}` is also accepted on the Python side.
+- Lifetime safety:
+  - `pybind11::keep_alive<1, 2>` ties `PluginLoader` and `RegistryDispatcher` to the `Registry` they wrap, so a Python-level garbage collection of the registry cannot dangle a loader.
+  - `LoadedPlugin` exposes the C++ move-only RAII semantics: drop the Python reference and the registry forgets the plugin's capabilities + the OS module is closed.
+- Ergonomic surface:
+  - `RunOptions.disk_cache_dir = "/path"` — assigning a path constructs a `DiskCache` and wires the `serialize_stage_output` / `deserialize_stage_output` callbacks automatically (no need to import the dispatcher serializers).
+  - `RunResult.outputs` returns a `dict[str, dict]` keyed by stage id, with each value carrying `{"kind": "mesh"|"path"|...}` + kind-specific fields. Path-kind outputs include `{"path": "..."}`.
+  - `parse_pipeline` / `parse_pipeline_file` raise `ValueError` carrying the YAML line+column on parse failure (no variant unwrapping needed Python-side).
+- Build-system additions:
+  - New `dev-python` CMake preset (in `CMakePresets.json`) — `Debug` build with `SOUXMAR_BUILD_PYTHON=ON` and `VCPKG_MANIFEST_FEATURES=tests;python` so vcpkg fetches `pybind11` automatically.
+  - `cmake/SouxmarOptions.cmake`'s pre-existing `SOUXMAR_BUILD_PYTHON` option is now wired to `add_subdirectory(bindings/python)` from the top-level `CMakeLists.txt`.
+- Tests:
+  - `bindings/python/tests/test_basics.py` — pure-Python unit tests covering version round-trip, ABI version, pipeline parsing (good + error paths), `Value` tree symmetry through `Stage.input`, `StageRef` shorthand, registry-empty contract, `DiskCache.default_dir` override.
+  - `bindings/python/tests/test_end_to_end.py` — integration tests against the in-tree `hello-mesher` + `vtu-writer` plugins. Asserts: discovery enumerates plugins, load registers capabilities, full pipeline run produces a well-formed VTU, second run with `disk_cache_dir` set hits the disk cache for the writer stage. Skips cleanly if no built plugins are found.
+- Examples + docs:
+  - `bindings/python/examples/cantilever.py` — 20-line script demonstrating the full discover/load/parse/run flow. Mirrors the Sprint 3 cantilever-beam C example.
+  - `bindings/python/README.md` — install, quick start, API surface table, lifetime rules, roadmap to Sprint 4 push 2/3 and Sprint 5.
+
 ### Changed
 
 - (None this release.)

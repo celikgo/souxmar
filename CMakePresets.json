@@ -26,6 +26,17 @@
       }
     },
     {
+      "name": "dev-python",
+      "displayName": "Local development with pysouxmar bindings (Debug)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "SOUXMAR_BUILD_TESTS": "ON",
+        "SOUXMAR_BUILD_PYTHON": "ON",
+        "VCPKG_MANIFEST_FEATURES": "tests;python"
+      }
+    },
+    {
       "name": "ci-linux-gcc",
       "displayName": "CI: Linux + GCC 13 (RelWithDebInfo)",
       "inherits": "base",
@@ -110,6 +121,7 @@
   ],
   "buildPresets": [
     { "name": "dev",            "configurePreset": "dev",            "jobs": 0 },
+    { "name": "dev-python",     "configurePreset": "dev-python",     "jobs": 0 },
     { "name": "ci-linux-gcc",   "configurePreset": "ci-linux-gcc",   "jobs": 0 },
     { "name": "ci-linux-clang", "configurePreset": "ci-linux-clang", "jobs": 0 },
     { "name": "ci-macos",       "configurePreset": "ci-macos",       "jobs": 0 },
@@ -125,6 +137,7 @@
       "execution": { "noTestsAction": "error", "stopOnFailure": false }
     },
     { "name": "dev",            "configurePreset": "dev",            "inherits": "default-test" },
+    { "name": "dev-python",     "configurePreset": "dev-python",     "inherits": "default-test" },
     { "name": "ci-linux-gcc",   "configurePreset": "ci-linux-gcc",   "inherits": "default-test" },
     { "name": "ci-linux-clang", "configurePreset": "ci-linux-clang", "inherits": "default-test" },
     { "name": "ci-macos",       "configurePreset": "ci-macos",       "inherits": "default-test" },

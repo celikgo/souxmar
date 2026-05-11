@@ -74,6 +74,10 @@ if(BUILD_TESTING AND SOUXMAR_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
+if(SOUXMAR_BUILD_PYTHON)
+  add_subdirectory(bindings/python)
+endif()
+
 if(SOUXMAR_BUILD_BENCHMARKS)
   add_subdirectory(benchmarks)
 endif()
