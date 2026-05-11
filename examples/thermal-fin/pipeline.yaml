@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Thermal-fin — Sprint 5's second runnable example. Drives the full
+# Sprint 5 capability chain (mesher → solver → postproc → writer)
+# against the in-tree placeholder plugins.
+#
+# What this models (notionally): a 1-D heat conduction problem on a
+# fin geometry, evolving over 5 time steps, with the absolute
+# temperature magnitude written to disk for ParaView inspection.
+#
+# Run:
+#   souxmar run examples/thermal-fin/pipeline.yaml \
+#     --plugin-path build/dev/examples/plugins
+#
+# Output: thermal-fin.vtu in $PWD.
+
+version: 1
+
+stages:
+  # Stage 1: mesh.
+  # The hello-mesher placeholder produces a unit tetrahedron. Sprint 6
+  # swaps in a real Gmsh-backed `mesher.tetra.gmsh` with the same YAML
+  # shape; everything downstream stays identical.
+  - id: mesh
+    plugin: mesher.tetra.hello
+
+  # Stage 2: heat solve.
+  # Reads the mesh upstream + the time-series + relaxation parameters.
+  # Produces a nodal scalar Field with 5 time steps:
+  #   T(node, step) = t_steady · (1 − exp(−t/τ)) · ½(1 + cos(π·x_norm))
+  # which is a 0-D analytic approach to steady state, spatially
+  # modulated by the node's normalised x-coordinate.
+  - id: heat
+    plugin: solver.heat.linear
+    input:
+      mesh: { from: mesh }
+      num_time_steps: 5
+      dt: 0.2
+      tau: 1.0
+      t_steady: 100.0
+
+  # Stage 3: postproc.
+  # scalar_magnitude takes any-kind field and emits a scalar magnitude.
+  # On a scalar input this is just abs() per location/step — useful here
+  # because the heat solver is non-negative anyway, so the magnitude
+  # field is identical to the temperature field. The point is to drive
+  # the postproc.* path end-to-end against the same plugin
+  # `compute_field` would dispatch.
+  - id: magnitude
+    plugin: postproc.scalar_magnitude
+    input:
+      mesh:  { from: mesh }
+      field: { from: heat }
+
+  # Stage 4: write.
+  # The VTU writer is field-agnostic — it just records mesh + cells.
+  # The full Field-aware writer lands with the VTK adapter in Sprint 6;
+  # for v1 we get the geometry to disk and inspect Field stats via
+  # the `query_field` agent tool.
+  - id: write
+    plugin: writer.vtu
+    input:
+      mesh: { from: mesh }
+      path: thermal-fin.vtu

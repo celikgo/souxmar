@@ -296,6 +296,21 @@ The plugin C ABI version is tracked separately and is independent of the project
 - **ADR-0006**: documents the design, the v1-heap / v2-mmap rollout plan, the alternatives considered (raw pointers, shared-memory from day 1, variable-batch per-element setters), and the freeze-ratchet implications.
 - **Build**: `src/core/CMakeLists.txt` picks up `c_abi_buffer.cpp`; new `benchmarks/` subdirectory wired to the existing top-level `SOUXMAR_BUILD_BENCHMARKS` gate.
 
+#### Sprint 5 push 5 — DX + Platform: plugin tutorial, thermal-fin example, perf-nightly CI
+
+- **`docs/tutorials/plugin-authoring.md`** — end-to-end walkthrough from `cmake --build` to a `souxmar-conformance`-passing plugin. References the in-tree hello-mesher (mesher), heat-solver (solver with time-series Field), hello-writer / vtu-writer (writer), scalar-magnitude (postproc) as canonical examples. Sections: project layout, manifest, single export, per-namespace vtable patterns, CMake with `souxmar_add_plugin`, conformance verification, distribution (per-platform plugin prefixes), troubleshooting the common first-attempt failures (C001 / C002 / C006 / C007).
+- **`examples/thermal-fin/`** — second runnable example. 4-stage pipeline (mesh → heat → scalar_magnitude → write) exercising every Sprint 5 capability namespace end-to-end:
+  - The hello-mesher placeholder produces a unit tet (Sprint 6's Gmsh adapter swaps this for real CAD-loaded geometry with the same YAML shape).
+  - The heat solver writes a 5-step nodal scalar `Field` per the Sprint 5 time-series demo.
+  - The scalar-magnitude postproc round-trips the Field through the new `postproc.*` C ABI (ADR-0005).
+  - The VTU writer dumps the mesh for ParaView inspection.
+  - README walks the runtime steps, the knobs the user can vary, and the diff to `cantilever-beam`.
+- **`.github/workflows/perf-nightly.yml`** — nightly + on-demand + PR-gated (on relevant paths) benchmark CI. Builds Release + `SOUXMAR_BUILD_BENCHMARKS=ON`, runs the mesh-construction bench in JSON format with 3 repetitions × 0.2 s min time, compares to `benchmarks/baselines/main.json` (skip + warn when absent), uploads the report as an artifact, fails on >10% regression.
+- **`tools/perf-compare/compare.py`** — Google-Benchmark-JSON diff utility. Prefers `_mean` aggregates when present, falls back to raw run times. Per-benchmark table with delta% + visual markers (`⚠` regression, `↓` improvement). Single-source threshold for tuning when shared-runner noise floors shift.
+- **`benchmarks/baselines/README.md`** — documents the baseline-update workflow, the deliberate "commit, don't auto-rotate" policy, the regression threshold rationale, what belongs in `baselines/` vs. workflow artifacts.
+
+This closes the Sprint 5 DX + Platform items called out in `docs/SPRINT_PLAN.md`. The baseline file itself is intentionally NOT committed in this push — the "baseline established" exit criterion is the first follow-on PR that lands a `benchmarks/baselines/main.json` generated on the CI hardware tier.
+
 ### Changed
 
 - (None this release.)

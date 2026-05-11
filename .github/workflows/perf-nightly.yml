@@ -1,0 +1,120 @@
+name: Perf-nightly
+
+# Runs the Google Benchmark suite nightly + on demand. Captures JSON
+# output, compares to `benchmarks/baselines/main.json` (when present),
+# uploads the report as an artifact, and fails on regressions > 10%.
+#
+# The "baseline established" exit criterion from the Sprint 5 plan is
+# the first PR that lands a non-empty baselines/main.json — see
+# benchmarks/baselines/README.md for the update workflow.
+
+on:
+  schedule:
+    - cron: "47 5 * * *"     # 05:47 UTC daily (30 min after the sanitisers job)
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'benchmarks/**'
+      - 'src/core/c_abi_mesh.cpp'
+      - 'src/core/c_abi_buffer.cpp'
+      - 'include/souxmar-c/buffer.h'
+      - 'include/souxmar-c/mesh.h'
+      - 'tools/perf-compare/**'
+
+concurrency:
+  group: perf-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite"
+  CMAKE_GENERATOR: Ninja
+  # Regression threshold — fail if any benchmark slows down by more than
+  # this fraction. Operators tune via PR if hardware noise floor shifts.
+  REGRESSION_THRESHOLD: "0.10"
+
+jobs:
+  bench:
+    name: bench / ubuntu-22.04
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config curl zip unzip tar \
+                                  build-essential python3
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 17
+          sudo apt-get install -y clang-17
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: ec6fe06e8da05a8157dc8581fa96b36b571c1bd5
+          runVcpkgInstall: false
+
+      - name: Cache vcpkg binary archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-cache
+          key: vcpkg-perf-${{ hashFiles('vcpkg.json') }}
+
+      - name: Configure (release + benchmarks)
+        env:
+          CC: clang-17
+          CXX: clang++-17
+          VCPKG_ROOT: ${{ env.VCPKG_ROOT }}
+        # We use the base preset's vcpkg toolchain by inlining the
+        # cache var. Benchmarks need the `tests` feature for Google
+        # Benchmark itself (per vcpkg.json's `tests` feature group).
+        run: |
+          cmake -B build/perf \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DSOUXMAR_BUILD_BENCHMARKS=ON \
+            -DSOUXMAR_BUILD_TESTS=OFF \
+            -DSOUXMAR_BUILD_CLI=OFF \
+            -DSOUXMAR_BUILD_EXAMPLES=OFF \
+            -DVCPKG_MANIFEST_FEATURES=tests
+
+      - name: Build benchmarks
+        run: cmake --build build/perf --parallel
+
+      - name: Run benchmarks (JSON output)
+        run: |
+          mkdir -p perf-report
+          ./build/perf/benchmarks/bench_mesh_construction \
+            --benchmark_format=json \
+            --benchmark_out=perf-report/mesh_construction.json \
+            --benchmark_out_format=json \
+            --benchmark_repetitions=3 \
+            --benchmark_min_time=0.2s
+
+      - name: Compare against baseline
+        id: compare
+        continue-on-error: true
+        run: |
+          if [ -f benchmarks/baselines/main.json ]; then
+            python3 tools/perf-compare/compare.py \
+              --baseline benchmarks/baselines/main.json \
+              --current  perf-report/mesh_construction.json \
+              --threshold ${REGRESSION_THRESHOLD}
+          else
+            echo "::warning::no baseline at benchmarks/baselines/main.json — skipping comparison"
+            echo "baseline-missing=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report-${{ github.run_id }}
+          path: perf-report/
+          retention-days: 30
+
+      - name: Fail if regressions detected
+        if: steps.compare.outcome == 'failure'
+        run: |
+          echo "::error::Performance regression detected — see compare step output above."
+          exit 1
