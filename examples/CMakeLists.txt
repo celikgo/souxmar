@@ -26,3 +26,9 @@ add_subdirectory(plugins/grid-mesher)
 if(SOUXMAR_WITH_GMSH)
   add_subdirectory(plugins/gmsh-mesher)
 endif()
+# Sprint 7 push 2 — second solver. Always-on elasticity-stub (closed
+# form); opt-in DOLFINx-backed fenicsx-solver.
+add_subdirectory(plugins/elasticity-stub)
+if(SOUXMAR_WITH_FENICSX)
+  add_subdirectory(plugins/fenicsx-solver)
+endif()

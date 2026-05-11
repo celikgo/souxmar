@@ -152,6 +152,13 @@ TEST_F(ConformanceGateTest, GridMesherPassesAllChecks) {
   expect_all_v1_checks_pass(plugin::run_conformance(*p));
 }
 
+// Sprint 7 push 2 — second solver (analytical stub). Same v1 bar.
+TEST_F(ConformanceGateTest, ElasticityStubPassesAllChecks) {
+  const auto* p = find_plugin(discovery_, "dev.souxmar.examples.elasticity-stub");
+  ASSERT_NE(p, nullptr);
+  expect_all_v1_checks_pass(plugin::run_conformance(*p));
+}
+
 // Negative: confirm that a deliberately-mismatched manifest (declared ABI
 // 99) trips C001 + Skips the rest. Builds on the discovered hello-mesher
 // to keep the test self-contained — we fabricate a DiscoveredPlugin in

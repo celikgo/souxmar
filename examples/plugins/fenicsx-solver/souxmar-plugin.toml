@@ -1,0 +1,25 @@
+[plugin]
+id            = "dev.souxmar.examples.fenicsx-solver"
+name          = "FEniCSx Poisson Solver"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/fenicsx-solver"
+
+description   = "Real DOLFINx-backed Poisson solver. The validation-grade companion to solver.heat.linear."
+documentation = "https://souxmar.dev/docs/plugins/fenicsx-solver"
+tags          = ["solver", "heat", "poisson", "fem", "dolfinx"]
+min_souxmar_abi_minor = 0
+
+[plugin.binary]
+file          = "libfenicsx_solver.so"
+
+[plugin.capabilities]
+provides      = ["solver.heat.fenicsx"]
+
+[plugin.threading]
+# DOLFINx + PETSc share MPI / process-global state.
+model         = "single-threaded"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"

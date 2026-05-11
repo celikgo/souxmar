@@ -443,6 +443,22 @@ This closes Sprint 6 cleanly. Six pushes landed:
 - **The commit landing this entry is tagged `abi-v1-frozen`** (annotated, signed by a release maintainer). Per `docs/GOVERNANCE.md` § ABI freeze process, this is the State 2 → State 3 transition: candidate → formally frozen. The two-maintainer-approval bar that gates Tier-3 changes was met before merge.
 - **No frozen-header surface was modified.** The freeze IS the contract — we did not change a single function signature or struct layout in this push. We removed exactly one declaration (`SOUXMAR_ABI_FREEZE_CANDIDATE`), which was explicitly designated for removal at this milestone by ADR-0007, and rewrote the status comment. The ABI binary surface is byte-identical to v1.1 at end-of-Sprint-6.
 
+#### Sprint 7 push 2 — second solver: elasticity-stub (always-on) + fenicsx-solver (opt-in)
+
+- **`examples/plugins/elasticity-stub/`** — ninth in-tree reference plugin, **always-on**. Registers `solver.elasticity.linear`. Reads `load_magnitude` / `youngs_modulus` / `poisson_ratio` from the stage input bag and produces a per-node 3-component `Field` ("displacement") from the closed-form uniaxial-tension solution:
+  ```
+  u_x =  (load / E) * x
+  u_y = -nu * (load / E) * y
+  u_z = -nu * (load / E) * z
+  ```
+  Documented as a stub: ignores BC manifest, ignores mesh-dependent stiffness. The point is to give the agent eval suite (push 4 of this sprint), the cantilever-beam example, and the documentation tutorials a runnable elasticity solver in the default CI matrix without dragging DOLFINx + PETSc into every build. The closed-form happens to be the analytical answer the FEniCSx adapter validates against on the canonical patch test — the `validating-solver` skill walks the comparison.
+- **`examples/plugins/fenicsx-solver/`** — opt-in DOLFINx-backed Poisson solver. Gated behind `-DSOUXMAR_WITH_FENICSX=ON` + `find_package(DOLFINX)`. Registers `solver.heat.fenicsx`. The real plugin: walks a souxmar Tet4 mesh into `dolfinx::mesh::create_mesh`, assembles the P1 Poisson weak form (`a(u,v) = ∫ ∇u · ∇v` and `L(v) = ∫ f v`) with FFCx-generated kernels (`poisson.py` is the canonical UFL source; a developer runs `ffcx` once and commits `poisson.c`), applies homogeneous Dirichlet BCs on the whole boundary, runs a PETSc Krylov solver, reads `u` back into a souxmar `Field`. Declared `single-threaded` because PETSc holds process-global MPI state. The CMakeLists `find_package(DOLFINX QUIET)` and `return()`s with a STATUS skip when DOLFINx isn't installed — `SOUXMAR_WITH_FENICSX=ON` on a DOLFINx-less machine produces a clear skip rather than a noisy linker failure. A separate CMake guard skips with an actionable message when `poisson.c` hasn't been generated. **Not built in default CI**; nightly DOLFINx-bearing runners exercise it.
+- **`examples/plugins/fenicsx-solver/README.md`** documents the FFCx regen step, the validation expectation (within FEM discretisation error of `solver.heat.linear` on the same problem; 1e-2 relative bar in the agent eval suite), and the v1 limitations (Poisson only, homogeneous Dirichlet only, single-rank). Sprint 8 lifts the BC + elasticity restrictions via an additive minor ratchet (ADR-0008 compliant — the structured BC array threads through the value bag, not the vtable).
+- **Conformance gate**: `tests/integration/test_conformance.cpp` now asserts `elasticity-stub` passes all 10 v1 checks (**9 in-tree plugins green**). The suite itself didn't change; the second solver fits the same shape as the first.
+- **`tests/integration/test_elasticity_stub.cpp`** — full `grid-mesher → elasticity-stub` end-to-end: programmatic unit-cube geometry → 3×3×3 grid mesh (27 nodes) → elasticity-stub against arbitrary load / E / ν → pin the closed-form values at the corner (1,1,1) and the origin (0,0,0) within 1e-12. Negative test: missing-mesh input rejected with a structured `DispatchError`.
+- **Build**: `examples/CMakeLists.txt` adds `plugins/elasticity-stub` unconditionally; `plugins/fenicsx-solver` only when `SOUXMAR_WITH_FENICSX=ON`. `tests/integration/CMakeLists.txt` depends on `elasticity_stub`.
+- **No frozen-header surface was touched.** Both new plugins build against the existing `souxmar-c/solver.h`. ABI v1.1 stays locked; no ratchet marker needed.
+
 ### Changed
 
 - (None this release.)

@@ -1,0 +1,24 @@
+[plugin]
+id            = "dev.souxmar.examples.elasticity-stub"
+name          = "Linear-Elasticity Stub Solver"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/elasticity-stub"
+
+description   = "Deterministic uniaxial-tension closed form. Stand-in for the FEniCSx adapter in default CI."
+documentation = "https://souxmar.dev/docs/plugins/elasticity-stub"
+tags          = ["solver", "elasticity", "stub", "reference"]
+min_souxmar_abi_minor = 0
+
+[plugin.binary]
+file          = "libelasticity_stub.so"
+
+[plugin.capabilities]
+provides      = ["solver.elasticity.linear"]
+
+[plugin.threading]
+model         = "reentrant"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"
