@@ -34,6 +34,8 @@ add_executable(souxmar_integration_tests
   test_swap_mesher.cpp
   # Sprint 7 push 2.
   test_elasticity_stub.cpp
+  # Sprint 8 push 2.
+  test_cfd_stub.cpp
 )
 
 target_include_directories(souxmar_integration_tests
@@ -58,7 +60,8 @@ add_dependencies(souxmar_integration_tests
   heat_solver scalar_magnitude
   mesh_quality stl_reader
   grid_mesher
-  elasticity_stub)
+  elasticity_stub
+  cfd_stub)
 if(SOUXMAR_BUILD_CLI AND TARGET souxmar_cli)
   add_dependencies(souxmar_integration_tests souxmar_cli)
 endif()

@@ -1,0 +1,24 @@
+[plugin]
+id            = "dev.souxmar.examples.cfd-stub"
+name          = "CFD Stub Solver"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/cfd-stub"
+
+description   = "Closed-form uniform-velocity vector field. Always-on stand-in for the OpenFOAM adapter in default CI."
+documentation = "https://souxmar.dev/docs/plugins/cfd-stub"
+tags          = ["solver", "cfd", "stub", "reference"]
+min_souxmar_abi_minor = 0
+
+[plugin.binary]
+file          = "libcfd_stub.so"
+
+[plugin.capabilities]
+provides      = ["solver.cfd.simple"]
+
+[plugin.threading]
+model         = "reentrant"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"

@@ -32,3 +32,9 @@ add_subdirectory(plugins/elasticity-stub)
 if(SOUXMAR_WITH_FENICSX)
   add_subdirectory(plugins/fenicsx-solver)
 endif()
+# Sprint 8 push 2 — CFD. Always-on cfd-stub (closed form);
+# opt-in OpenFOAM subprocess adapter per ADR-0009.
+add_subdirectory(plugins/cfd-stub)
+if(SOUXMAR_WITH_OPENFOAM)
+  add_subdirectory(plugins/openfoam-solver)
+endif()

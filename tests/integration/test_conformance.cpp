@@ -159,6 +159,15 @@ TEST_F(ConformanceGateTest, ElasticityStubPassesAllChecks) {
   expect_all_v1_checks_pass(plugin::run_conformance(*p));
 }
 
+// Sprint 8 push 2 — always-on CFD stub. Closes R-003 alongside the
+// opt-in OpenFOAM subprocess adapter (which is exercised on the nightly
+// CFD-bearing matrix, not here). Same v1 bar — 10 in-tree plugins now.
+TEST_F(ConformanceGateTest, CfdStubPassesAllChecks) {
+  const auto* p = find_plugin(discovery_, "dev.souxmar.examples.cfd-stub");
+  ASSERT_NE(p, nullptr);
+  expect_all_v1_checks_pass(plugin::run_conformance(*p));
+}
+
 // Negative: confirm that a deliberately-mismatched manifest (declared ABI
 // 99) trips C001 + Skips the rest. Builds on the discovered hello-mesher
 // to keep the test self-contained — we fabricate a DiscoveredPlugin in

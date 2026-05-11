@@ -1,0 +1,36 @@
+[plugin]
+id            = "dev.souxmar.examples.openfoam-solver"
+name          = "OpenFOAM CFD Adapter (subprocess)"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"   # THIS plugin's license; OpenFOAM itself stays GPLv3 on disk
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/openfoam-solver"
+
+description   = "Invokes OpenFOAM as a subprocess per ADR-0009. OpenFOAM (GPLv3) must be installed separately; the plugin links no GPL'd code."
+documentation = "https://souxmar.dev/docs/plugins/openfoam-solver"
+tags          = ["solver", "cfd", "openfoam", "subprocess"]
+min_souxmar_abi_minor = 0
+
+[plugin.binary]
+file          = "libopenfoam_solver.so"
+
+[plugin.capabilities]
+provides      = [
+  "solver.cfd.openfoam.simple",
+  "solver.cfd.openfoam.pimple",
+  "solver.cfd.openfoam.inter",
+]
+
+[plugin.threading]
+# OpenFOAM holds working-directory + temp-file state; concurrent
+# stages would clobber each other under our reentrancy guard.
+model         = "single-threaded"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"
+
+[plugin.openfoam_required]
+# Supported version range. The plugin probes via simpleFoam --version
+# at run time; ESI's foam-extend fork is NOT supported (ADR-0009 names
+# the dictionary-format drift).
+version_range = ">=11.0,<13.0"
