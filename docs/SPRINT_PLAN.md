@@ -22,7 +22,7 @@ We follow the engineering practices in [`ENGINEERING_PRACTICES.md`](ENGINEERING_
 | ----- | -------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------- |
 | R-001 | OpenCASCADE C++ ABI churn between 7.x minor releases                 | Med        | High   | Pin OCCT version per release; isolate behind adapter; ADR-0004 documents pin policy.        |
 | R-002 | Tauri 2 still pre-stable in some edge cases (auto-update on Linux)   | Med        | Med    | Maintain Electron POC as a 2-week bail-out; track Tauri stability monthly.                  |
-| R-003 | OpenFOAM is GPL — adapter must be process-isolated to avoid taint    | High       | High   | Adapter execs OpenFOAM as a subprocess, never links it; legal review pre-Sprint 7.          |
+| R-003 | OpenFOAM is GPL — adapter must be process-isolated to avoid taint    | Med (↓)    | High   | **ADR-0009 accepted (Sprint 7 push 5).** Subprocess-only invocation locked; build gates resolve binaries on $PATH, never link libraries. R-003 closes when the Sprint 8 push 1 plugin lands. |
 | R-004 | Apple notarisation queue stalls block macOS releases                 | Med        | Med    | Bake retry/backoff into release pipeline; have a manual override runbook.                   |
 | R-005 | LLM API costs in CI (agent eval suite) blow budget                   | Med        | Med    | Cache responses; run full eval weekly not per-PR; pre-commit per-PR uses local Ollama.      |
 | R-006 | Plugin segfault crashes desktop app despite isolation frame          | Low        | High   | Per-plugin out-of-process worker as an escape hatch (post-1.0 if not needed before).        |

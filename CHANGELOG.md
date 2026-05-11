@@ -508,6 +508,15 @@ Closes the Sprint 7 plan's "Agent eval suite v1: 30 canonical engineering tasks 
 - **`.github/workflows/eval-nightly.yml`** — nightly + PR-gated (on `tools/eval/**`, `evals/v1/**`, `src/ai/**`, `include/souxmar/ai/**`) workflow. Builds the runner + every example plugin, walks `build/.../examples/plugins/*/` to assemble `--plugin-path` args, runs the suite, uploads the report as an artifact. Fails the workflow on any task failure.
 - **No frozen-header surface touched.** This is pure new tooling under `tools/eval/` + a YAML catalogue under `evals/`. No commit-message ratchet marker needed.
 
+#### Sprint 7 push 5 — ADR-0009: OpenFOAM process isolation
+
+Closes the Sprint 7 plan's "OpenFOAM legal/process-isolation ADR finalised (precondition for Sprint 8)" deliverable. Pure docs/design — no code, no build changes, no frozen-header touch.
+
+- **[ADR-0009]** [docs/adr/0009-openfoam-process-isolation.md](docs/adr/0009-openfoam-process-isolation.md) — binding architectural decision: the Sprint 8 OpenFOAM adapter **must** invoke OpenFOAM as a child process via `exec(3)`, never link `libOpenFOAM.so`. The GPL ↔ Apache 2.0 license boundary forces this; the FSF + OpenFOAM Foundation FAQs explicitly recognise the subprocess workaround. The ADR carries the legal context, the case-directory IPC contract (PolyMesh + `system/` + `0/` dictionary files), the crash + timeout isolation story (subprocess boundary IS the guard), the per-release version-pin policy (OpenFOAM Foundation v11–v12; foam-extend not supported in v1), and the implementation hand-off to Sprint 8 push 1.
+- **Risk register** (`docs/SPRINT_PLAN.md`): R-003 likelihood downgraded High → Med now that the design contract is in place; closure deferred to the Sprint 8 push 1 implementation landing.
+- **Plugin host surface unchanged.** The OpenFOAM plugin will expose the standard `solver.*` C ABI to the host (`souxmar_solver_vtable_t`); the GPL boundary lives entirely below that vtable. The plugin's manifest declares Apache-2.0 (the *plugin*'s license, since it links nothing GPL'd); the OpenFOAM binary it `exec`s remains the operator's separate install.
+- **Pre-mortem one year out**: the most likely failure mode is the agent fumbling case-file authoring (LLMs without targeted training data write plausible-but-wrong `fvSchemes` / `fvSolution` dictionaries). The ADR names this explicitly + lists the leading indicators (CFD-bucket failure rate in the agent eval suite ≥ 30% is the trigger to revisit the agent surface, not the adapter).
+
 ### Changed
 
 - (None this release.)
