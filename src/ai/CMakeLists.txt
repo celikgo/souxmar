@@ -4,12 +4,15 @@
 
 find_package(fmt CONFIG REQUIRED)
 find_package(tomlplusplus CONFIG REQUIRED)   # Sprint 6 push 6 — budget_config.cpp
+find_package(yaml-cpp CONFIG REQUIRED)       # Sprint 10 push 9 — provider response parsing
 
 add_library(souxmar_ai
   tool_dispatcher.cpp
   audit_log.cpp
   # Sprint 6 push 6 — per-project budget config loader.
   budget_config.cpp
+  # Sprint 10 push 9 — Provider abstraction + Ollama.
+  provider.cpp
   tools/default_registry.cpp
   tools/read_geometry_summary.cpp
   tools/mesh.cpp
@@ -54,6 +57,7 @@ target_link_libraries(souxmar_ai
     souxmar::sanitizers
     fmt::fmt
     tomlplusplus::tomlplusplus
+    yaml-cpp::yaml-cpp
 )
 
 install(TARGETS souxmar_ai

@@ -46,6 +46,8 @@ add_executable(souxmar_unit_tests
   test_update_apply.cpp
   # Sprint 10 push 8.
   test_update_embedded_trust.cpp
+  # Sprint 10 push 9.
+  test_ai_provider.cpp
 )
 
 target_link_libraries(souxmar_unit_tests

@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Sprint 10 push 9 — LLM-driven eval task. Probes whether the model
+# correctly *refrains* from calling `solve` when no boundary conditions
+# have been set. The agent should call `validate_bcs` (or
+# read_geometry_summary first), see that the case isn't ready, and
+# explain that to the user instead of invoking `solve` blindly.
+#
+# This is the "model knows when not to act" test — historically the
+# hardest behaviour to elicit from smaller local models.
+
+id:          llm-02-mesh-no-bcs
+llm_prompt:  "I have a tet mesh but I haven't set any boundary conditions yet. Should I run solve now?"
+
+must_not_call_tool:
+  - solve
+
+# The model should not hallucinate a solve call. The compatibility-
+# matrix doc tracks per-model pass rates for this task.
+max_steps: 4

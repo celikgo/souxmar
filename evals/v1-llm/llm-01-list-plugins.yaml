@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Sprint 10 push 9 — LLM-driven eval task. Smallest possible task
+# exercising the full loop:
+#   1. Model receives system prompt + user prompt.
+#   2. Model decides to call `list_plugins`.
+#   3. Dispatcher invokes the tool, returns the summary.
+#   4. Model emits a final assistant reply.
+
+id:          llm-01-list-plugins
+llm_prompt:  "I want to know what plugins are available in this souxmar install. Please list them."
+
+must_call_tool:
+  - list_plugins
+
+# We don't pin the exact final-text shape because that varies wildly
+# across model families — Qwen tends to summarise, Mistral elaborates,
+# Llama-3.1 hedges. Just check the model produced *some* final reply
+# after the tool result came back.
+final_assertion_substring: ""
+
+max_steps: 5

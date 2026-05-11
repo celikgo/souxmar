@@ -63,6 +63,8 @@ if(SOUXMAR_BUILD_CLI)
   add_subdirectory(tools/conformance)
   # Sprint 7 push 4 — agent eval runner.
   add_subdirectory(tools/eval)
+  # Sprint 10 push 9 — LLM-driven eval runner.
+  add_subdirectory(tools/eval-llm)
 endif()
 
 # Examples must be added BEFORE tests: the integration test_config.h
