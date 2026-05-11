@@ -8,6 +8,34 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
+#### Sprint 9 push 8 — benchmark dashboard published per release
+
+Closes the DX-team named SPRINT_PLAN.md story for Sprint 9 ("Benchmark dashboard published per release"). The push 6 gate now produces a human-readable artifact alongside the machine-readable JSON: a self-contained HTML report that release notes can link to directly. Engineers reviewing a perf-regression PR get a one-page dashboard with red / green badges per binary instead of trawling through three JSON files in the artifact bundle. **No frozen-header surface touched** — new tool + workflow step; ABI v1.3 stands.
+
+- **`tools/perf-compare/dashboard.py`** — new stdlib-only Python script (no `pip install` required on CI runners; same constraint as the existing `compare.py`). Renders `perf-report/*.json` to a single HTML file:
+  - **Self-contained.** Inline CSS, inline SVG, no JavaScript, no external fonts. Attach to a GitHub Release, view offline in any modern browser, email to a reviewer — all of those work without further setup.
+  - **Twitter-dim palette.** Uses the project's UI design tokens (`#15202B` base, `#1D9BF0` accent, `#F4212E` regress, `#00BA7C` improve) so the dashboard reads as souxmar-native rather than a generic Google-Benchmark dump.
+  - **Per-binary cards.** One `<section>` per benchmark binary, with a header badge that surfaces the binary's overall state at a glance: "new — no baseline yet", "removed — no current report", "regression", or "improvement" (the last two appear when at least one workload in the binary tripped the threshold either way).
+  - **Per-workload rows.** A table per binary with columns for benchmark name, iteration count, real time (rendered in the Google-Benchmark-reported unit — ns / µs / ms), delta-vs-baseline as a coloured pill, and an inline-SVG bar chart sized against the binary's own slowest workload.
+  - **Threshold = the gate's threshold.** Defaults to 0.05 to match `docs/ENGINEERING_PRACTICES.md` § Performance budgets and Sprint 9 push 6's `REGRESSION_THRESHOLD` env var. Anything beyond the threshold is rendered red (regression) or green (improvement); within-noise rows render muted.
+  - **Defensive against partial input.** A new binary without a baseline gets a "new — no baseline yet" badge instead of dropping out; a baseline file without a matching current report gets a "removed" badge; a malformed JSON file surfaces an error placeholder rather than crashing the run. Same carve-outs `compare.py` honors.
+  - **Header.** Generation timestamp (UTC), git ref (passed via `--git-ref`), threshold value. Footer points at `docs/ENGINEERING_PRACTICES.md` § Performance budgets and the souxmar repo.
+  Smoke-tested locally against synthetic JSON inputs covering the happy path (within-threshold), the regression path (red badge + red delta pill), the new-benchmark path (blue "new" badge), and the removed-benchmark path. The HTML rendered each case correctly.
+- **`.github/workflows/perf-nightly.yml`** — new "Render benchmark dashboard" step between the comparison and the artifact upload. Runs with `if: always()` so a regressed comparison still produces a dashboard with the red badge — reviewers can see *what* broke without manually downloading the JSON artifact. The dashboard is written to `perf-report/dashboard.html` and rolls into the existing artifact upload (so the bundle now carries both the JSONs and the HTML). Title threads `${{ github.ref_name }}` and git ref threads `${{ github.sha }}` so a release-tagged run produces a report titled `souxmar benchmark report — v0.9.0-rc1` with the matching commit SHA in the header.
+- **`benchmarks/baselines/README.md`** — new "Dashboard" section documenting the rendering pipeline + local regeneration loop. Notes the rule that the dashboard's red badges and the gate's failures share the same logic — there's one source of truth for "did this regress" and the dashboard is the visual presentation of it, not an independent judgment.
+
+The full Sprint 9 perf-coverage stack now reads:
+
+| Layer        | Where                                          | What                                                    |
+| ------------ | ---------------------------------------------- | ------------------------------------------------------- |
+| Gate         | `.github/workflows/perf-nightly.yml`           | Per-PR + nightly run; fails on > 5 % regression.        |
+| Comparator   | `tools/perf-compare/compare.py`                | Directory-mode JSON diff, threshold-driven exit code.   |
+| Dashboard    | `tools/perf-compare/dashboard.py`              | HTML rendering of the same data, published per release. |
+| Baselines    | `benchmarks/baselines/*.json` (committed)      | Per-binary expected numbers; rotated by deliberate PR.  |
+| Bench suite  | `benchmarks/*.cpp` (4 binaries)                | mesh-construction, mmap-buffer, face-tag, plugin-dispatch. |
+
+The Sprint 9 themed work has now landed three pushes worth of perf machinery: gate hardened (push 6), absolute-budget enforcement enters the gate (push 7), human-readable artifact for review (push 8). The next themed pushes can pick from the remaining named SPRINT_PLAN.md items — Core's SIMD pass, Plugin Host's heap accounting, AI's BYOK latency — each of which can now add its benchmark binary and have it automatically picked up by the gate, the comparator, and the dashboard without further infrastructure work.
+
 #### Sprint 9 push 7 — `bench_plugin_dispatch` (the 20 µs warm budget enters the gate)
 
 First push to land a benchmark that enforces a named `ENGINEERING_PRACTICES.md` § Performance budgets entry. The "Plugin call overhead (no-op tool) < 20 µs (warm)" line has been on the books since Sprint 0 but had no measurement against it; Sprint 9 push 6's gate infrastructure made the natural follow-on a concrete coverage push. **No frozen-header surface touched** — new bench + workflow loop entry; ABI v1.3 stands.

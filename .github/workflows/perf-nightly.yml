@@ -131,10 +131,29 @@ jobs:
             --current-dir  perf-report \
             --threshold    ${REGRESSION_THRESHOLD}
 
+      - name: Render benchmark dashboard
+        # Sprint 9 push 8 — DX-team SPRINT_PLAN.md story "Benchmark
+        # dashboard published per release". Always runs (regardless of
+        # whether the comparison step passed); a regressed run still
+        # produces an HTML report with the red badge so reviewers can
+        # see what broke without trawling the JSON artifact.
+        if: always()
+        run: |
+          python3 tools/perf-compare/dashboard.py \
+            --input-dir    perf-report \
+            --baseline-dir benchmarks/baselines \
+            --threshold    ${REGRESSION_THRESHOLD} \
+            --output       perf-report/dashboard.html \
+            --git-ref      "${{ github.sha }}" \
+            --title        "souxmar benchmark report — ${{ github.ref_name }}"
+
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:
           name: perf-report-${{ github.run_id }}
+          # The artifact bundle now carries both the JSON reports and
+          # the rendered dashboard.html — the latter is what release
+          # notes link to per "published per release" from SPRINT_PLAN.md.
           path: perf-report/
           retention-days: 30
 

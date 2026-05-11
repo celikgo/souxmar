@@ -83,3 +83,35 @@ This directory holds **expected numbers** — small, committed, diffable.
 Per-run benchmark artifacts uploaded by the workflow are NOT
 committed; they live as workflow artifacts (30-day retention,
 configurable in `perf-nightly.yml`).
+
+## Dashboard (Sprint 9 push 8)
+
+Every workflow run renders a self-contained HTML dashboard at
+`perf-report/dashboard.html` and uploads it alongside the JSON
+reports. `tools/perf-compare/dashboard.py` takes the same input
+directory the comparison step uses + the baseline directory, applies
+the same threshold, and emits one HTML file with per-binary cards,
+inline-SVG bar charts, and regression / improvement colour coding
+against the committed baselines. The script is stdlib-only and the
+HTML is fully offline (no external CSS / JS / fonts) — releases attach
+the file directly so reviewers don't need a live dashboard service to
+read it.
+
+Local regeneration (e.g. when iterating on a perf fix locally):
+
+```sh
+# Assumes you've already run the benchmark loop above and written
+# the JSON files into perf-report/.
+python3 tools/perf-compare/dashboard.py \
+  --input-dir    perf-report \
+  --baseline-dir benchmarks/baselines \
+  --output       perf-report/dashboard.html \
+  --threshold    0.05 \
+  --git-ref      "$(git rev-parse --short HEAD)" \
+  --title        "souxmar benchmark report — local"
+open perf-report/dashboard.html
+```
+
+The dashboard's regression rules are the same as the gate's — a binary
+flagged red in HTML is the same binary that failed the comparison
+step in CI. Use it for review, not as a separate source of truth.
