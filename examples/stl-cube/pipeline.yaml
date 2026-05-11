@@ -1,0 +1,23 @@
+# Sprint 6 push 4 — the first souxmar pipeline driven by a real input
+# file. The unit cube is twelve triangles in ASCII STL form, which
+# reader.stl reads and deduplicates into an 8-node / 12-cell Tri3 mesh,
+# postproc.mesh_quality reports per-cell quality on, and writer.vtu
+# saves for ParaView.
+version: 1
+stages:
+  - id: read
+    plugin: reader.stl
+    input:
+      path: cube.stl
+
+  - id: quality
+    plugin: postproc.mesh_quality
+    input:
+      mesh: { from: read }
+
+  - id: write
+    plugin: writer.vtu
+    input:
+      mesh:  { from: read }
+      field: { from: quality }
+      path:  cube.vtu

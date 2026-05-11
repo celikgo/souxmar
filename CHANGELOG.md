@@ -372,6 +372,23 @@ This push lands no code under `src/` — it is the contractual moment Sprint 5 h
   - Python mirror covers the same four surfaces via the existing `sx.Registry()` / `sx.ai.dispatch_tool` bindings.
 - **No frozen-header surface touched.** Four pure additions to `libsouxmar-ai`; the new tools talk to plugins exclusively through `RegistryDispatcher`. ABI v1 freeze-candidate soak rolls forward unchanged.
 
+#### Sprint 6 push 4 — `reader.*` C ABI surface (ABI v1.1 ratchet)
+
+- **[ABI v1.1]** `SOUXMAR_ABI_VERSION_MINOR` bumped **0 → 1**. **First additive minor ratchet event during the v1 freeze-candidate soak.** Per ADR-0007, additive minor surfaces are forward-compatible by construction: a v1.0 plugin keeps loading on a v1.1 host because every new symbol is opt-in, and a v1.1 plugin attempting to register a reader against a v1.0 host fails at symbol resolution time (conformance check C004 catches it). Soak rolls forward; this bump does NOT reset the soak window — only breaking changes do.
+- **[ABI v1.1]** New header `include/souxmar-c/reader.h` and registration entry `souxmar_registry_add_reader`:
+  - `souxmar_reader_vtable_t` with `read_fn(path, inputs, options, &out_mesh, &out_geometry, user_data)`. The plugin fills exactly one of `out_mesh` / `out_geometry` per the file format it consumes; the dispatcher's `dispatch_reader` routes the produced handle to the matching `StageOutput::Kind::Mesh` or `Kind::Geometry`.
+  - `souxmar_reader_options_t`: `merge_coincident_nodes`, `coincidence_tolerance`, `preserve_tags`, `random_seed`.
+  - Registry extensions: `CapabilityKind::Reader`, `ReaderEntry`, `add_reader` / `add_reader_c` / `find_reader`. Capability variant payload extended with `ReaderEntry`.
+  - Dispatcher routing table now: `mesher.*` / `solver.*` / `writer.*` / `postproc.*` / **`reader.*`**.
+- **`examples/plugins/stl-reader/`** — seventh in-tree reference plugin, **always-on** (no external dependencies). Registers `reader.stl`. Parses ASCII STL into a Tri3 mesh through the C ABI, deduplicating coincident vertices (quantised to 1e-7 in world coords) so adjacent facets share nodes — without dedup every cell carries 3 fresh nodes and topological adjacency is lost. Declared `reentrant`. Manifest declares `min_souxmar_abi_minor = 1` (the floor for the reader surface).
+- **`examples/plugins/occt-reader/`** — opt-in OCCT-backed STEP / IGES reader, gated behind `-DSOUXMAR_WITH_OPENCASCADE=ON` + `find_package(OpenCASCADE)`. Registers `reader.step` AND `reader.iges` (shared vtable, switches on file extension). Walks `TopExp_Explorer` over the loaded `TopoDS_Shape` and emits vertices / edges / faces / solids into a souxmar Geometry with stable tag preservation. Declared `single-threaded` — OpenCASCADE's translator state isn't thread-safe. Not built in default CI; nightly builds with OCCT-bearing runners exercise it.
+- **`examples/stl-cube/`** — first souxmar pipeline driven by a real input file. `reader.stl → postproc.mesh_quality → writer.vtu` against a 12-facet ASCII STL cube. After `souxmar run`, the user has a `cube.vtu` ParaView can open and a deduplicated 8-node / 12-cell Tri3 mesh inside it. README documents the cantilever-beam upgrade path: swap `reader.stl` for `reader.step` and the rest of the pipeline keeps working with no other changes — that's the namespace contract.
+- **Conformance gate**: `tests/integration/test_conformance.cpp` now asserts `stl-reader` passes all 10 v1 checks (7 in-tree plugins green); the suite itself didn't change. C001 / C004 / C006 / C008 directly cover the new reader namespace's manifest + registration + threading.
+- **Tests**:
+  - `tests/integration/test_reader_end_to_end.cpp` — full `reader.stl → writer.vtu` flow against a generated STL fixture: discovery, load, parse, dispatch, file appears on disk. Asserts the deduplicated 8-node / 12-cell shape — pins the dedup logic against regression. Negative test for missing-`path` input asserts `dispatch_reader` surfaces the structured rejection.
+- **Build**: `cmake/SouxmarOptions.cmake`'s pre-existing `SOUXMAR_WITH_OPENCASCADE` option now gates `examples/plugins/occt-reader/`. The plugin's CMakeLists calls `find_package(OpenCASCADE QUIET)` and `return()`s with a `STATUS` message if OCCT isn't installed — clean skip, no noisy failure.
+- **Docs** (`docs/PLUGIN_SDK.md`): new Reader subsection documents the dual-output vtable contract and explicitly names this push as the first soak ratchet event.
+
 ### Changed
 
 - (None this release.)

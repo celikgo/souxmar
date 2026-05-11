@@ -120,7 +120,13 @@ souxmar follows semantic versioning **for the ABI**, decoupled from the release 
 - New capabilities added in 1.x are additive: a 1.0 plugin still works on 1.5; a 1.5 plugin running on 1.0 may have some capabilities silently disabled (it inspects `host->capabilities`).
 - A breaking ABI change requires major bump (souxmar 2.0). Plugins targeting `abi = 1` continue to load on souxmar 2.x via a built-in compatibility shim, marked deprecated, removed in 3.0. We commit to one full major of overlap.
 
-### Current freeze status: **frozen-candidate v1** (since 2026-05-11)
+#### Reader plugins — Sprint 6 push 4 (ABI minor v1.1)
+
+Reader plugins consume a path on disk + a value-bag of options and produce **either** a Mesh (tessellated formats — STL / OBJ / PLY) **or** a Geometry (CAD formats — STEP / IGES / BREP). The vtable has two output slots; the plugin fills exactly one, and the host's dispatcher routes the result to the matching `StageOutput` kind. See `souxmar-c/reader.h` for the full contract and `examples/plugins/stl-reader/` for the reference implementation.
+
+The `reader.*` surface landed as the **first additive minor ratchet event** during the v1 freeze-candidate soak — `SOUXMAR_ABI_VERSION_MINOR` bumped 0 → 1. A v1.0 plugin keeps loading on a v1.1 host (every new symbol is opt-in); a v1.1 plugin attempting to register a reader against a v1.0 host fails at symbol resolution time, which conformance check C004 catches.
+
+## Current freeze status: **frozen-candidate v1** (since 2026-05-11)
 
 The v1 ABI is in its **two-sprint soak period**. Formal freeze target: **2026-06-08**.
 

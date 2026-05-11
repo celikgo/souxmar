@@ -214,6 +214,45 @@ const PostprocEntry* Registry::find_postproc(std::string_view capability_id) con
   return std::get_if<PostprocEntry>(&entry->payload);
 }
 
+std::variant<std::monostate, RegistryError>
+Registry::add_reader(std::string                     capability_id,
+                     std::string                     plugin_id,
+                     const souxmar_reader_vtable_t*  vtable,
+                     void*                           user_data,
+                     ThreadingModel                  threading) {
+  if (capability_id.empty()) return RegistryError{"capability_id must not be empty"};
+  if (vtable == nullptr) {
+    return RegistryError{fmt::format("'{}': vtable pointer is null", capability_id)};
+  }
+  if (vtable->abi_version != SOUXMAR_ABI_VERSION_MAJOR) {
+    return RegistryError{fmt::format(
+        "'{}': vtable.abi_version = {}, host expects {}",
+        capability_id, vtable->abi_version, SOUXMAR_ABI_VERSION_MAJOR)};
+  }
+  if (vtable->read_fn == nullptr) {
+    return RegistryError{fmt::format("'{}': vtable.read_fn is null", capability_id)};
+  }
+
+  std::unique_lock lock(mu_);
+  if (entries_.contains(capability_id)) {
+    return RegistryError{fmt::format("'{}': capability already registered", capability_id)};
+  }
+  CapabilityEntry entry{
+      capability_id, std::move(plugin_id),
+      CapabilityKind::Reader, vtable->abi_version,
+      threading,
+      ReaderEntry{vtable, user_data},
+  };
+  entries_.emplace(std::move(capability_id), std::move(entry));
+  return std::monostate{};
+}
+
+const ReaderEntry* Registry::find_reader(std::string_view capability_id) const {
+  const auto* entry = find(capability_id);
+  if (!entry || entry->kind != CapabilityKind::Reader) return nullptr;
+  return std::get_if<ReaderEntry>(&entry->payload);
+}
+
 std::optional<ThreadingModel>
 Registry::find_threading(std::string_view capability_id) const {
   std::shared_lock lock(mu_);
@@ -300,6 +339,16 @@ souxmar_status_t Registry::add_postproc_c(std::string_view                   plu
   });
 }
 
+souxmar_status_t Registry::add_reader_c(std::string_view                plugin_id,
+                                        const char*                     capability_id,
+                                        const souxmar_reader_vtable_t*  vtable,
+                                        void*                           user_data) noexcept {
+  const auto threading = current_plugin_threading_;
+  return add_c_impl(capability_id, "souxmar_registry_add_reader", [&] {
+    return add_reader(capability_id, std::string(plugin_id), vtable, user_data, threading);
+  });
+}
+
 }  // namespace souxmar::plugin
 
 // -------- C ABI surface --------
@@ -361,6 +410,19 @@ souxmar_registry_add_postproc(souxmar_registry_t*                   registry,
   }
   auto* reg = reinterpret_cast<souxmar::plugin::Registry*>(registry);
   return reg->add_postproc_c(reg->current_plugin_id_, capability_id, vtable, user_data);
+}
+
+souxmar_status_t
+souxmar_registry_add_reader(souxmar_registry_t*             registry,
+                            const char*                     capability_id,
+                            const souxmar_reader_vtable_t*  vtable,
+                            void*                           user_data) {
+  if (registry == nullptr) {
+    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT,
+                                "souxmar_registry_add_reader: registry is NULL");
+  }
+  auto* reg = reinterpret_cast<souxmar::plugin::Registry*>(registry);
+  return reg->add_reader_c(reg->current_plugin_id_, capability_id, vtable, user_data);
 }
 
 }  // extern "C"

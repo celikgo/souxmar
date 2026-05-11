@@ -1,0 +1,25 @@
+[plugin]
+id            = "dev.souxmar.examples.occt-reader"
+name          = "OpenCASCADE STEP/IGES Reader"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/occt-reader"
+
+description   = "Reads STEP and IGES CAD files via OpenCASCADE into a souxmar Geometry."
+documentation = "https://souxmar.dev/docs/plugins/occt-reader"
+tags          = ["reader", "step", "iges", "cad", "occt"]
+min_souxmar_abi_minor = 1
+
+[plugin.binary]
+file          = "libocct_reader.so"
+
+[plugin.capabilities]
+provides      = ["reader.step", "reader.iges"]
+
+[plugin.threading]
+# OpenCASCADE's translator state is not thread-safe.
+model         = "single-threaded"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"

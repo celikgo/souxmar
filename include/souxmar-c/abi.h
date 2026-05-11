@@ -32,7 +32,18 @@
 #include <stddef.h>
 
 #define SOUXMAR_ABI_VERSION_MAJOR 1
-#define SOUXMAR_ABI_VERSION_MINOR 0
+/* MINOR was bumped 0 → 1 at Sprint 6 push 4 (2026-05-11+) when the
+ * additive `reader.*` capability surface (souxmar-c/reader.h +
+ * souxmar_registry_add_reader) landed during the v1 freeze-candidate
+ * soak. This is the soak's first ratchet event; per ADR-0007, additive
+ * minor surfaces are forward-compatible by construction (a v1.0 plugin
+ * keeps loading on a v1.1 host because every new symbol is opt-in, and
+ * a v1.1 plugin on a v1.0 host fails registration at the `add_reader`
+ * symbol resolution — caught by C004 of the conformance suite).
+ *
+ * Bumps lift the floor advertised to plugins via host_info.abi_version_minor;
+ * the freeze-candidate ratchet permits monotonic increments only. */
+#define SOUXMAR_ABI_VERSION_MINOR 1
 
 /* Set during the freeze-candidate soak; removed at formal freeze. Host
  * tooling and plugin authors can branch on this macro to surface

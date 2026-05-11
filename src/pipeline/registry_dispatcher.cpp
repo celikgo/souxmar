@@ -10,6 +10,7 @@
 
 #include "souxmar-c/mesher.h"
 #include "souxmar-c/postproc.h"
+#include "souxmar-c/reader.h"
 #include "souxmar-c/solver.h"
 #include "souxmar-c/writer.h"
 #include "souxmar/plugin/guard.h"
@@ -312,6 +313,78 @@ DispatchResult dispatch_postproc(plugin::Registry&       registry,
   return std::static_pointer_cast<void>(out);
 }
 
+DispatchResult dispatch_reader(plugin::Registry&       registry,
+                               const DispatchContext&  ctx) {
+  const auto* entry = registry.find_reader(ctx.capability_id);
+  if (!entry) {
+    return DispatchError{fmt::format(
+        "no reader capability registered as '{}'", ctx.capability_id)};
+  }
+
+  // Required `path` input.
+  const auto* path_v = ctx.inputs.find("path");
+  if (!path_v || path_v->kind() != Value::Kind::String) {
+    return DispatchError{fmt::format(
+        "reader '{}' input is missing required string `path`", ctx.capability_id)};
+  }
+  const std::string path_str(path_v->as_string());
+
+  const auto* c_inputs = reinterpret_cast<const souxmar_value_t*>(&ctx.inputs);
+
+  souxmar_mesh_t*     out_mesh     = nullptr;
+  souxmar_geometry_t* out_geometry = nullptr;
+  souxmar_status_t    status{SOUXMAR_E_INTERNAL, "uninitialised", nullptr};
+
+  const auto guard = plugin::guard_call([&] {
+    status = entry->vtable->read_fn(path_str.c_str(), c_inputs,
+                                    /*options=*/nullptr,
+                                    &out_mesh, &out_geometry,
+                                    entry->user_data);
+  });
+  if (guard.outcome != plugin::GuardOutcome::Ok) {
+    if (out_mesh)     souxmar_mesh_free(out_mesh);
+    if (out_geometry) souxmar_geometry_free(out_geometry);
+    return DispatchError{fmt::format(
+        "reader '{}' raised: {}", ctx.capability_id, guard.detail)};
+  }
+  if (status.code != SOUXMAR_OK) {
+    if (out_mesh)     souxmar_mesh_free(out_mesh);
+    if (out_geometry) souxmar_geometry_free(out_geometry);
+    return DispatchError{fmt::format(
+        "reader '{}' returned error {}: {}", ctx.capability_id,
+        status.code, status.message ? status.message : "(no message)")};
+  }
+  if ((out_mesh == nullptr) == (out_geometry == nullptr)) {
+    // Both NULL → nothing produced; both set → ambiguous. Either is a
+    // plugin contract violation; clean up and surface the error.
+    if (out_mesh)     souxmar_mesh_free(out_mesh);
+    if (out_geometry) souxmar_geometry_free(out_geometry);
+    return DispatchError{fmt::format(
+        "reader '{}' must fill exactly one of out_mesh / out_geometry "
+        "(got mesh={}, geometry={})",
+        ctx.capability_id,
+        out_mesh != nullptr, out_geometry != nullptr)};
+  }
+
+  auto out = std::make_shared<StageOutput>();
+  if (out_mesh) {
+    out->kind = StageOutput::Kind::Mesh;
+    out->mesh = std::shared_ptr<souxmar::core::Mesh>(
+        reinterpret_cast<souxmar::core::Mesh*>(out_mesh),
+        [](souxmar::core::Mesh* m) {
+          souxmar_mesh_free(reinterpret_cast<souxmar_mesh_t*>(m));
+        });
+  } else {
+    out->kind     = StageOutput::Kind::Geometry;
+    out->geometry = std::shared_ptr<souxmar::core::Geometry>(
+        reinterpret_cast<souxmar::core::Geometry*>(out_geometry),
+        [](souxmar::core::Geometry* g) {
+          souxmar_geometry_free(reinterpret_cast<souxmar_geometry_t*>(g));
+        });
+  }
+  return std::static_pointer_cast<void>(out);
+}
+
 }  // namespace
 
 RegistryDispatcher::RegistryDispatcher(plugin::Registry& registry)
@@ -356,9 +429,12 @@ DispatchResult RegistryDispatcher::dispatch(const DispatchContext& ctx) {
   if (ctx.capability_id.starts_with("postproc.")) {
     return dispatch_postproc(registry_, ctx);
   }
+  if (ctx.capability_id.starts_with("reader.")) {
+    return dispatch_reader(registry_, ctx);
+  }
   return DispatchError{fmt::format(
       "unsupported capability namespace for '{}' "
-      "(known namespaces: mesher.*, solver.*, writer.*, postproc.*)",
+      "(known namespaces: mesher.*, solver.*, writer.*, postproc.*, reader.*)",
       ctx.capability_id)};
 }
 

@@ -134,6 +134,15 @@ TEST_F(ConformanceGateTest, MeshQualityPostprocPassesAllChecks) {
   expect_all_v1_checks_pass(plugin::run_conformance(*p));
 }
 
+// Sprint 6 push 4 — the first reader.* plugin lands. ABI minor v1.1 is
+// the additive change; the conformance suite is unchanged and must
+// still pass for every in-tree plugin.
+TEST_F(ConformanceGateTest, StlReaderPassesAllChecks) {
+  const auto* p = find_plugin(discovery_, "dev.souxmar.examples.stl-reader");
+  ASSERT_NE(p, nullptr);
+  expect_all_v1_checks_pass(plugin::run_conformance(*p));
+}
+
 // Negative: confirm that a deliberately-mismatched manifest (declared ABI
 // 99) trips C001 + Skips the rest. Builds on the discovered hello-mesher
 // to keep the test self-contained — we fabricate a DiscoveredPlugin in
