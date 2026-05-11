@@ -62,6 +62,30 @@ class Mesh {
   [[nodiscard]] std::span<const NodeIndex> cell_nodes(CellIndex index) const;
   [[nodiscard]] EntityTag                  cell_tag(CellIndex index) const noexcept;
 
+  // -------- Per-face tags (ADR-0012, ABI minor v1.3) --------
+  //
+  // Sparse: only explicitly-set face tags consume storage. An unset
+  // face reads back as EntityTag{-1} (the same untagged sentinel
+  // cell_tag uses for an uninitialised cell). Local face indices run
+  // 0 .. num_faces(cell_type(cell)) - 1. The set_face_tag accessor
+  // throws std::out_of_range if the cell index is out of range and
+  // std::invalid_argument if the local face index exceeds the cell's
+  // face count.
+
+  [[nodiscard]] EntityTag face_tag(CellIndex cell,
+                                   std::uint8_t local_face) const noexcept;
+  void set_face_tag(CellIndex cell, std::uint8_t local_face, EntityTag tag);
+
+  // Iterate every explicitly-tagged face. Each entry is
+  // ((cell, local_face), tag). Order is unspecified — consumers that
+  // need a stable order sort the returned vector themselves.
+  struct TaggedFace {
+    CellIndex     cell;
+    std::uint8_t  local_face;
+    EntityTag     tag;
+  };
+  [[nodiscard]] std::vector<TaggedFace> tagged_faces() const;
+
   // Histogram of element types present, in canonical numeric order.
   [[nodiscard]] std::vector<std::pair<ElementType, std::size_t>> element_histogram() const;
 

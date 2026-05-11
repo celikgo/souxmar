@@ -38,31 +38,37 @@ struct ElementInfo {
   std::uint8_t  dimension;   // 0..3
   std::uint8_t  num_nodes;
   std::uint8_t  order;       // 1 = linear, 2 = quadratic
+  std::uint8_t  num_faces;   // boundary side count. For 2D elements
+                             // these are the bounding edges; for 3D
+                             // elements they are the bounding faces;
+                             // for Vertex / Edge* the count is 0
+                             // (no face concept). Matches Gmsh / VTK /
+                             // OpenFOAM side-set conventions.
   std::string_view name;     // canonical short name, e.g. "tet4"
 };
 
 [[nodiscard]] constexpr ElementInfo info(ElementType t) noexcept {
   switch (t) {
-    case ElementType::Vertex:     return {0,  1, 1, "vertex"};
-    case ElementType::Edge2:      return {1,  2, 1, "edge2"};
-    case ElementType::Edge3:      return {1,  3, 2, "edge3"};
-    case ElementType::Tri3:       return {2,  3, 1, "tri3"};
-    case ElementType::Tri6:       return {2,  6, 2, "tri6"};
-    case ElementType::Quad4:      return {2,  4, 1, "quad4"};
-    case ElementType::Quad8:      return {2,  8, 2, "quad8"};
-    case ElementType::Quad9:      return {2,  9, 2, "quad9"};
-    case ElementType::Tet4:       return {3,  4, 1, "tet4"};
-    case ElementType::Tet10:      return {3, 10, 2, "tet10"};
-    case ElementType::Hex8:       return {3,  8, 1, "hex8"};
-    case ElementType::Hex20:      return {3, 20, 2, "hex20"};
-    case ElementType::Hex27:      return {3, 27, 2, "hex27"};
-    case ElementType::Prism6:     return {3,  6, 1, "prism6"};
-    case ElementType::Prism15:    return {3, 15, 2, "prism15"};
-    case ElementType::Pyramid5:   return {3,  5, 1, "pyramid5"};
-    case ElementType::Pyramid13:  return {3, 13, 2, "pyramid13"};
-    case ElementType::Unknown:    return {0,  0, 0, "unknown"};
+    case ElementType::Vertex:     return {0,  1, 1, 0, "vertex"};
+    case ElementType::Edge2:      return {1,  2, 1, 0, "edge2"};
+    case ElementType::Edge3:      return {1,  3, 2, 0, "edge3"};
+    case ElementType::Tri3:       return {2,  3, 1, 3, "tri3"};
+    case ElementType::Tri6:       return {2,  6, 2, 3, "tri6"};
+    case ElementType::Quad4:      return {2,  4, 1, 4, "quad4"};
+    case ElementType::Quad8:      return {2,  8, 2, 4, "quad8"};
+    case ElementType::Quad9:      return {2,  9, 2, 4, "quad9"};
+    case ElementType::Tet4:       return {3,  4, 1, 4, "tet4"};
+    case ElementType::Tet10:      return {3, 10, 2, 4, "tet10"};
+    case ElementType::Hex8:       return {3,  8, 1, 6, "hex8"};
+    case ElementType::Hex20:      return {3, 20, 2, 6, "hex20"};
+    case ElementType::Hex27:      return {3, 27, 2, 6, "hex27"};
+    case ElementType::Prism6:     return {3,  6, 1, 5, "prism6"};
+    case ElementType::Prism15:    return {3, 15, 2, 5, "prism15"};
+    case ElementType::Pyramid5:   return {3,  5, 1, 5, "pyramid5"};
+    case ElementType::Pyramid13:  return {3, 13, 2, 5, "pyramid13"};
+    case ElementType::Unknown:    return {0,  0, 0, 0, "unknown"};
   }
-  return {0, 0, 0, "unknown"};
+  return {0, 0, 0, 0, "unknown"};
 }
 
 [[nodiscard]] constexpr std::uint8_t dimension(ElementType t) noexcept {
@@ -71,6 +77,14 @@ struct ElementInfo {
 
 [[nodiscard]] constexpr std::uint8_t num_nodes(ElementType t) noexcept {
   return info(t).num_nodes;
+}
+
+// Number of bounding sides (edges for 2D elements; faces for 3D
+// elements; 0 for Vertex / Edge*). Used by Mesh's per-face-tag
+// surface and by adapters that build polyMesh-style boundary
+// patches (ADR-0012).
+[[nodiscard]] constexpr std::uint8_t num_faces(ElementType t) noexcept {
+  return info(t).num_faces;
 }
 
 [[nodiscard]] constexpr std::uint8_t order(ElementType t) noexcept {

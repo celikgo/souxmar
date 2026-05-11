@@ -175,6 +175,45 @@ int32_t souxmar_mesh_cell_tag(const souxmar_mesh_t* mesh, uint64_t cell_index) {
   return as_cpp(mesh)->cell_tag(souxmar::core::CellIndex{cell_index}).value;
 }
 
+size_t souxmar_mesh_cell_face_count(const souxmar_mesh_t* mesh, uint64_t cell_index) {
+  if (!mesh) return 0;
+  if (cell_index >= as_cpp(mesh)->num_cells()) return 0;
+  const auto type = as_cpp(mesh)->cell_type(souxmar::core::CellIndex{cell_index});
+  return souxmar::core::num_faces(type);
+}
+
+int32_t souxmar_mesh_face_tag(const souxmar_mesh_t* mesh,
+                              uint64_t              cell_index,
+                              uint8_t               local_face_index) {
+  if (!mesh) return SOUXMAR_FACE_UNTAGGED;
+  return as_cpp(mesh)->face_tag(souxmar::core::CellIndex{cell_index},
+                                local_face_index).value;
+}
+
+souxmar_status_t souxmar_mesh_set_face_tag(souxmar_mesh_t* mesh,
+                                           uint64_t        cell_index,
+                                           uint8_t         local_face_index,
+                                           int32_t         tag) {
+  if (!mesh) {
+    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT, "mesh is NULL");
+  }
+  try {
+    as_cpp(mesh)->set_face_tag(souxmar::core::CellIndex{cell_index},
+                               local_face_index,
+                               souxmar::core::EntityTag{tag});
+    return souxmar_status_ok();
+  } catch (const std::out_of_range&) {
+    return souxmar_status_error(SOUXMAR_E_NOT_FOUND, "cell index out of range");
+  } catch (const std::invalid_argument&) {
+    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT,
+                                "local face index exceeds cell's face count");
+  } catch (const std::bad_alloc&) {
+    return souxmar_status_error(SOUXMAR_E_OUT_OF_MEMORY, "out of memory");
+  } catch (...) {
+    return souxmar_status_error(SOUXMAR_E_INTERNAL, "internal error");
+  }
+}
+
 const double* souxmar_mesh_nodes_flat(const souxmar_mesh_t* mesh, size_t* out_size) {
   if (!mesh) {
     if (out_size) *out_size = 0;

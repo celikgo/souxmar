@@ -7,9 +7,25 @@
 #include <limits>
 #include <map>
 #include <stdexcept>
+#include <unordered_map>
 #include <vector>
 
 namespace souxmar::core {
+
+namespace {
+
+// Sparse key for per-face tags: (cell index, local face index) packed
+// into a single uint64_t so std::unordered_map's default hash works.
+// Cell indices are bounded by num_cells (< 2^56 even on absurdly large
+// meshes); local face indices are bounded by 6 (hex family). The pack
+// reserves the low byte for local_face, leaving 56 bits for cell idx —
+// plenty of headroom for the 1.x release series.
+constexpr std::uint64_t pack_face_key(std::uint64_t cell,
+                                      std::uint8_t  local_face) noexcept {
+  return (cell << 8) | static_cast<std::uint64_t>(local_face);
+}
+
+}  // namespace
 
 class Mesh::Impl {
  public:
@@ -25,6 +41,11 @@ class Mesh::Impl {
   // num_cells + 1 so cell_node_offsets[num_cells] == cell_node_indices.size().
   std::vector<std::uint64_t> cell_node_offsets{0};
   std::vector<NodeIndex>     cell_node_indices;
+
+  // Per-face tags (ADR-0012). Sparse: only explicitly-tagged faces
+  // materialise. Empty for the default-untagged-everywhere case that
+  // covers nearly every interior face of nearly every mesh.
+  std::unordered_map<std::uint64_t, EntityTag> face_tags;
 };
 
 Mesh::Mesh() : impl_(std::make_unique<Impl>()) {}
@@ -116,6 +137,45 @@ std::span<const NodeIndex> Mesh::cell_nodes(CellIndex index) const {
 EntityTag Mesh::cell_tag(CellIndex index) const noexcept {
   if (index.value >= num_cells()) return EntityTag{};
   return impl_->cell_tags[index.value];
+}
+
+EntityTag Mesh::face_tag(CellIndex cell, std::uint8_t local_face) const noexcept {
+  if (cell.value >= num_cells()) return EntityTag{-1};
+  const auto type = impl_->cell_types[cell.value];
+  if (local_face >= num_faces(type)) return EntityTag{-1};
+  const auto it = impl_->face_tags.find(pack_face_key(cell.value, local_face));
+  if (it == impl_->face_tags.end()) return EntityTag{-1};
+  return it->second;
+}
+
+void Mesh::set_face_tag(CellIndex cell, std::uint8_t local_face, EntityTag tag) {
+  if (cell.value >= num_cells()) {
+    throw std::out_of_range("Mesh::set_face_tag: cell index out of range");
+  }
+  const auto type = impl_->cell_types[cell.value];
+  if (local_face >= num_faces(type)) {
+    throw std::invalid_argument(
+        "Mesh::set_face_tag: local_face index exceeds cell's face count");
+  }
+  const auto key = pack_face_key(cell.value, local_face);
+  if (tag.value == -1) {
+    impl_->face_tags.erase(key);
+  } else {
+    impl_->face_tags[key] = tag;
+  }
+}
+
+std::vector<Mesh::TaggedFace> Mesh::tagged_faces() const {
+  std::vector<TaggedFace> out;
+  out.reserve(impl_->face_tags.size());
+  for (const auto& [key, tag] : impl_->face_tags) {
+    out.push_back(TaggedFace{
+        CellIndex{key >> 8},
+        static_cast<std::uint8_t>(key & 0xFFu),
+        tag,
+    });
+  }
+  return out;
 }
 
 std::vector<std::pair<ElementType, std::size_t>> Mesh::element_histogram() const {

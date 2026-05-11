@@ -125,6 +125,94 @@ TEST(CAbiMesh, FlatNodesIsContiguous) {
   souxmar_mesh_free(m);
 }
 
+// -------- Per-face tags (ABI v1.3, ADR-0012) --------
+
+namespace {
+
+// Build a 1-tet mesh and return its handle. Caller frees with
+// souxmar_mesh_free. Tet4 has 4 faces — convenient for tag-range tests.
+souxmar_mesh_t* MakeOneTet() {
+  souxmar_mesh_t* m = souxmar_mesh_new();
+  const double p0[3] = {0, 0, 0};
+  const double p1[3] = {1, 0, 0};
+  const double p2[3] = {0, 1, 0};
+  const double p3[3] = {0, 0, 1};
+  souxmar_mesh_add_node(m, p0);
+  souxmar_mesh_add_node(m, p1);
+  souxmar_mesh_add_node(m, p2);
+  souxmar_mesh_add_node(m, p3);
+  const uint64_t nodes[4] = {0, 1, 2, 3};
+  souxmar_mesh_add_cell(m, SOUXMAR_ET_TET4, nodes, 4, -1, nullptr);
+  return m;
+}
+
+}  // namespace
+
+TEST(CAbiMeshFaceTags, FreshCellReportsFaceCountFromTaxonomy) {
+  souxmar_mesh_t* m = MakeOneTet();
+  EXPECT_EQ(souxmar_mesh_cell_face_count(m, 0), 4u);
+  // Out-of-range cell → 0.
+  EXPECT_EQ(souxmar_mesh_cell_face_count(m, 99), 0u);
+  // NULL mesh → 0.
+  EXPECT_EQ(souxmar_mesh_cell_face_count(nullptr, 0), 0u);
+  souxmar_mesh_free(m);
+}
+
+TEST(CAbiMeshFaceTags, EveryFaceStartsUntagged) {
+  souxmar_mesh_t* m = MakeOneTet();
+  for (uint8_t f = 0; f < 4; ++f) {
+    EXPECT_EQ(souxmar_mesh_face_tag(m, 0, f), SOUXMAR_FACE_UNTAGGED);
+  }
+  souxmar_mesh_free(m);
+}
+
+TEST(CAbiMeshFaceTags, SetAndGetRoundtrip) {
+  souxmar_mesh_t* m = MakeOneTet();
+  auto s = souxmar_mesh_set_face_tag(m, 0, 2, 42);
+  EXPECT_EQ(s.code, SOUXMAR_OK);
+  EXPECT_EQ(souxmar_mesh_face_tag(m, 0, 2), 42);
+  // Other slots untouched.
+  EXPECT_EQ(souxmar_mesh_face_tag(m, 0, 0), SOUXMAR_FACE_UNTAGGED);
+  EXPECT_EQ(souxmar_mesh_face_tag(m, 0, 3), SOUXMAR_FACE_UNTAGGED);
+  souxmar_mesh_free(m);
+}
+
+TEST(CAbiMeshFaceTags, ClearWithUntaggedSentinel) {
+  souxmar_mesh_t* m = MakeOneTet();
+  souxmar_mesh_set_face_tag(m, 0, 1, 99);
+  EXPECT_EQ(souxmar_mesh_face_tag(m, 0, 1), 99);
+  auto s = souxmar_mesh_set_face_tag(m, 0, 1, SOUXMAR_FACE_UNTAGGED);
+  EXPECT_EQ(s.code, SOUXMAR_OK);
+  EXPECT_EQ(souxmar_mesh_face_tag(m, 0, 1), SOUXMAR_FACE_UNTAGGED);
+  souxmar_mesh_free(m);
+}
+
+TEST(CAbiMeshFaceTags, OutOfRangeCellReturnsNotFound) {
+  souxmar_mesh_t* m = MakeOneTet();
+  auto s = souxmar_mesh_set_face_tag(m, 99, 0, 1);
+  EXPECT_EQ(s.code, SOUXMAR_E_NOT_FOUND);
+  // Getter just returns untagged sentinel.
+  EXPECT_EQ(souxmar_mesh_face_tag(m, 99, 0), SOUXMAR_FACE_UNTAGGED);
+  souxmar_mesh_free(m);
+}
+
+TEST(CAbiMeshFaceTags, OutOfRangeLocalFaceReturnsInvalidArgument) {
+  souxmar_mesh_t* m = MakeOneTet();
+  // Tet4 has 4 faces (0..3); index 4 is out of range.
+  auto s = souxmar_mesh_set_face_tag(m, 0, 4, 1);
+  EXPECT_EQ(s.code, SOUXMAR_E_INVALID_ARGUMENT);
+  EXPECT_EQ(souxmar_mesh_face_tag(m, 0, 4), SOUXMAR_FACE_UNTAGGED);
+  souxmar_mesh_free(m);
+}
+
+TEST(CAbiMeshFaceTags, NullMeshSafe) {
+  // Getter: untagged sentinel.
+  EXPECT_EQ(souxmar_mesh_face_tag(nullptr, 0, 0), SOUXMAR_FACE_UNTAGGED);
+  // Setter: structured error, no crash.
+  auto s = souxmar_mesh_set_face_tag(nullptr, 0, 0, 1);
+  EXPECT_EQ(s.code, SOUXMAR_E_INVALID_ARGUMENT);
+}
+
 // -------- geometry handle --------
 
 TEST(CAbiGeometry, NewFreeRoundtrip) {

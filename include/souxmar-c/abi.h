@@ -40,11 +40,16 @@
  *   v1.1  Sprint 6 push 4 — `reader.*` capability + souxmar-c/reader.h.
  *   v1.2  Sprint 7 push 3 — `souxmar_buffer_new_mmap` + flag constants;
  *                            v2 of ADR-0006 (mmap-backed buffer backing).
+ *   v1.3  Sprint 9 push 2 — per-face-tag surface
+ *                            (`souxmar_mesh_cell_face_count`,
+ *                            `souxmar_mesh_face_tag`,
+ *                            `souxmar_mesh_set_face_tag`,
+ *                            `SOUXMAR_FACE_UNTAGGED`); ADR-0012.
  *
  * Future minor bumps land via ADR plus the
  * `Ratchet: additive minor surface (ADR-0008)` commit marker checked
  * by scripts/check-frozen-headers.sh. */
-#define SOUXMAR_ABI_VERSION_MINOR 2
+#define SOUXMAR_ABI_VERSION_MINOR 3
 
 /* ---- Symbol export ---------------------------------------------------- */
 

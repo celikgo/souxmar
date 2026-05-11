@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <stdexcept>
 #include <vector>
@@ -160,6 +161,98 @@ TEST(Mesh, MixedElementTypesInOneMesh) {
   EXPECT_EQ(m.cell_type(CellIndex{1}), ElementType::Hex8);
   EXPECT_EQ(m.cell_nodes(CellIndex{0}).size(), 4u);
   EXPECT_EQ(m.cell_nodes(CellIndex{1}).size(), 8u);
+}
+
+// -------- Per-face tags (ADR-0012, ABI v1.3) --------
+
+TEST(MeshFaceTags, FreshMeshAllFacesUntagged) {
+  const auto m = MakeTwoTets();
+  // Tet4 has 4 faces; both cells should report -1 on every face slot.
+  for (std::uint64_t cell = 0; cell < m.num_cells(); ++cell) {
+    for (std::uint8_t f = 0; f < 4; ++f) {
+      EXPECT_EQ(m.face_tag(CellIndex{cell}, f).value, -1);
+    }
+  }
+  EXPECT_TRUE(m.tagged_faces().empty());
+}
+
+TEST(MeshFaceTags, SetAndReadBackRoundtrip) {
+  auto m = MakeTwoTets();
+  m.set_face_tag(CellIndex{0}, 2, EntityTag{77});
+  EXPECT_EQ(m.face_tag(CellIndex{0}, 2).value, 77);
+  // Untouched slots stay untagged.
+  EXPECT_EQ(m.face_tag(CellIndex{0}, 0).value, -1);
+  EXPECT_EQ(m.face_tag(CellIndex{0}, 3).value, -1);
+  EXPECT_EQ(m.face_tag(CellIndex{1}, 2).value, -1);
+}
+
+TEST(MeshFaceTags, OverwriteReplacesPreviousTag) {
+  auto m = MakeTwoTets();
+  m.set_face_tag(CellIndex{0}, 1, EntityTag{10});
+  m.set_face_tag(CellIndex{0}, 1, EntityTag{20});
+  EXPECT_EQ(m.face_tag(CellIndex{0}, 1).value, 20);
+}
+
+TEST(MeshFaceTags, ClearWithUntaggedSentinelDropsSlot) {
+  auto m = MakeTwoTets();
+  m.set_face_tag(CellIndex{0}, 1, EntityTag{5});
+  EXPECT_EQ(m.tagged_faces().size(), 1u);
+  m.set_face_tag(CellIndex{0}, 1, EntityTag{-1});
+  EXPECT_EQ(m.face_tag(CellIndex{0}, 1).value, -1);
+  EXPECT_TRUE(m.tagged_faces().empty());
+}
+
+TEST(MeshFaceTags, OutOfRangeCellThrows) {
+  auto m = MakeTwoTets();
+  EXPECT_THROW(m.set_face_tag(CellIndex{99}, 0, EntityTag{1}),
+               std::out_of_range);
+  // Getter is noexcept and returns the untagged sentinel.
+  EXPECT_EQ(m.face_tag(CellIndex{99}, 0).value, -1);
+}
+
+TEST(MeshFaceTags, OutOfRangeLocalFaceIndexThrows) {
+  auto m = MakeTwoTets();
+  // Tet4 has only 4 faces (indices 0..3).
+  EXPECT_THROW(m.set_face_tag(CellIndex{0}, 4, EntityTag{1}),
+               std::invalid_argument);
+  // Getter just returns untagged.
+  EXPECT_EQ(m.face_tag(CellIndex{0}, 4).value, -1);
+}
+
+TEST(MeshFaceTags, TaggedFacesEnumerationCoversEveryTag) {
+  auto m = MakeTwoTets();
+  m.set_face_tag(CellIndex{0}, 0, EntityTag{100});
+  m.set_face_tag(CellIndex{0}, 3, EntityTag{200});
+  m.set_face_tag(CellIndex{1}, 1, EntityTag{300});
+
+  auto entries = m.tagged_faces();
+  ASSERT_EQ(entries.size(), 3u);
+  // Order is unspecified; sort by (cell, local_face) for the comparison.
+  std::sort(entries.begin(), entries.end(),
+            [](const Mesh::TaggedFace& a, const Mesh::TaggedFace& b) {
+              if (a.cell.value != b.cell.value) return a.cell.value < b.cell.value;
+              return a.local_face < b.local_face;
+            });
+  EXPECT_EQ(entries[0].cell.value,  0u); EXPECT_EQ(entries[0].local_face, 0); EXPECT_EQ(entries[0].tag.value, 100);
+  EXPECT_EQ(entries[1].cell.value,  0u); EXPECT_EQ(entries[1].local_face, 3); EXPECT_EQ(entries[1].tag.value, 200);
+  EXPECT_EQ(entries[2].cell.value,  1u); EXPECT_EQ(entries[2].local_face, 1); EXPECT_EQ(entries[2].tag.value, 300);
+}
+
+TEST(MeshFaceTags, ElementTypeFaceCountMatchesTaxonomy) {
+  // Spot-check num_faces() against the ADR-0012 contract.
+  EXPECT_EQ(num_faces(ElementType::Vertex),    0);
+  EXPECT_EQ(num_faces(ElementType::Edge2),     0);
+  EXPECT_EQ(num_faces(ElementType::Tri3),      3);
+  EXPECT_EQ(num_faces(ElementType::Quad4),     4);
+  EXPECT_EQ(num_faces(ElementType::Tet4),      4);
+  EXPECT_EQ(num_faces(ElementType::Hex8),      6);
+  EXPECT_EQ(num_faces(ElementType::Prism6),    5);
+  EXPECT_EQ(num_faces(ElementType::Pyramid5),  5);
+  // Quadratic variants share their linear sibling's face count.
+  EXPECT_EQ(num_faces(ElementType::Tet10),     4);
+  EXPECT_EQ(num_faces(ElementType::Hex27),     6);
+  EXPECT_EQ(num_faces(ElementType::Prism15),   5);
+  EXPECT_EQ(num_faces(ElementType::Pyramid13), 5);
 }
 
 }  // namespace

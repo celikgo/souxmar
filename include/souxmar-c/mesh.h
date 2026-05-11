@@ -105,6 +105,49 @@ int32_t  souxmar_mesh_cell_tag(const souxmar_mesh_t* mesh, uint64_t cell_index);
  * valid until the next mutation of the mesh. *out_size receives 3*N. */
 const double* souxmar_mesh_nodes_flat(const souxmar_mesh_t* mesh, size_t* out_size);
 
+/* ---- Per-face tags (ABI v1.3 — ADR-0012) -----------------------------
+ *
+ * Per-face tags discriminate boundary faces by their source geometry
+ * entity (e.g. an inlet face vs. a wall face on the same volume mesh).
+ * Storage on the host is sparse: only explicitly-tagged faces consume
+ * a slot. An unset face reads SOUXMAR_FACE_UNTAGGED.
+ *
+ * Local face indices run 0 .. souxmar_mesh_cell_face_count(mesh, cell) - 1.
+ * The per-element-type face count comes from the element taxonomy:
+ *
+ *   Vertex / Edge*          : 0  (no face concept)
+ *   Tri3 / Tri6             : 3  (bounding edges)
+ *   Quad4 / Quad8 / Quad9   : 4  (bounding edges)
+ *   Tet4 / Tet10            : 4
+ *   Hex8 / Hex20 / Hex27    : 6
+ *   Prism6 / Prism15        : 5
+ *   Pyramid5 / Pyramid13    : 5
+ *
+ * Convention matches Gmsh / VTK / OpenFOAM side-set ordering. */
+
+#define SOUXMAR_FACE_UNTAGGED ((int32_t)-1)
+
+/* Returns the bounding-side count for the cell's element type, or 0 if
+ * the cell index is out of range / the cell has no face concept. */
+size_t souxmar_mesh_cell_face_count(const souxmar_mesh_t* mesh,
+                                    uint64_t              cell_index);
+
+/* Returns the tag stored for (cell_index, local_face_index), or
+ * SOUXMAR_FACE_UNTAGGED if the slot is untagged, the cell index is out
+ * of range, or the local face index exceeds the cell's face count. */
+int32_t souxmar_mesh_face_tag(const souxmar_mesh_t* mesh,
+                              uint64_t              cell_index,
+                              uint8_t               local_face_index);
+
+/* Sets the tag stored for (cell_index, local_face_index). Setting
+ * SOUXMAR_FACE_UNTAGGED clears the slot. Returns SOUXMAR_E_NOT_FOUND
+ * if the cell index is out of range, SOUXMAR_E_INVALID_ARGUMENT if the
+ * local face index exceeds the cell's face count. */
+souxmar_status_t souxmar_mesh_set_face_tag(souxmar_mesh_t* mesh,
+                                           uint64_t        cell_index,
+                                           uint8_t         local_face_index,
+                                           int32_t         tag);
+
 /* ---- Bulk construction (Sprint 5 push 4 — ADR-0006) ---- */
 
 /* Bulk-construction descriptor. Every buffer is borrowed by the host
