@@ -446,16 +446,18 @@ TEST(ValueYaml, StageRefShorthand) {
 
 TEST(AiDefaultTools_v2, RegistryNowContainsEightTools) {
   auto r = ai::default_v1_tools();
-  // Sprint 8 push 4: catalogue 13 → 16 (added apply_inlet, apply_wall,
-  // apply_outlet — CFD-aware BC vocabulary; siblings of set_bc).
-  EXPECT_EQ(r.list().size(), 16u);
+  // Sprint 8 push 5: catalogue 16 → 18 (added propose_cfd_setup +
+  // validate_bcs). This is the catalogue ADR-0010 freezes as the
+  // tool-contract v1 candidate.
+  EXPECT_EQ(r.list().size(), 18u);
   for (const auto* expected : {
       "read_geometry_summary", "mesh", "set_bc", "solve",
       "screenshot_viewport", "query_field", "compute_field",
       "propose_pipeline",
       "query_mesh_quality",
       "set_material", "list_plugins", "apply_pipeline_diff", "export_results",
-      "apply_inlet", "apply_wall", "apply_outlet"}) {
+      "apply_inlet", "apply_wall", "apply_outlet",
+      "propose_cfd_setup", "validate_bcs"}) {
     EXPECT_NE(r.find(expected), nullptr) << "missing tool: " << expected;
   }
 }
@@ -1076,6 +1078,202 @@ TEST(AiTools_ApplyOutlet, OutflowDoesNotRequirePressure) {
   ASSERT_FALSE(out.error.has_value()) << out.summary;
   EXPECT_EQ(session.find("boundary_conditions")->as_list()[0]
                 .find("condition")->as_string(), "outflow");
+}
+
+// ============================================================================
+// Sprint 8 push 5 — CFD planner + BC validator
+// ============================================================================
+
+TEST(AiTools_ProposeCfdSetup, GenericPipeFlowProducesInletWallOutlet) {
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;
+  ai::ConfirmationPolicy policy;
+  auto input = pl::Value::map({
+      {"goal",            pl::Value::string("steady pipe flow at Re=2000")},
+      {"target_velocity", pl::Value::number(2.0)},
+  });
+  auto out = ai::dispatch_tool(r, "propose_cfd_setup", input, ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << out.summary;
+  ASSERT_EQ(out.data.kind(), pl::Value::Kind::Map);
+
+  // Solver: incompressible default.
+  EXPECT_EQ(out.data.find("recommended_solver")->as_string(),
+            "solver.cfd.simple");
+
+  // Plan shape: apply_inlet → apply_wall → apply_outlet.
+  const auto* plan = out.data.find("plan");
+  ASSERT_NE(plan, nullptr);
+  ASSERT_EQ(plan->kind(), pl::Value::Kind::List);
+  ASSERT_EQ(plan->as_list().size(), 3u);
+  EXPECT_EQ(plan->as_list()[0].find("tool")->as_string(), "apply_inlet");
+  EXPECT_EQ(plan->as_list()[1].find("tool")->as_string(), "apply_wall");
+  EXPECT_EQ(plan->as_list()[2].find("tool")->as_string(), "apply_outlet");
+
+  // Inlet carries the target velocity through.
+  EXPECT_EQ(plan->as_list()[0].find("input")->find("velocity")->as_number(),
+            2.0);
+}
+
+TEST(AiTools_ProposeCfdSetup, TagListPicksFirstAndLastByName) {
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;
+  ai::ConfirmationPolicy policy;
+  auto input = pl::Value::map({
+      {"goal", pl::Value::string("flow through a pipe bend")},
+      {"tags", pl::Value::list({pl::Value::string("walls_pipe"),
+                                pl::Value::string("inflow_face"),
+                                pl::Value::string("outflow_face"),
+                                pl::Value::string("walls_flange")})},
+  });
+  auto out = ai::dispatch_tool(r, "propose_cfd_setup", input, ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << out.summary;
+  const auto* plan = out.data.find("plan");
+
+  // First step should be apply_inlet on the in_flow-named tag.
+  EXPECT_EQ(plan->as_list()[0].find("tool")->as_string(), "apply_inlet");
+  EXPECT_EQ(plan->as_list()[0].find("input")->find("tag")->as_string(),
+            "inflow_face");
+  // Last step should be apply_outlet on the out_flow-named tag.
+  const auto& last = plan->as_list().back();
+  EXPECT_EQ(last.find("tool")->as_string(), "apply_outlet");
+  EXPECT_EQ(last.find("input")->find("tag")->as_string(), "outflow_face");
+  // The two `walls_*` tags should appear as apply_wall steps.
+  std::size_t wall_count = 0;
+  for (const auto& step : plan->as_list()) {
+    if (step.find("tool")->as_string() == "apply_wall") ++wall_count;
+  }
+  EXPECT_EQ(wall_count, 2u);
+}
+
+TEST(AiTools_ProposeCfdSetup, CompressibleRegimeRoutesToPimple) {
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;
+  ai::ConfirmationPolicy policy;
+  auto input = pl::Value::map({
+      {"goal",   pl::Value::string("nozzle expansion")},
+      {"regime", pl::Value::string("compressible")},
+  });
+  auto out = ai::dispatch_tool(r, "propose_cfd_setup", input, ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << out.summary;
+  EXPECT_EQ(out.data.find("recommended_solver")->as_string(),
+            "solver.cfd.openfoam.pimple");
+}
+
+TEST(AiTools_ProposeCfdSetup, RejectsUnknownRegime) {
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;
+  ai::ConfirmationPolicy policy;
+  auto input = pl::Value::map({
+      {"goal",   pl::Value::string("anything")},
+      {"regime", pl::Value::string("relativistic")},
+  });
+  auto out = ai::dispatch_tool(r, "propose_cfd_setup", input, ctx, policy);
+  ASSERT_TRUE(out.error.has_value());
+  EXPECT_EQ(out.error->code, "INVALID_ARGUMENT");
+}
+
+TEST(AiTools_ValidateBcs, EmptySessionIsWarningOk) {
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;  // no session_state
+  ai::ConfirmationPolicy policy;
+  auto out = ai::dispatch_tool(r, "validate_bcs",
+                               pl::Value::null_value(), ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << out.summary;
+  EXPECT_TRUE(out.data.find("ok")->as_bool());
+  const auto* issues = out.data.find("issues");
+  ASSERT_NE(issues, nullptr);
+  ASSERT_EQ(issues->kind(), pl::Value::Kind::List);
+  ASSERT_FALSE(issues->as_list().empty());
+  EXPECT_EQ(issues->as_list()[0].find("severity")->as_string(), "warning");
+}
+
+TEST(AiTools_ValidateBcs, FullSetupIsOk) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["apply_inlet"]  = ai::Confirmation::Auto;
+  policy.overrides["apply_wall"]   = ai::Confirmation::Auto;
+  policy.overrides["apply_outlet"] = ai::Confirmation::Auto;
+
+  ai::dispatch_tool(r, "apply_inlet",
+      pl::Value::map({{"tag",      pl::Value::string("in")},
+                      {"velocity", pl::Value::number(1.0)}}),
+      ctx, policy);
+  ai::dispatch_tool(r, "apply_wall",
+      pl::Value::map({{"tag", pl::Value::string("walls")}}),
+      ctx, policy);
+  ai::dispatch_tool(r, "apply_outlet",
+      pl::Value::map({{"tag",      pl::Value::string("out")},
+                      {"pressure", pl::Value::number(0.0)}}),
+      ctx, policy);
+
+  auto out = ai::dispatch_tool(r, "validate_bcs",
+                               pl::Value::null_value(), ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << out.summary;
+  EXPECT_TRUE(out.data.find("ok")->as_bool());
+  EXPECT_EQ(out.data.find("counts")->find("inlet")->as_number(),  1.0);
+  EXPECT_EQ(out.data.find("counts")->find("wall")->as_number(),   1.0);
+  EXPECT_EQ(out.data.find("counts")->find("outlet")->as_number(), 1.0);
+}
+
+TEST(AiTools_ValidateBcs, NoInletAndNoOutletEmitWarnings) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["apply_wall"] = ai::Confirmation::Auto;
+
+  // Stage only walls.
+  ai::dispatch_tool(r, "apply_wall",
+      pl::Value::map({{"tag", pl::Value::string("walls")}}),
+      ctx, policy);
+
+  auto out = ai::dispatch_tool(r, "validate_bcs",
+                               pl::Value::null_value(), ctx, policy);
+  ASSERT_FALSE(out.error.has_value());
+  EXPECT_TRUE(out.data.find("ok")->as_bool());  // warnings only.
+  bool saw_no_inlet  = false, saw_no_outlet = false;
+  for (const auto& iss : out.data.find("issues")->as_list()) {
+    const auto code = std::string(iss.find("code")->as_string());
+    if (code == "NO_INLET")  saw_no_inlet  = true;
+    if (code == "NO_OUTLET") saw_no_outlet = true;
+  }
+  EXPECT_TRUE(saw_no_inlet);
+  EXPECT_TRUE(saw_no_outlet);
+}
+
+TEST(AiTools_ValidateBcs, DuplicateTagWithConflictingTypesIsError) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  policy.overrides["apply_inlet"]  = ai::Confirmation::Auto;
+  policy.overrides["apply_outlet"] = ai::Confirmation::Auto;
+
+  // Same tag once as inlet, then as outlet — apply_* tools do not
+  // dedupe, so the staged bag has the duplicate.
+  ai::dispatch_tool(r, "apply_inlet",
+      pl::Value::map({{"tag",      pl::Value::string("port")},
+                      {"velocity", pl::Value::number(1.0)}}),
+      ctx, policy);
+  ai::dispatch_tool(r, "apply_outlet",
+      pl::Value::map({{"tag",      pl::Value::string("port")},
+                      {"pressure", pl::Value::number(0.0)}}),
+      ctx, policy);
+
+  auto out = ai::dispatch_tool(r, "validate_bcs",
+                               pl::Value::null_value(), ctx, policy);
+  ASSERT_FALSE(out.error.has_value());
+  EXPECT_FALSE(out.data.find("ok")->as_bool());
+  bool saw_dup = false;
+  for (const auto& iss : out.data.find("issues")->as_list()) {
+    if (iss.find("code")->as_string() == "DUPLICATE_TAG") saw_dup = true;
+  }
+  EXPECT_TRUE(saw_dup);
 }
 
 // Three CFD-aware tools chained together build a complete pipe-flow BC

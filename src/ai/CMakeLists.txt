@@ -30,6 +30,9 @@ add_library(souxmar_ai
   tools/apply_inlet.cpp
   tools/apply_wall.cpp
   tools/apply_outlet.cpp
+  # Sprint 8 push 5 — CFD planner + BC validator.
+  tools/propose_cfd_setup.cpp
+  tools/validate_bcs.cpp
 )
 add_library(souxmar::ai ALIAS souxmar_ai)
 

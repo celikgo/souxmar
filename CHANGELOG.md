@@ -8,6 +8,20 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
+#### Sprint 8 push 5 — CFD planner + BC validator (catalogue 16 → 18); ADR-0010 tool-contract v1 freeze candidate
+
+Two new agent tools that close out the v1 catalogue at 18, plus the
+**ADR-0010 freeze candidate** for the agent tool contract — mirroring
+the ABI candidate-then-final process from ADR-0007 → ADR-0008. **No
+frozen-header surface touched** — `souxmar-c/*` unchanged; ABI v1.1
+stands.
+
+- **`tools/propose_cfd_setup.cpp`** — `{goal, tags?, regime?, target_velocity?}`. Heuristic planner: maps an optional list of mesh boundary tags onto an inlet/wall/outlet trio (matches `/in|inlet|inflow/i` for the first, `/out|outlet|exit/i` for the last), recommends a solver capability per regime (`incompressible` → `solver.cfd.simple`; `compressible` → `solver.cfd.openfoam.pimple`; `multiphase` → `solver.cfd.openfoam.inter`). Returns a dispatch-ready plan (`[{tool, input}, ...]`) the agent walks through. Pure planner — read-only, deterministic, replayable, easy to score against the agent eval suite.
+- **`tools/validate_bcs.cpp`** — stateless sanity check on `session_state.boundary_conditions`. Reports errors (malformed entry, missing tag/type, duplicate tag with conflicting types, `pressure_outlet` without a numeric pressure) and warnings (no inlet, no outlet, empty session). Returns per-type counts so the LLM can decide what's missing. Confirmation::Auto — agents loop on it during BC iteration.
+- **ADR-0010** (`docs/adr/0010-tool-contract-v1-freeze-candidate.md`) — declares the agent tool contract a **freeze candidate** at 18 tools. Locks the framework surface in `include/souxmar/ai/tool.h` (Confirmation enum, ToolError / ToolResult / ToolContext / Tool / ToolRegistry / ConfirmationPolicy field shapes + method signatures; `dispatch_tool`'s five-step contract). Locks per-tool **name**, **category**, **confirmation tier**, and **schema shape** for every tool in `default_v1_tools()`. Tool *descriptions* (the LLM-facing blurbs) stay editable as documentation. Ratchet allows additive new tools (`Ratchet: additive tool (ADR-0010)`) and additive optional `ToolContext` fields (`Ratchet: additive context field (ADR-0010)`). Final freeze target: Sprint 9 push 1, gated on a clear soak.
+- **`scripts/check-tool-contract.sh`** — CI guard that detects modifications to `include/souxmar/ai/tool.h` / `src/ai/tools/default_registry.cpp` and demands the matching ratchet marker. Runs **non-blocking** during the candidate period (prints a warning + exits 0) and flips to blocking via `SOUXMAR_TOOL_CONTRACT_BLOCKING=1` when the final-freeze ADR lands.
+- **Tests** (`tests/unit/test_ai_tools.cpp`): generic-pipe planner returns inlet→wall→outlet with the target velocity carried through; tag-list planner picks `inflow_face`/`outflow_face` correctly and emits one apply_wall per wall tag; compressible regime → `pimple`; unknown regime rejected. validate_bcs: empty session → warning-OK; full inlet+wall+outlet → ok=true with right counts; only-walls → ok=true with NO_INLET + NO_OUTLET warnings; same tag staged as inlet then outlet → ok=false with DUPLICATE_TAG. Registry-count assertion updated `16 → 18`.
+
 #### Sprint 8 push 4 — CFD-aware BC tools (catalogue 13 → 16)
 
 Three new agent tools — `apply_inlet`, `apply_wall`, `apply_outlet` — extending the `set_bc` general-purpose surface with CFD vocabulary. Same staging contract as `set_bc` (append to `session_state.boundary_conditions`); the value of the trio is that each entry carries `type: 'inlet' | 'wall' | 'outlet'` plus the canonical CFD inputs, so downstream solvers (cfd-stub, openfoam-solver) can pattern-match on `type` instead of parsing free-form Dirichlet/Neumann bags. **No frozen-header surface touched** — `souxmar-c/*` unchanged; ABI v1.1 stands.

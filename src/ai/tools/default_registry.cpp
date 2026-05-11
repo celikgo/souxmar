@@ -29,6 +29,10 @@ Tool make_export_results_tool();
 Tool make_apply_inlet_tool();
 Tool make_apply_wall_tool();
 Tool make_apply_outlet_tool();
+// Sprint 8 push 5 — CFD planner + BC validator. Catalogue 16 → 18.
+// Tool-contract v1 freeze candidate lands at this catalogue (ADR-0010).
+Tool make_propose_cfd_setup_tool();
+Tool make_validate_bcs_tool();
 
 ToolRegistry default_v1_tools() {
   ToolRegistry r;
@@ -53,6 +57,10 @@ ToolRegistry default_v1_tools() {
   r.add(make_apply_inlet_tool());
   r.add(make_apply_wall_tool());
   r.add(make_apply_outlet_tool());
+  // Sprint 8 push 5 — CFD planner + BC validator (catalogue closes at
+  // 18 for the ADR-0010 tool-contract v1 freeze candidate).
+  r.add(make_propose_cfd_setup_tool());
+  r.add(make_validate_bcs_tool());
   return r;
 }
 
