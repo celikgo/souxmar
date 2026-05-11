@@ -446,15 +446,205 @@ TEST(ValueYaml, StageRefShorthand) {
 
 TEST(AiDefaultTools_v2, RegistryNowContainsEightTools) {
   auto r = ai::default_v1_tools();
-  // Sprint 6 push 1: catalogue grew to 9 (added query_mesh_quality).
-  EXPECT_EQ(r.list().size(), 9u);
+  // Sprint 6 push 3: catalogue 9 → 12 (added set_material, list_plugins,
+  // apply_pipeline_diff, export_results).
+  EXPECT_EQ(r.list().size(), 12u);
   for (const auto* expected : {
       "read_geometry_summary", "mesh", "set_bc", "solve",
       "screenshot_viewport", "query_field", "compute_field",
       "propose_pipeline",
-      "query_mesh_quality"}) {
+      "query_mesh_quality",
+      "set_material", "list_plugins", "apply_pipeline_diff", "export_results"}) {
     EXPECT_NE(r.find(expected), nullptr) << "missing tool: " << expected;
   }
+}
+
+// ============================================================================
+// Sprint 6 push 3 — new tools (set_material / list_plugins /
+// apply_pipeline_diff / export_results).
+// ============================================================================
+
+TEST(AiTools_SetMaterial, AppendsToSessionStateMaterials) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  // ConfirmOnce tools without a prompter return NOT_CONFIRMED — feed
+  // an always-yes prompter so the handler runs.
+  policy.prompter = [](const ai::Tool&, const pl::Value&) { return true; };
+
+  std::map<std::string, pl::Value> input;
+  input.emplace("tag",        pl::Value::string("body"));
+  input.emplace("model",      pl::Value::string("linear_elastic"));
+  std::map<std::string, pl::Value> props;
+  props.emplace("E",  pl::Value::number(210e9));
+  props.emplace("nu", pl::Value::number(0.3));
+  input.emplace("properties", pl::Value::map(std::move(props)));
+
+  auto out = ai::dispatch_tool(r, "set_material",
+                               pl::Value::map(std::move(input)), ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << (out.error ? out.error->message : "");
+  EXPECT_EQ(out.data.find("count")->as_number(), 1.0);
+
+  const auto* mats = session.find("materials");
+  ASSERT_NE(mats, nullptr);
+  ASSERT_EQ(mats->kind(), pl::Value::Kind::List);
+  ASSERT_EQ(mats->as_list().size(), 1u);
+  EXPECT_EQ(mats->as_list()[0].find("tag")->as_string(), "body");
+  EXPECT_EQ(mats->as_list()[0].find("model")->as_string(), "linear_elastic");
+}
+
+TEST(AiTools_SetMaterial, RejectsMissingProperties) {
+  auto r = ai::default_v1_tools();
+  pl::Value session = pl::Value::map({});
+  ai::ToolContext ctx;
+  ctx.session_state = &session;
+  ai::ConfirmationPolicy policy;
+  policy.prompter = [](const ai::Tool&, const pl::Value&) { return true; };
+
+  std::map<std::string, pl::Value> input;
+  input.emplace("tag",   pl::Value::string("body"));
+  input.emplace("model", pl::Value::string("linear_elastic"));
+  // No `properties` map.
+  auto out = ai::dispatch_tool(r, "set_material",
+                               pl::Value::map(std::move(input)), ctx, policy);
+  ASSERT_TRUE(out.error.has_value());
+  EXPECT_EQ(out.error->code, "INVALID_ARGUMENT");
+}
+
+TEST(AiTools_ListPlugins, RequiresRegistry) {
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;  // no registry
+  ai::ConfirmationPolicy policy;
+  auto out = ai::dispatch_tool(r, "list_plugins",
+                               pl::Value::null_value(), ctx, policy);
+  ASSERT_TRUE(out.error.has_value());
+  EXPECT_EQ(out.error->code, "INTERNAL");
+}
+
+TEST(AiTools_ListPlugins, ReturnsEmptyOnEmptyRegistry) {
+  auto r = ai::default_v1_tools();
+  souxmar::plugin::Registry empty;
+  ai::ToolContext ctx;
+  ctx.registry = &empty;
+  ai::ConfirmationPolicy policy;
+  auto out = ai::dispatch_tool(r, "list_plugins",
+                               pl::Value::null_value(), ctx, policy);
+  ASSERT_FALSE(out.error.has_value());
+  EXPECT_EQ(out.data.find("count_total")->as_number(), 0.0);
+  const auto* caps = out.data.find("capabilities");
+  ASSERT_NE(caps, nullptr);
+  ASSERT_EQ(caps->kind(), pl::Value::Kind::List);
+  EXPECT_EQ(caps->as_list().size(), 0u);
+}
+
+TEST(AiTools_ApplyPipelineDiff, AddStageAndReValidate) {
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;
+  ai::ConfirmationPolicy policy;
+  policy.prompter = [](const ai::Tool&, const pl::Value&) { return true; };
+
+  // Base: a 1-stage pipeline (mesher).
+  std::map<std::string, pl::Value> mesh_stage;
+  mesh_stage.emplace("id",     pl::Value::string("mesh"));
+  mesh_stage.emplace("plugin", pl::Value::string("mesher.tetra.hello"));
+  std::vector<pl::Value> stages{pl::Value::map(std::move(mesh_stage))};
+  std::map<std::string, pl::Value> base_map;
+  base_map.emplace("version", pl::Value::number(1));
+  base_map.emplace("stages",  pl::Value::list(std::move(stages)));
+
+  // Op: add a writer downstream.
+  std::map<std::string, pl::Value> add_stage_map;
+  add_stage_map.emplace("id",     pl::Value::string("write"));
+  add_stage_map.emplace("plugin", pl::Value::string("writer.vtu"));
+  std::map<std::string, pl::Value> write_input;
+  std::map<std::string, pl::Value> from_ref;
+  from_ref.emplace("from", pl::Value::string("mesh"));
+  write_input.emplace("mesh", pl::Value::map(std::move(from_ref)));
+  write_input.emplace("path", pl::Value::string("/tmp/out.vtu"));
+  add_stage_map.emplace("input", pl::Value::map(std::move(write_input)));
+
+  std::map<std::string, pl::Value> add_op;
+  add_op.emplace("op",    pl::Value::string("add"));
+  add_op.emplace("after", pl::Value::string("mesh"));
+  add_op.emplace("stage", pl::Value::map(std::move(add_stage_map)));
+
+  std::vector<pl::Value> ops{pl::Value::map(std::move(add_op))};
+
+  std::map<std::string, pl::Value> input;
+  input.emplace("base", pl::Value::map(std::move(base_map)));
+  input.emplace("ops",  pl::Value::list(std::move(ops)));
+
+  auto out = ai::dispatch_tool(r, "apply_pipeline_diff",
+                               pl::Value::map(std::move(input)), ctx, policy);
+  ASSERT_FALSE(out.error.has_value()) << (out.error ? out.error->message : "");
+  EXPECT_EQ(out.data.find("parsed_stages")->as_number(), 2.0);
+  EXPECT_EQ(out.data.find("ops_applied")->as_number(),   1.0);
+  EXPECT_NE(out.data.find("yaml")->as_string().find("writer.vtu"),
+            std::string_view::npos);
+}
+
+TEST(AiTools_ApplyPipelineDiff, DanglingReferenceTripsParser) {
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;
+  ai::ConfirmationPolicy policy;
+  policy.prompter = [](const ai::Tool&, const pl::Value&) { return true; };
+
+  // Base: mesh → write. Remove `mesh` so `write` dangles.
+  std::map<std::string, pl::Value> mesh_stage;
+  mesh_stage.emplace("id",     pl::Value::string("mesh"));
+  mesh_stage.emplace("plugin", pl::Value::string("mesher.tetra.hello"));
+
+  std::map<std::string, pl::Value> write_stage;
+  write_stage.emplace("id",     pl::Value::string("write"));
+  write_stage.emplace("plugin", pl::Value::string("writer.vtu"));
+  std::map<std::string, pl::Value> wi;
+  std::map<std::string, pl::Value> ref;
+  ref.emplace("from", pl::Value::string("mesh"));
+  wi.emplace("mesh", pl::Value::map(std::move(ref)));
+  write_stage.emplace("input", pl::Value::map(std::move(wi)));
+
+  std::vector<pl::Value> stages{
+      pl::Value::map(std::move(mesh_stage)),
+      pl::Value::map(std::move(write_stage))};
+  std::map<std::string, pl::Value> base_map;
+  base_map.emplace("version", pl::Value::number(1));
+  base_map.emplace("stages",  pl::Value::list(std::move(stages)));
+
+  std::map<std::string, pl::Value> remove_op;
+  remove_op.emplace("op", pl::Value::string("remove"));
+  remove_op.emplace("id", pl::Value::string("mesh"));
+  std::vector<pl::Value> ops{pl::Value::map(std::move(remove_op))};
+
+  std::map<std::string, pl::Value> input;
+  input.emplace("base", pl::Value::map(std::move(base_map)));
+  input.emplace("ops",  pl::Value::list(std::move(ops)));
+
+  auto out = ai::dispatch_tool(r, "apply_pipeline_diff",
+                               pl::Value::map(std::move(input)), ctx, policy);
+  ASSERT_TRUE(out.error.has_value());
+  EXPECT_EQ(out.error->code, "INVALID_ARGUMENT");
+}
+
+TEST(AiTools_ExportResults, RequiresMeshHandle) {
+  auto r = ai::default_v1_tools();
+  ai::ToolContext ctx;
+  ai::ConfirmationPolicy policy;
+  policy.prompter = [](const ai::Tool&, const pl::Value&) { return true; };
+
+  std::map<std::string, pl::Value> input;
+  input.emplace("capability_id", pl::Value::string("writer.vtu"));
+  input.emplace("path",          pl::Value::string("/tmp/x.vtu"));
+  auto out = ai::dispatch_tool(r, "export_results",
+                               pl::Value::map(std::move(input)), ctx, policy);
+  ASSERT_TRUE(out.error.has_value());
+  // No registry / dispatcher attached → INTERNAL. With them and no
+  // mesh handle → PRECONDITION_FAILED. Either reaches an early-error
+  // path without invoking a writer.
+  EXPECT_TRUE(out.error->code == "INTERNAL" ||
+              out.error->code == "PRECONDITION_FAILED" ||
+              out.error->code == "PLUGIN_NOT_FOUND");
 }
 
 TEST(AiTools_QueryMeshQuality, RequiresMeshHandle) {

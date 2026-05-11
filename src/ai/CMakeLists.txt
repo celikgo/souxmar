@@ -18,6 +18,11 @@ add_library(souxmar_ai
   tools/propose_pipeline.cpp
   # Sprint 6 push 1.
   tools/query_mesh_quality.cpp
+  # Sprint 6 push 3.
+  tools/set_material.cpp
+  tools/list_plugins.cpp
+  tools/apply_pipeline_diff.cpp
+  tools/export_results.cpp
 )
 add_library(souxmar::ai ALIAS souxmar_ai)
 

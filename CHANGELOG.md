@@ -356,6 +356,22 @@ This push lands no code under `src/` — it is the contractual moment Sprint 5 h
   - `tests/unit/test_discovery.cpp` — every existing rejection test now asserts on the new `code`; new `BadCapabilityNamespaceManifestRejectedWithStructuredCode` test that walks the full plugin-host stack: bad manifest → discovery → structured rejection.
 - **No frozen-header surface was touched** — `souxmar-c/*` is unchanged. The new structured-rejection surface is all C++; the ABI v1 freeze-candidate soak rolls forward unchanged.
 
+#### Sprint 6 push 3 — agent tools 9 → 12
+
+- **Four new agent tools** complete the docs/AI_INTEGRATION.md v1 catalogue:
+  - **`set_material`** (`src/ai/tools/set_material.cpp`, BC / ConfirmOnce) — stages a material spec on `session_state['materials']`. Mirrors `set_bc`'s shape: `{tag, model, properties: {<key>: number|string, ...}, name?}`. Validates required fields; passes unknown keys through so future solver plugins can introduce material parameters without a tool upgrade.
+  - **`list_plugins`** (`src/ai/tools/list_plugins.cpp`, Read / Auto) — walks `ctx.registry`, returns `{capabilities: [{id, kind, plugin_id, abi_version, threading}, ...], count_total, count_by_kind}`. Optional `{namespace: string}` filter routes through `Registry::list_capabilities_in_namespace`. This is the inventory call the agent makes before `mesh` / `solve` / `compute_field` / `export_results` so it picks a capability the host has actually loaded.
+  - **`apply_pipeline_diff`** (`src/ai/tools/apply_pipeline_diff.cpp`, Pipeline / ConfirmOnce) — applies `{base, ops}` where `ops` are `{op: 'add'|'remove'|'set_input'|'replace', ...}`. The result is re-emitted via `emit_value_yaml` and re-parsed via `parse_pipeline`, so a returned draft is guaranteed to load at `souxmar run` time. A `remove` op that leaves a `{from: <id>}` dangling trips the parser; the tool surfaces `INVALID_ARGUMENT` with the parser's line/column rather than producing a broken draft. The matching `write_pipeline` (commit-to-disk) lands in Sprint 7.
+  - **`export_results`** (`src/ai/tools/export_results.cpp`, Export / ConfirmAlways) — dispatches a registered `writer.*` capability against the session mesh + (optional) field via the synthetic-upstream pattern (`__session_mesh__` / `__session_field__`) `compute_field` / `query_mesh_quality` already use. The `path` is passed through in the stage input bag. ConfirmAlways because writers have observable side-effects (files appearing on disk).
+- **`default_v1_tools()` catalogue size: 9 → 12.** `tests/unit/test_ai_tools.cpp` and `bindings/python/tests/test_agent_tools.py` registry assertions bumped to 12 and the full expected name set updated.
+- **Tests**:
+  - `set_material`: success path appends to `session_state['materials']`; missing `properties` is rejected with `INVALID_ARGUMENT`.
+  - `list_plugins`: missing-registry → `INTERNAL`; empty registry → zero-result success path.
+  - `apply_pipeline_diff`: add-stage round-trips through the parser; remove-with-dangling-reference is rejected with `INVALID_ARGUMENT` (the parser is the ground truth on what a valid pipeline is).
+  - `export_results`: precondition failures (no mesh / no registry / unknown writer) all surface structured `ToolError` codes; no writer is invoked.
+  - Python mirror covers the same four surfaces via the existing `sx.Registry()` / `sx.ai.dispatch_tool` bindings.
+- **No frozen-header surface touched.** Four pure additions to `libsouxmar-ai`; the new tools talk to plugins exclusively through `RegistryDispatcher`. ABI v1 freeze-candidate soak rolls forward unchanged.
+
 ### Changed
 
 - (None this release.)

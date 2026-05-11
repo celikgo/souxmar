@@ -16,9 +16,9 @@ import pysouxmar as sx
 
 
 def test_default_registry_contains_v1_tools():
-    """Sprint 6 push 1 expanded the catalogue from 8 to 9 tools."""
+    """Sprint 6 push 3 expanded the catalogue from 9 to 12 tools."""
     r = sx.ai.default_v1_tools()
-    assert len(r) == 9
+    assert len(r) == 12
     assert set(r.list()) == {
         "read_geometry_summary",
         "mesh",
@@ -29,7 +29,90 @@ def test_default_registry_contains_v1_tools():
         "compute_field",
         "propose_pipeline",
         "query_mesh_quality",
+        "set_material",
+        "list_plugins",
+        "apply_pipeline_diff",
+        "export_results",
     }
+
+
+def test_set_material_stages_session_state():
+    r = sx.ai.default_v1_tools()
+    ctx = sx.ai.ToolContext()
+    ctx.session_state = {}
+    policy = sx.ai.ConfirmationPolicy()
+    policy.prompter = lambda tool, inputs: True
+
+    out = sx.ai.dispatch_tool(r, "set_material", {
+        "tag": "body",
+        "model": "linear_elastic",
+        "properties": {"E": 210e9, "nu": 0.3, "rho": 7850.0},
+    }, ctx, policy)
+    assert out.error is None, out.summary
+    assert out.data["count"] == 1
+    mats = ctx.session_state["materials"]
+    assert len(mats) == 1
+    assert mats[0]["tag"] == "body"
+    assert mats[0]["model"] == "linear_elastic"
+
+
+def test_list_plugins_on_empty_registry():
+    r = sx.ai.default_v1_tools()
+    ctx = sx.ai.ToolContext()
+    ctx.registry = sx.Registry()
+    policy = sx.ai.ConfirmationPolicy()
+    out = sx.ai.dispatch_tool(r, "list_plugins", None, ctx, policy)
+    assert out.error is None
+    assert out.data["count_total"] == 0
+    assert out.data["capabilities"] == []
+
+
+def test_apply_pipeline_diff_adds_stage():
+    r = sx.ai.default_v1_tools()
+    ctx = sx.ai.ToolContext()
+    policy = sx.ai.ConfirmationPolicy()
+    policy.prompter = lambda tool, inputs: True
+
+    out = sx.ai.dispatch_tool(r, "apply_pipeline_diff", {
+        "base": {
+            "version": 1,
+            "stages": [
+                {"id": "mesh", "plugin": "mesher.tetra.hello"},
+            ],
+        },
+        "ops": [
+            {"op": "add", "after": "mesh", "stage": {
+                "id": "write", "plugin": "writer.vtu",
+                "input": {"mesh": {"from": "mesh"}, "path": "/tmp/out.vtu"},
+            }},
+        ],
+    }, ctx, policy)
+    assert out.error is None, out.summary
+    assert out.data["parsed_stages"] == 2
+    assert "writer.vtu" in out.data["yaml"]
+
+
+def test_apply_pipeline_diff_rejects_dangling():
+    r = sx.ai.default_v1_tools()
+    ctx = sx.ai.ToolContext()
+    policy = sx.ai.ConfirmationPolicy()
+    policy.prompter = lambda tool, inputs: True
+
+    out = sx.ai.dispatch_tool(r, "apply_pipeline_diff", {
+        "base": {
+            "version": 1,
+            "stages": [
+                {"id": "mesh", "plugin": "mesher.tetra.hello"},
+                {"id": "write", "plugin": "writer.vtu",
+                 "input": {"mesh": {"from": "mesh"}}},
+            ],
+        },
+        "ops": [
+            {"op": "remove", "id": "mesh"},
+        ],
+    }, ctx, policy)
+    assert out.error is not None
+    assert out.error.code == "INVALID_ARGUMENT"
 
 
 def test_tool_metadata_round_trips():
