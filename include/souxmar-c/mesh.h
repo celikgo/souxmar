@@ -15,6 +15,7 @@
 #define SOUXMAR_C_MESH_H
 
 #include "souxmar-c/abi.h"
+#include "souxmar-c/buffer.h"
 #include "souxmar-c/status.h"
 #include "souxmar-c/types.h"
 
@@ -103,6 +104,61 @@ int32_t  souxmar_mesh_cell_tag(const souxmar_mesh_t* mesh, uint64_t cell_index);
 /* Zero-copy access to the flat 3*N node coordinate buffer. Pointer is
  * valid until the next mutation of the mesh. *out_size receives 3*N. */
 const double* souxmar_mesh_nodes_flat(const souxmar_mesh_t* mesh, size_t* out_size);
+
+/* ---- Bulk construction (Sprint 5 push 4 — ADR-0006) ---- */
+
+/* Bulk-construction descriptor. Every buffer is borrowed by the host
+ * during the souxmar_mesh_from_buffers call and may be freed by the
+ * plugin immediately on return. Layout contract:
+ *
+ *   node_coords        : 3 * num_nodes contiguous doubles, row-major (xyz, xyz, ...).
+ *                        size_bytes = 3 * num_nodes * sizeof(double).
+ *
+ *   cell_types         : num_cells uint16_t values, each one of SOUXMAR_ET_*.
+ *                        size_bytes = num_cells * sizeof(uint16_t).
+ *
+ *   cell_connectivity  : flat uint64_t buffer of node indices. The slice
+ *                        for cell i is connectivity[offsets[i] .. offsets[i+1]).
+ *                        size_bytes = total_node_refs * sizeof(uint64_t),
+ *                        where total_node_refs = offsets[num_cells].
+ *
+ *   cell_offsets       : (num_cells + 1) uint64_t values. offsets[0] = 0;
+ *                        offsets[i+1] - offsets[i] = number of nodes in cell i;
+ *                        offsets[num_cells] = total_node_refs.
+ *                        size_bytes = (num_cells + 1) * sizeof(uint64_t).
+ *
+ *   cell_tags          : OPTIONAL (NULL allowed). num_cells int32_t values
+ *                        (-1 for untagged). size_bytes = num_cells * sizeof(int32_t).
+ */
+typedef struct souxmar_mesh_buffers {
+  const souxmar_buffer_t*  node_coords;
+  size_t                   num_nodes;
+  const souxmar_buffer_t*  cell_types;
+  const souxmar_buffer_t*  cell_connectivity;
+  const souxmar_buffer_t*  cell_offsets;
+  size_t                   num_cells;
+  const souxmar_buffer_t*  cell_tags;       /* may be NULL */
+} souxmar_mesh_buffers_t;
+
+/* Build a Mesh from pre-populated buffers in a single ABI call.
+ *
+ * On success returns a fresh souxmar_mesh_t* (ownership transferred to
+ * the caller, free with souxmar_mesh_free) and writes SOUXMAR_OK to
+ * *out_status.
+ *
+ * On failure returns NULL and writes a structured status to *out_status
+ * describing what was wrong:
+ *   * SOUXMAR_E_INVALID_ARGUMENT  — buffers struct or required pointer NULL
+ *   * SOUXMAR_E_INVALID_ARGUMENT  — buffer size doesn't match declared count
+ *   * SOUXMAR_E_INVALID_ARGUMENT  — cell_offsets non-monotonic / wrong terminator
+ *   * SOUXMAR_E_INVALID_ARGUMENT  — cell_types[i] is not a known SOUXMAR_ET_*
+ *   * SOUXMAR_E_INVALID_ARGUMENT  — per-cell node count doesn't match its element type
+ *   * SOUXMAR_E_INVALID_ARGUMENT  — cell connectivity references an out-of-range node
+ *   * SOUXMAR_E_OUT_OF_MEMORY     — host couldn't allocate the new Mesh
+ *
+ * out_status may be NULL if the caller doesn't care about the reason. */
+souxmar_mesh_t* souxmar_mesh_from_buffers(const souxmar_mesh_buffers_t* buffers,
+                                          souxmar_status_t*             out_status);
 
 SOUXMAR_C_END
 

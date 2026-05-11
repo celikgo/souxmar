@@ -279,6 +279,23 @@ The plugin C ABI version is tracked separately and is independent of the project
 - **Unit test updates**: `tests/unit/test_ai_tools.cpp` — `compute_field` is no longer NOT_AVAILABLE. New assertions: `INVALID_ARGUMENT` for a missing `capability_id`, `PLUGIN_NOT_FOUND` / `PRECONDITION_FAILED` for an empty registry. Python pytest mirrors the same.
 - **Docs**: ADR-0005 documents the decision, the three alternatives considered (extend solver vtable / smuggle through value bag / subprocess), and the consequences.
 
+#### Sprint 5 push 4 — bulk-buffer ABI for large mesh transfer (ADR-0006)
+
+- **[ABI v1]** New opaque handle `souxmar_buffer_t` (`include/souxmar-c/buffer.h`, `src/core/c_abi_buffer.cpp`):
+  - `souxmar_buffer_new(bytes)` / `_free` / `_data` / `_data_const` / `_size` / `_alignment` (≥16-byte SIMD-friendly).
+  - Heap-backed v1 implementation. Internal header carries a magic word + size + allocation pointer; double-free is a no-op rather than a corruption (poisons the magic on first free).
+  - Forward-compatible with the v2 mmap-backed implementation per [ADR-0006](docs/adr/0006-memory-mapped-buffer-protocol.md) — no plugin-side change when v2 lands.
+- **`souxmar_mesh_from_buffers()`** (`include/souxmar-c/mesh.h`, `src/core/c_abi_mesh.cpp`):
+  - `souxmar_mesh_buffers_t` descriptor: `node_coords` (3·num_nodes doubles) + `cell_types` (uint16 per cell) + `cell_connectivity` (flat uint64 node ids) + `cell_offsets` (num_cells+1 uint64 prefix sum) + optional `cell_tags` (int32 per cell, NULL = untagged).
+  - Single-call mesh ingest — amortizes the ~50 ns per-call ABI overhead the per-element `souxmar_mesh_add_node` / `add_cell` path pays.
+  - Full validation: required-pointer null check, each buffer's size matches its declared count, offsets monotonic + zero-prefixed + terminator matches connectivity length, every cell type is a known `SOUXMAR_ET_*`, per-cell node count matches the element type's expected count, every node index is in range. `out_status` carries a structured rejection reason on any failure.
+  - Pre-reserves the underlying `Mesh` vectors from the declared counts so the hot loop is amortised O(1) per element.
+- **Latent bug fixed**: `souxmar_value_t` was referenced throughout the C ABI (`solver.h`, `value.h`) but never `typedef`'d. The in-tree plugins all compile as C++, where `struct X` aliases `X` automatically, masking the issue. Pure-C plugin authors would have hit an "unknown type" error. Typedef added to `souxmar-c/types.h` next to the new `souxmar_buffer_t`.
+- **Benchmark**: `benchmarks/bench_mesh_construction.cpp` compares per-element vs bulk construction across N³ tetrahedral grids (N = 8 / 16 / 32 / 64). First in-tree benchmark — `benchmarks/CMakeLists.txt` is the seed for the nightly perf-regression CI work in the Sprint 5 plan.
+- **Tests**: `tests/unit/test_c_abi_buffer.cpp` covers the buffer round-trip, alignment guarantee, null-safety, every documented bulk-mesh validation failure path (null inputs, wrong sizes, non-monotonic offsets, unknown element type, mismatched node count, out-of-range node index), and a bulk-vs-incremental equivalence test against a 5-node 2-tet mesh.
+- **ADR-0006**: documents the design, the v1-heap / v2-mmap rollout plan, the alternatives considered (raw pointers, shared-memory from day 1, variable-batch per-element setters), and the freeze-ratchet implications.
+- **Build**: `src/core/CMakeLists.txt` picks up `c_abi_buffer.cpp`; new `benchmarks/` subdirectory wired to the existing top-level `SOUXMAR_BUILD_BENCHMARKS` gate.
+
 ### Changed
 
 - (None this release.)
