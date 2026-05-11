@@ -1,0 +1,67 @@
+# Sprint 12 push 3 — Vitepress docs site build + publish.
+#
+# Triggers on every push to master that touches docs-site/ + on
+# manual workflow_dispatch. Publishes to the souxmar/souxmar
+# repository's GitHub Pages (served at docs.souxmar.dev via a CNAME
+# we set up out-of-band).
+
+name: docs-site
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "docs-site/**"
+      - ".github/workflows/docs-site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages:    write
+  id-token: write
+
+# Allow only one in-flight publish. Subsequent pushes queue + the
+# most-recent wins; no point publishing every intermediate doc edit.
+concurrency:
+  group: docs-site
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: docs-site/package.json
+
+      - name: Install
+        working-directory: docs-site
+        run: npm ci || npm install
+
+      - name: Build
+        working-directory: docs-site
+        env:
+          SOUXMAR_DOCS_BASE: "/"
+        run: npm run build
+
+      - name: Upload artefact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-site/.vitepress/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-22.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

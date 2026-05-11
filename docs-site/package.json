@@ -1,0 +1,16 @@
+{
+  "name": "souxmar-docs-site",
+  "version": "0.9.0",
+  "private": true,
+  "description": "souxmar public documentation site. Sprint 12 push 3 scaffold.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.5.0"
+  }
+}
