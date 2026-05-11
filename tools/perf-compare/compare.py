@@ -1,13 +1,27 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Compare two Google Benchmark JSON reports and exit non-zero on regression.
+"""Compare Google Benchmark JSON reports and exit non-zero on regression.
 
-Usage:
-    compare.py --baseline <path> --current <path> [--threshold 0.10]
+Two modes:
 
-Exit code 0 if every benchmark is within `threshold` (default 10%) of the
-baseline; non-zero otherwise. Prints a per-benchmark table to stdout in
-either case so the GitHub Actions log carries the diff regardless.
+    # Single-file mode (legacy — one benchmark binary at a time):
+    compare.py --baseline <path> --current <path> [--threshold 0.05]
+
+    # Directory mode (Sprint 9 push 6 — full suite at once):
+    compare.py --baseline-dir <dir> --current-dir <dir> [--threshold 0.05]
+
+In directory mode every `<name>.json` in `--current-dir` is compared
+against the same-named file in `--baseline-dir`. Files present in
+current but missing in baseline are reported as "(new — no baseline)"
+and do not fail the gate; files present in baseline but missing in
+current are reported as "(removed)" and do not fail the gate either
+(removing a benchmark is a deliberate motion handled at PR review).
+
+Exit code 0 if every benchmark is within `threshold` (default 5%, per
+docs/ENGINEERING_PRACTICES.md § Performance budgets, lowered from the
+Sprint 5 nightly's 10% by Sprint 9 push 6) of the baseline; non-zero
+otherwise. Prints a per-benchmark table to stdout in either case so
+the GitHub Actions log carries the diff regardless.
 
 Google Benchmark's JSON format records `cpu_time` + `real_time` per
 benchmark. We compare `real_time` (wall clock) since that's what users
@@ -96,35 +110,126 @@ def render(rows: list[tuple[str, float, float, float]], threshold: float) -> str
     return "\n".join(out)
 
 
+def compare_single_pair(baseline_path: Path, current_path: Path,
+                        threshold: float, label: str) -> tuple[bool, str]:
+    """Compare one (baseline, current) JSON file pair.
+
+    Returns (regressed, rendered_table). Errors (missing file, empty
+    parse) raise ValueError so the directory-mode driver can decide
+    per-file how to react.
+    """
+    if not baseline_path.exists():
+        raise ValueError(f"baseline {baseline_path} does not exist")
+    if not current_path.exists():
+        raise ValueError(f"current {current_path} does not exist")
+    baseline = load_benchmarks(baseline_path)
+    current  = load_benchmarks(current_path)
+    if not baseline:
+        raise ValueError(f"no benchmarks parsed from {baseline_path}")
+    if not current:
+        raise ValueError(f"no benchmarks parsed from {current_path}")
+    regressed, rows = compare(baseline, current, threshold)
+    header = f"\n=== {label} ==="
+    return regressed, header + "\n" + render(rows, threshold)
+
+
 def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--baseline", type=Path, required=True)
-    p.add_argument("--current",  type=Path, required=True)
-    p.add_argument("--threshold", type=float, default=0.10,
-                   help="Fail when current/baseline > 1 + threshold (default 0.10)")
+    # Single-file mode (legacy, one binary at a time).
+    p.add_argument("--baseline", type=Path,
+                   help="Baseline JSON file (single-file mode)")
+    p.add_argument("--current",  type=Path,
+                   help="Current JSON file (single-file mode)")
+    # Directory mode (Sprint 9 push 6 — multi-binary suite).
+    p.add_argument("--baseline-dir", type=Path,
+                   help="Directory of baseline JSON files (directory mode)")
+    p.add_argument("--current-dir",  type=Path,
+                   help="Directory of current JSON files (directory mode)")
+    p.add_argument("--threshold", type=float, default=0.05,
+                   help="Fail when current/baseline > 1 + threshold "
+                        "(default 0.05 — matches "
+                        "docs/ENGINEERING_PRACTICES.md § Performance budgets)")
     args = p.parse_args(argv)
 
-    if not args.baseline.exists():
-        print(f"error: baseline {args.baseline} does not exist", file=sys.stderr)
-        return 2
-    if not args.current.exists():
-        print(f"error: current {args.current} does not exist", file=sys.stderr)
-        return 2
-
-    baseline = load_benchmarks(args.baseline)
-    current  = load_benchmarks(args.current)
-    if not baseline:
-        print(f"error: no benchmarks parsed from {args.baseline}", file=sys.stderr)
-        return 2
-    if not current:
-        print(f"error: no benchmarks parsed from {args.current}", file=sys.stderr)
+    single_mode = args.baseline is not None or args.current is not None
+    dir_mode    = args.baseline_dir is not None or args.current_dir is not None
+    if single_mode == dir_mode:
+        print("error: pick exactly one of --baseline/--current or "
+              "--baseline-dir/--current-dir", file=sys.stderr)
         return 2
 
-    regressed, rows = compare(baseline, current, args.threshold)
-    print(render(rows, args.threshold))
-    if regressed:
-        print(f"\nERROR: at least one benchmark regressed beyond {args.threshold * 100:.0f}%",
+    if single_mode:
+        if args.baseline is None or args.current is None:
+            print("error: --baseline and --current must both be set",
+                  file=sys.stderr)
+            return 2
+        try:
+            regressed, table = compare_single_pair(
+                args.baseline, args.current, args.threshold,
+                label=args.current.name)
+        except ValueError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        print(table)
+        if regressed:
+            print(f"\nERROR: at least one benchmark regressed beyond "
+                  f"{args.threshold * 100:.0f}%", file=sys.stderr)
+            return 1
+        print(f"\nOK: every benchmark within {args.threshold * 100:.0f}% of baseline")
+        return 0
+
+    # Directory mode.
+    if args.baseline_dir is None or args.current_dir is None:
+        print("error: --baseline-dir and --current-dir must both be set",
               file=sys.stderr)
+        return 2
+    if not args.current_dir.is_dir():
+        print(f"error: --current-dir {args.current_dir} is not a directory",
+              file=sys.stderr)
+        return 2
+    if not args.baseline_dir.is_dir():
+        print(f"warning: --baseline-dir {args.baseline_dir} is not a "
+              "directory — no comparisons will run", file=sys.stderr)
+
+    any_regression = False
+    any_compared   = False
+    skipped: list[str] = []
+    current_files = sorted(args.current_dir.glob("*.json"))
+    for cur in current_files:
+        base = args.baseline_dir / cur.name
+        if not base.exists():
+            skipped.append(cur.name)
+            print(f"\n=== {cur.name} ===\n  (new — no baseline yet; skipping)")
+            continue
+        try:
+            regressed, table = compare_single_pair(
+                base, cur, args.threshold, label=cur.name)
+        except ValueError as e:
+            print(f"\n=== {cur.name} ===\n  error: {e}", file=sys.stderr)
+            return 2
+        any_compared = True
+        if regressed:
+            any_regression = True
+        print(table)
+
+    # Files in baseline that aren't in current (removed benchmarks).
+    if args.baseline_dir.is_dir():
+        baseline_names = {p.name for p in args.baseline_dir.glob("*.json")}
+        current_names  = {p.name for p in current_files}
+        for missing in sorted(baseline_names - current_names):
+            print(f"\n=== {missing} ===\n  (removed — no current report)")
+
+    if not any_compared:
+        if skipped:
+            print(f"\nNOTE: no comparisons ran — {len(skipped)} new "
+                  "benchmark(s) without a baseline. The first run after a "
+                  "baseline rotation always lands in this state.")
+        else:
+            print("\nNOTE: no current reports found.")
+        return 0
+    if any_regression:
+        print(f"\nERROR: at least one benchmark regressed beyond "
+              f"{args.threshold * 100:.0f}%", file=sys.stderr)
         return 1
     print(f"\nOK: every benchmark within {args.threshold * 100:.0f}% of baseline")
     return 0

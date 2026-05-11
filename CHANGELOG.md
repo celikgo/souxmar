@@ -8,6 +8,40 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
+#### Sprint 9 push 6 — perf-regression gate hardened to the `ENGINEERING_PRACTICES.md` target
+
+First push of Sprint 9's themed "Performance + scale" work; closes the Platform team's named story (`SPRINT_PLAN.md` § Sprint 9: "Benchmark suite gates merges (perf regression > 5 % blocks)"). Aligns the CI gate with the `docs/ENGINEERING_PRACTICES.md` § Performance budgets contract that's been on the books since Sprint 0 but only half-enforced. **No frozen-header surface touched** — CI + tooling + new benchmark; ABI v1.3 stands.
+
+Background: Sprint 5 push 5 landed `perf-nightly.yml` with a 10% regression threshold, ran only on PRs touching a small handful of perf-relevant paths, executed only the single `bench_mesh_construction` binary, and had no committed baseline (so per-PR runs always fell through to the "no baseline — skipping" warning). The `ENGINEERING_PRACTICES.md` doc has named 5% as the live target since the founding crew wrote it. This push closes the gap — and adds perf coverage for the Sprint 9 push 2 ABI v1.3 per-face-tag surface, which had landed without any performance enforcement.
+
+- **`benchmarks/bench_face_tag.cpp`** — new Google Benchmark binary. Four workloads pin the ADR-0012 sparse-map promises:
+  - `BM_FaceTag_Set` — sparse-map insert throughput. One tag per cell, on a fresh mesh per iteration (using `state.PauseTiming` / `state.ResumeTiming` so the mesh-construction cost doesn't pollute the insert measurement). Catches a future regression that makes `set_face_tag` non-amortised-constant.
+  - `BM_FaceTag_GetHit` — populated-tag lookup throughput. Rotates the cell index so the bucket walks aren't hot-cached against one slot.
+  - `BM_FaceTag_GetMiss` — **the zero-storage-zero-cost promise**. No face tags set anywhere; every lookup must short-circuit constant-time regardless of mesh size. A future regression that ever made the empty-map lookup grow with mesh size would surface as a >5% delta between the 1K and 100K arg here.
+  - `BM_FaceTag_Enumerate` — full `tagged_faces()` cost vs. tag count. Locks in the "scales with tagged-face count, not mesh size" promise.
+  Sized at 1K / 10K / 100K cells — same scale step as the existing `bench_mesh_construction` workloads so per-cell costs across reports are directly comparable. Build target wired through the existing `souxmar_add_benchmark()` helper in `benchmarks/CMakeLists.txt`.
+- **`tools/perf-compare/compare.py`** — extended with directory mode. Two new flags (`--baseline-dir`, `--current-dir`); a new `compare_single_pair()` helper extracts the per-pair logic so the directory driver can iterate. Files in current-dir without a same-named baseline are reported as "(new — no baseline yet; skipping)" and do **not** fail the gate — required so a PR that introduces a benchmark doesn't itself fail on the missing baseline. Files in baseline-dir without a matching current are reported as "(removed — no current report)" and don't fail either. Default threshold flipped 0.10 → 0.05 to match the ENGINEERING_PRACTICES.md contract. Single-file mode is preserved for ad-hoc / local use. Three smoke-test paths verified manually (happy path, regression, new-bench-only).
+- **`.github/workflows/perf-nightly.yml`** — three changes:
+  - Workflow name `Perf-nightly` → `Perf`. Reflects that the per-PR gate is now real (the workflow already ran on PRs under a path filter; pre-Sprint-9 push 6 the gate just didn't fail because the threshold was 10% and the baseline was absent).
+  - `REGRESSION_THRESHOLD` env var `"0.10"` → `"0.05"`. Matches the `ENGINEERING_PRACTICES.md` § Performance budgets contract.
+  - Pull-request path filter widened from the Sprint 5 whitelist (only `c_abi_mesh.cpp` / `c_abi_buffer.cpp` / two frozen-buffer headers / `tools/perf-compare`) to cover any host-side core / pipeline / plugin-host change. UI, docs, AI tools, and examples stay outside the gate by construction — they can't affect benchmark numbers.
+  - Per-binary run-and-emit loop. The "Run benchmarks" step now iterates `bench_mesh_construction`, `bench_mmap_buffer`, `bench_face_tag` and writes each to `perf-report/<name>.json`. The "Compare" step uses `compare.py`'s new directory mode so a single comparison run covers the whole suite — no per-binary step duplication, no per-binary skip logic.
+- **`benchmarks/baselines/README.md`** — rewritten to document the new layout. Names the three baseline files (one per binary), records the file-stem-as-baseline-name matching rule, names the new-benchmark-no-baseline carve-out, and points reviewers at the `bash for bench in ...` regeneration loop for full-suite rotations. Notes that loosening the threshold requires an RFC.
+
+**No baseline files committed in this push.** The first rotation that lands non-empty `benchmarks/baselines/*.json` files is the natural next push — the workflow already prints "(new — no baseline yet; skipping)" for each binary in the meantime, and PRs that don't regress fall through cleanly. This is the same Sprint 5 "baseline established" exit criterion still pending on real CI hardware data; the infrastructure is now in place so the rotation is a one-PR motion.
+
+The full Sprint 9 push 6 gate behaviour:
+
+| Scenario                                                   | Workflow outcome                                          |
+| ---------------------------------------------------------- | --------------------------------------------------------- |
+| PR touches a path under the filter, suite all green        | ✅ pass — every binary within 5%                          |
+| PR touches a path under the filter, one binary > 5% slower | ❌ fail — comparison step exits 1, "Fail if regressions" surfaces the diff |
+| PR touches a path outside the filter                       | ⏭ skip — workflow doesn't run; non-perf surface           |
+| PR adds a new benchmark binary                             | ⏭ partial — new bench prints "(new — no baseline)", other binaries still gated |
+| Baseline directory completely empty (first run ever)       | ⏭ all-skip — workflow exits 0 with the "no comparisons ran" note |
+
+The Sprint 9 "Performance + scale" theme moves forward from here — Core's assembly hot-path SIMD pass + PETSc handle pooling, Plugin Host's per-plugin heap accounting, and AI's BYOK latency budget enforcement all build on top of this gate's existence. Each can land its own benchmark + baseline pair without further infrastructure work.
+
 #### Sprint 9 push 5 — `pipe-bend.obj` fixture + `usemtl` preservation in `obj-reader`
 
 Closes the last carry-over from the Sprint 8 retro. The pipe-bend example now runs against real geometry — a 12-vertex L-shaped duct read from `examples/pipe-bend/pipe-bend.obj` — instead of the unit-tet placeholder. The Sprint 8 push 3 `obj-reader` is extended to preserve `usemtl` group names as per-cell tags, the natural metadata channel for downstream tetrahedralisers and the `openfoam-solver` per-patch routing chain (Sprint 9 push 3). **No frozen-header surface touched** — pure plugin-internal + new fixture; ABI v1.3 stands.

@@ -1,25 +1,40 @@
-name: Perf-nightly
+name: Perf
 
-# Runs the Google Benchmark suite nightly + on demand. Captures JSON
-# output, compares to `benchmarks/baselines/main.json` (when present),
-# uploads the report as an artifact, and fails on regressions > 10%.
+# Runs the Google Benchmark suite on every PR that touches perf-relevant
+# paths AND nightly across the full source tree. Captures JSON output
+# from every benchmark binary into `perf-report/`, compares against
+# committed baselines in `benchmarks/baselines/`, uploads the report
+# as an artifact, and fails on regressions > 5% (Sprint 9 push 6 —
+# matches docs/ENGINEERING_PRACTICES.md § Performance budgets; was 10%
+# under the Sprint 5 nightly-only regime).
 #
-# The "baseline established" exit criterion from the Sprint 5 plan is
-# the first PR that lands a non-empty baselines/main.json — see
-# benchmarks/baselines/README.md for the update workflow.
+# Baseline files live one-per-benchmark-binary under
+# `benchmarks/baselines/<binary_name>.json`. Files absent from the
+# baseline directory are reported as "(new — no baseline yet)" and do
+# not fail the gate; deliberate baseline rotations land via the
+# update-workflow documented in benchmarks/baselines/README.md.
 
 on:
   schedule:
     - cron: "47 5 * * *"     # 05:47 UTC daily (30 min after the sanitisers job)
   workflow_dispatch:
   pull_request:
+    # Sprint 9 push 6 — widened from the Sprint 5 perf-relevant whitelist
+    # (which only covered c_abi_mesh.cpp / c_abi_buffer.cpp / the
+    # frozen-buffer headers / tools/perf-compare). The gate now fires on
+    # any host-side core / pipeline / plugin-host change, the benchmark
+    # suite itself, and the perf-compare tool. Anything outside this
+    # path filter never affects performance by construction (UI work,
+    # docs, AI tools, examples) and stays out of the per-PR gate.
     paths:
       - 'benchmarks/**'
-      - 'src/core/c_abi_mesh.cpp'
-      - 'src/core/c_abi_buffer.cpp'
-      - 'include/souxmar-c/buffer.h'
-      - 'include/souxmar-c/mesh.h'
+      - 'src/core/**'
+      - 'src/pipeline/**'
+      - 'src/plugin-host/**'
+      - 'include/souxmar/**'
+      - 'include/souxmar-c/**'
       - 'tools/perf-compare/**'
+      - '.github/workflows/perf-nightly.yml'
 
 concurrency:
   group: perf-${{ github.workflow }}-${{ github.ref }}
@@ -29,8 +44,10 @@ env:
   VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite"
   CMAKE_GENERATOR: Ninja
   # Regression threshold — fail if any benchmark slows down by more than
-  # this fraction. Operators tune via PR if hardware noise floor shifts.
-  REGRESSION_THRESHOLD: "0.10"
+  # this fraction. Sprint 9 push 6 tightened 0.10 → 0.05 to match
+  # ENGINEERING_PRACTICES.md. Operators tune via PR (with an RFC if the
+  # change isn't a hardware-noise-floor follow-up).
+  REGRESSION_THRESHOLD: "0.05"
 
 jobs:
   bench:
@@ -82,29 +99,37 @@ jobs:
       - name: Build benchmarks
         run: cmake --build build/perf --parallel
 
-      - name: Run benchmarks (JSON output)
+      - name: Run benchmarks (JSON output, full suite)
+        # Sprint 9 push 6 — every benchmark binary contributes one
+        # report file to perf-report/. The binary name is the file's
+        # stem so the directory-compare step lines up baseline ↔
+        # current by name.
         run: |
           mkdir -p perf-report
-          ./build/perf/benchmarks/bench_mesh_construction \
-            --benchmark_format=json \
-            --benchmark_out=perf-report/mesh_construction.json \
-            --benchmark_out_format=json \
-            --benchmark_repetitions=3 \
-            --benchmark_min_time=0.2s
+          for bench in bench_mesh_construction bench_mmap_buffer bench_face_tag; do
+            echo "::group::run $bench"
+            ./build/perf/benchmarks/$bench \
+              --benchmark_format=json \
+              --benchmark_out=perf-report/$bench.json \
+              --benchmark_out_format=json \
+              --benchmark_repetitions=3 \
+              --benchmark_min_time=0.2s
+            echo "::endgroup::"
+          done
 
-      - name: Compare against baseline
+      - name: Compare full suite against baseline directory
         id: compare
         continue-on-error: true
+        # Sprint 9 push 6 — directory mode. compare.py iterates every
+        # perf-report/*.json, looks up the same-named file under
+        # benchmarks/baselines/, and reports per-binary diffs. New
+        # benchmarks (current-only) print "(new — no baseline)" and
+        # don't fail the gate.
         run: |
-          if [ -f benchmarks/baselines/main.json ]; then
-            python3 tools/perf-compare/compare.py \
-              --baseline benchmarks/baselines/main.json \
-              --current  perf-report/mesh_construction.json \
-              --threshold ${REGRESSION_THRESHOLD}
-          else
-            echo "::warning::no baseline at benchmarks/baselines/main.json — skipping comparison"
-            echo "baseline-missing=true" >> "$GITHUB_OUTPUT"
-          fi
+          python3 tools/perf-compare/compare.py \
+            --baseline-dir benchmarks/baselines \
+            --current-dir  perf-report \
+            --threshold    ${REGRESSION_THRESHOLD}
 
       - name: Upload report
         uses: actions/upload-artifact@v4

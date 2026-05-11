@@ -31,3 +31,8 @@ souxmar_add_benchmark(bench_mesh_construction
 souxmar_add_benchmark(bench_mmap_buffer
   bench_mmap_buffer.cpp
 )
+
+# Sprint 9 push 6 — per-face-tag sparse-map (ADR-0012).
+souxmar_add_benchmark(bench_face_tag
+  bench_face_tag.cpp
+)
