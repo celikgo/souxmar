@@ -21,6 +21,7 @@ target_link_libraries(souxmar_cli
     souxmar::core
     souxmar::plugin
     souxmar::pipeline
+    souxmar::ai
     souxmar::warnings
     souxmar::sanitizers
     fmt::fmt

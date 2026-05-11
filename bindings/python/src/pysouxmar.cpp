@@ -46,6 +46,8 @@
 #include "souxmar/plugin/manifest.h"
 #include "souxmar/plugin/registry.h"
 
+#include "souxmar/ai/tool.h"
+
 namespace py = pybind11;
 using namespace souxmar;
 namespace fs = std::filesystem;
@@ -504,4 +506,133 @@ PYBIND11_MODULE(_pysouxmar, m) {
         py::arg("options") = pipeline::RunOptions{},
         "Run a pipeline through the supplied dispatcher and cache. Returns\n"
         "a RunResult — inspect `.status`, `.stage_results`, `.outputs`.");
+
+  // ---- Value ↔ YAML helpers (the CLI agent shim relies on these) -----
+
+  m.def("parse_value_yaml",
+        [](const std::string& src) { return value_to_py(pipeline::parse_value_yaml(src)); },
+        py::arg("yaml_source"),
+        "Parse a YAML string into a Python object (dict / list / scalars / StageRef).");
+
+  m.def("emit_value_yaml",
+        [](const py::handle& obj) {
+          return pipeline::emit_value_yaml(py_to_value(obj));
+        },
+        py::arg("value"),
+        "Emit a Python object as a stable YAML string.");
+
+  // ============================================================================
+  // Agent tool surface (sx.ai.*)
+  // ============================================================================
+
+  auto ai = m.def_submodule("ai", "Agent tool surface — Tool, ToolRegistry, dispatch_tool.");
+
+  py::enum_<souxmar::ai::Confirmation>(ai, "Confirmation")
+      .value("Auto",          souxmar::ai::Confirmation::Auto)
+      .value("ConfirmOnce",   souxmar::ai::Confirmation::ConfirmOnce)
+      .value("ConfirmAlways", souxmar::ai::Confirmation::ConfirmAlways);
+
+  py::class_<souxmar::ai::ToolError>(ai, "ToolError")
+      .def_readonly("code",       &souxmar::ai::ToolError::code)
+      .def_readonly("message",    &souxmar::ai::ToolError::message)
+      .def_readonly("suggestion", &souxmar::ai::ToolError::suggestion)
+      .def("__repr__", [](const souxmar::ai::ToolError& e) {
+        return "ToolError(code='" + e.code + "', message='" + e.message + "')";
+      });
+
+  py::class_<souxmar::ai::ToolResult>(ai, "ToolResult")
+      .def_property_readonly("data",    [](const souxmar::ai::ToolResult& r) { return value_to_py(r.data); })
+      .def_readonly("summary",          &souxmar::ai::ToolResult::summary)
+      .def_readonly("error",            &souxmar::ai::ToolResult::error)
+      .def("__repr__", [](const souxmar::ai::ToolResult& r) {
+        return std::string{"ToolResult(error="} +
+               (r.error ? "True" : "False") + ", summary='" + r.summary + "')";
+      });
+
+  py::class_<souxmar::ai::Tool>(ai, "Tool")
+      .def_readonly("name",              &souxmar::ai::Tool::name)
+      .def_readonly("description",       &souxmar::ai::Tool::description)
+      .def_readonly("category",          &souxmar::ai::Tool::category)
+      .def_readonly("confirmation",      &souxmar::ai::Tool::confirmation)
+      .def_readonly("input_schema_doc",  &souxmar::ai::Tool::input_schema_doc)
+      .def_readonly("output_schema_doc", &souxmar::ai::Tool::output_schema_doc);
+
+  py::class_<souxmar::ai::ToolRegistry>(ai, "ToolRegistry")
+      .def(py::init<>())
+      .def("__len__",  &souxmar::ai::ToolRegistry::size)
+      .def("size",     &souxmar::ai::ToolRegistry::size)
+      .def("list",     &souxmar::ai::ToolRegistry::list)
+      .def("find",
+           [](const souxmar::ai::ToolRegistry& r, const std::string& name) -> py::object {
+             const auto* t = r.find(name);
+             return t ? py::cast(t) : py::none();
+           },
+           py::arg("name"), py::return_value_policy::reference_internal);
+
+  py::class_<souxmar::ai::ConfirmationPolicy>(ai, "ConfirmationPolicy")
+      .def(py::init<>())
+      .def_readwrite("overrides",       &souxmar::ai::ConfirmationPolicy::overrides)
+      .def_readwrite("confirmed_once",  &souxmar::ai::ConfirmationPolicy::confirmed_once);
+      // NOTE: `prompter` (std::function<bool(const Tool&, const Value&)>) is
+      // not bound in v1 because the C++ Value parameter would need its own
+      // pybind11 wrapper. Python users invoke `overrides` to whitelist
+      // confirmation-gated tools (e.g. set every name to Confirmation.Auto).
+      // A first-class Python prompter callback lands in Sprint 5 alongside
+      // the desktop app's tool-confirmation UI.
+
+  // ToolContext exposes the runtime pointers as keep-alive-tied properties
+  // so Python users can wire up a context without dealing with raw pointers.
+  py::class_<souxmar::ai::ToolContext>(ai, "ToolContext")
+      .def(py::init<>())
+      .def_property("registry",
+          [](const souxmar::ai::ToolContext& c) -> py::object {
+            return c.registry ? py::cast(c.registry, py::return_value_policy::reference) : py::none();
+          },
+          [](souxmar::ai::ToolContext& c, plugin::Registry* r) { c.registry = r; },
+          py::keep_alive<1, 2>())
+      .def_property("dispatcher",
+          [](const souxmar::ai::ToolContext& c) -> py::object {
+            return c.dispatcher ? py::cast(c.dispatcher, py::return_value_policy::reference) : py::none();
+          },
+          [](souxmar::ai::ToolContext& c, pipeline::IDispatcher* d) { c.dispatcher = d; },
+          py::keep_alive<1, 2>())
+      .def_property("cache",
+          [](const souxmar::ai::ToolContext& c) -> py::object {
+            return c.cache ? py::cast(c.cache, py::return_value_policy::reference) : py::none();
+          },
+          [](souxmar::ai::ToolContext& c, pipeline::Cache* cache) { c.cache = cache; },
+          py::keep_alive<1, 2>())
+      // session_state is treated as a Python object: assigning a dict /
+      // None replaces the underlying Value tree, which ToolContext owns
+      // through its `take_session_state` helper. Reads return the
+      // current Value tree converted to Python types — tools that
+      // mutate session_state during dispatch show up here too.
+      .def_property("session_state",
+          [](souxmar::ai::ToolContext& c) -> py::object {
+            return c.session_state ? value_to_py(*c.session_state) : py::none();
+          },
+          [](souxmar::ai::ToolContext& c, py::object v) {
+            c.take_session_state(v.is_none() ? pipeline::Value::null_value()
+                                              : py_to_value(v));
+          });
+
+  ai.def("default_v1_tools", &souxmar::ai::default_v1_tools,
+         "Build the default v1 ToolRegistry (read_geometry_summary, mesh, "
+         "set_bc, solve, screenshot_viewport).");
+
+  ai.def("dispatch_tool",
+        [](const souxmar::ai::ToolRegistry& reg,
+           const std::string&               tool_name,
+           const py::handle&                inputs,
+           souxmar::ai::ToolContext&        ctx,
+           souxmar::ai::ConfirmationPolicy& policy) {
+          auto v = py_to_value(inputs);
+          return souxmar::ai::dispatch_tool(reg, tool_name, v, ctx, policy);
+        },
+        py::arg("registry"),
+        py::arg("tool_name"),
+        py::arg("inputs"),
+        py::arg("context"),
+        py::arg("policy"),
+        "Dispatch a tool by name. Returns a ToolResult; check .error before .data.");
 }

@@ -126,6 +126,48 @@ PYTHONPATH=../../build/dev-python/bindings/python pytest
 The plugin-loading tests skip cleanly if no built plugins are found, so
 the unit-test layer runs fine on a clean install.
 
+## Agent tools (sx.ai)
+
+The agent tool surface from `docs/AI_INTEGRATION.md` is exposed under
+`sx.ai`. Sprint 4 push 3 ships the five v1 tools:
+
+```python
+import pysouxmar as sx
+
+reg    = sx.ai.default_v1_tools()
+ctx    = sx.ai.ToolContext()
+ctx.session_state = {
+    "geometry": {"num_vertices": 8, "num_edges": 12, "num_faces": 6, "num_solids": 1}
+}
+policy = sx.ai.ConfirmationPolicy()
+# `set_bc` defaults to ConfirmOnce; flip to Auto for headless use.
+policy.overrides = {"set_bc": sx.ai.Confirmation.Auto,
+                    "solve":  sx.ai.Confirmation.Auto}
+
+out = sx.ai.dispatch_tool(reg, "read_geometry_summary", None, ctx, policy)
+print(out.summary)
+print(out.data)
+```
+
+The v1 catalogue (see `docs/AI_INTEGRATION.md` for the full design):
+
+| Tool                  | Category | Confirmation     | Notes                                                            |
+| --------------------- | -------- | ---------------- | ---------------------------------------------------------------- |
+| `read_geometry_summary` | Read   | Auto             | Inspects `session_state['geometry']`.                            |
+| `mesh`                | Mesh     | Auto             | Dispatches a registered `mesher.*` plugin via `ToolContext`.    |
+| `set_bc`              | BC       | ConfirmOnce      | Appends to `session_state['boundary_conditions']`.              |
+| `solve`               | Solve    | ConfirmAlways    | Dispatches `solver.*`; requires `mesh` was called first.        |
+| `screenshot_viewport` | Read     | ConfirmOnce      | Stub in headless / pip builds; available in the desktop app.    |
+
+Python v1 limitations:
+
+* `ConfirmationPolicy.prompter` is not exposed yet — use the `overrides`
+  dict to whitelist tools to `Confirmation.Auto`. A first-class Python
+  prompter callback lands in Sprint 5 alongside the desktop tool UI.
+* Mesh / Field handles created by `mesh` / `solve` are stashed on the
+  `ToolContext` and consumed by the next tool, but are not directly
+  inspectable from Python yet (Sprint 5: numpy-backed accessors).
+
 ## Parallel runs
 
 The runner is parallel under the hood — set `RunOptions.max_workers > 1`
@@ -146,9 +188,9 @@ declare the same contract.
 
 ## Roadmap
 
-- **Sprint 4 push 3** — Python-subclassable `IDispatcher` (the Python
-  trampoline) and the `@sx.plugin.mesher` / `@sx.plugin.solver` decorator
-  (write a plugin in pure Python). Plus the agent-tool dispatcher v1.
-- **Sprint 5** — direct Mesh / Geometry / Field handle access through
-  the C ABI accessors; numpy-backed coordinate arrays via the buffer
-  protocol.
+- **Sprint 5** — Python-subclassable `IDispatcher` (trampoline + payload
+  story now that plugin-side serialization is on deck), the
+  `@sx.plugin.mesher` / `@sx.plugin.solver` decorator (write a plugin
+  in pure Python), Python prompter callback for `ConfirmationPolicy`,
+  direct Mesh / Geometry / Field handle access through the C ABI
+  accessors, and numpy-backed coordinate arrays via the buffer protocol.

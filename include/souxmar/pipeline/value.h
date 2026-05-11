@@ -99,4 +99,12 @@ class Value {
 
 [[nodiscard]] std::string_view kind_name(Value::Kind k) noexcept;
 
+// Generic YAML ↔ Value helpers — used by the CLI agent shim and tests
+// that want to feed Python-like literal trees into tools. Strict by
+// design: unknown YAML constructs throw via the underlying yaml-cpp.
+// StageRef is recognised as the `{ from: <stage_id> }` shorthand for
+// parity with the pipeline parser.
+[[nodiscard]] Value       parse_value_yaml(std::string_view yaml_source);
+[[nodiscard]] std::string emit_value_yaml(const Value& value);
+
 }  // namespace souxmar::pipeline

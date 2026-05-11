@@ -23,17 +23,21 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "souxmar/ai/tool.h"
 #include "souxmar/pipeline/cache.h"
 #include "souxmar/pipeline/parser.h"
 #include "souxmar/pipeline/registry_dispatcher.h"
 #include "souxmar/pipeline/runner.h"
+#include "souxmar/pipeline/value.h"
 #include "souxmar/plugin/discovery.h"
 #include "souxmar/plugin/loader.h"
 #include "souxmar/plugin/registry.h"
@@ -55,6 +59,8 @@ void print_usage() {
       "Usage:\n"
       "  souxmar run <pipeline.yaml> [--no-cache] [--cache-dir <dir>] [--plugin-path <dir>]...\n"
       "  souxmar plugin list [--plugin-path <dir>]...\n"
+      "  souxmar agent list\n"
+      "  souxmar agent invoke <tool> [--input <yaml>] [--input-file <path>] [--yes] [--plugin-path <dir>]...\n"
       "  souxmar version\n"
       "  souxmar help\n"
       "\n"
@@ -251,6 +257,111 @@ int cmd_run(const fs::path&              pipeline_path,
   return kExitOk;
 }
 
+// ---- Agent subcommands -------------------------------------------------
+
+std::string_view confirmation_name(souxmar::ai::Confirmation c) {
+  switch (c) {
+    case souxmar::ai::Confirmation::Auto:          return "auto";
+    case souxmar::ai::Confirmation::ConfirmOnce:   return "confirm-once";
+    case souxmar::ai::Confirmation::ConfirmAlways: return "confirm-always";
+  }
+  return "?";
+}
+
+int cmd_agent_list() {
+  const auto registry = souxmar::ai::default_v1_tools();
+  fmt::print("souxmar agent tools (v1, {} total):\n\n", registry.size());
+  for (const auto& name : registry.list()) {
+    const auto* t = registry.find(name);
+    fmt::print("  {} [{}]  ({})\n",
+               t->name, t->category, confirmation_name(t->confirmation));
+    if (!t->description.empty()) {
+      fmt::print("    {}\n", t->description);
+    }
+    fmt::print("\n");
+  }
+  return kExitOk;
+}
+
+int cmd_agent_invoke(const std::string&            tool_name,
+                     const std::string&            input_yaml,
+                     bool                          auto_yes,
+                     bool                          use_cache,
+                     const fs::path&               cache_dir_override,
+                     const std::vector<fs::path>&  extra_paths) {
+  // 1. Parse the inputs first so an obvious typo fails before we touch
+  //    plugins.
+  souxmar::pipeline::Value inputs;
+  if (!input_yaml.empty()) {
+    try {
+      inputs = souxmar::pipeline::parse_value_yaml(input_yaml);
+    } catch (const std::exception& e) {
+      fmt::print(stderr, "error: --input YAML did not parse: {}\n", e.what());
+      return kExitInputData;
+    }
+  }
+
+  // 2. Discover + load every plugin under the search path. mesh / solve
+  //    need a populated registry; other tools tolerate an empty one.
+  souxmar::plugin::Registry     registry;
+  souxmar::plugin::PluginLoader loader(registry, std::string{souxmar::version_string()});
+
+  std::vector<souxmar::plugin::LoadedPlugin> live_plugins;
+  const auto report = discover_with_overrides(extra_paths);
+  live_plugins.reserve(report.loaded.size());
+  for (const auto& d : report.loaded) {
+    auto load_result = loader.load(d);
+    if (auto* lerr = std::get_if<souxmar::plugin::LoadError>(&load_result)) {
+      fmt::print(stderr, "warning: failed to load plugin {}: {}\n",
+                 d.manifest.id, lerr->message);
+      continue;
+    }
+    live_plugins.push_back(std::move(std::get<souxmar::plugin::LoadedPlugin>(load_result)));
+  }
+
+  // 3. Build dispatch context.
+  souxmar::pipeline::RegistryDispatcher dispatcher(registry);
+  souxmar::pipeline::Cache              cache;
+  souxmar::pipeline::Value session_state =
+      souxmar::pipeline::Value::map({});
+
+  souxmar::ai::ToolContext ctx;
+  ctx.registry      = &registry;
+  ctx.dispatcher    = &dispatcher;
+  ctx.cache         = &cache;
+  ctx.session_state = &session_state;
+  (void)cache_dir_override;  // disk_cache only relevant to `run` today
+  (void)use_cache;
+
+  // 4. Confirmation policy: --yes maps every tool to Auto for this run.
+  //    Without it, a tool needing confirmation will hit the no-prompter
+  //    path and fail with NOT_CONFIRMED — explicit and recoverable.
+  souxmar::ai::ConfirmationPolicy policy;
+  if (auto_yes) {
+    for (const auto& name : souxmar::ai::default_v1_tools().list()) {
+      policy.overrides[name] = souxmar::ai::Confirmation::Auto;
+    }
+  }
+
+  // 5. Dispatch + print.
+  const auto registry_v1 = souxmar::ai::default_v1_tools();
+  const auto result = souxmar::ai::dispatch_tool(registry_v1, tool_name,
+                                                 inputs, ctx, policy);
+  if (result.error) {
+    fmt::print(stderr, "{} [{}]\n", result.error->message, result.error->code);
+    if (!result.error->suggestion.empty()) {
+      fmt::print(stderr, "  → {}\n", result.error->suggestion);
+    }
+    return kExitInternal;
+  }
+
+  fmt::print("{}\n", result.summary);
+  if (result.data.kind() != souxmar::pipeline::Value::Kind::Null) {
+    fmt::print("---\n{}\n", souxmar::pipeline::emit_value_yaml(result.data));
+  }
+  return kExitOk;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -263,10 +374,12 @@ int main(int argc, char** argv) {
   const std::string& sub = args[0];
 
   // Common: collect --plugin-path flags from anywhere in the tail.
-  std::vector<fs::path> extra_paths;
-  fs::path  cache_dir_override;
-  bool      use_cache = true;
-  fs::path  positional;
+  std::vector<fs::path>    extra_paths;
+  fs::path                 cache_dir_override;
+  bool                     use_cache = true;
+  bool                     auto_yes  = false;
+  std::string              input_yaml;
+  std::vector<std::string> positionals;
 
   for (std::size_t i = 1; i < args.size(); ++i) {
     if (args[i] == "--plugin-path") {
@@ -279,15 +392,34 @@ int main(int argc, char** argv) {
       auto v = pop_value(args, i, "--cache-dir");
       if (!v) return kExitUsage;
       cache_dir_override = *v;
+    } else if (args[i] == "--input") {
+      auto v = pop_value(args, i, "--input");
+      if (!v) return kExitUsage;
+      input_yaml = *v;
+    } else if (args[i] == "--input-file") {
+      auto v = pop_value(args, i, "--input-file");
+      if (!v) return kExitUsage;
+      try {
+        std::ifstream src(*v);
+        if (!src.is_open()) {
+          fmt::print(stderr, "error: cannot open --input-file '{}'\n", *v);
+          return kExitInputData;
+        }
+        std::ostringstream buf;
+        buf << src.rdbuf();
+        input_yaml = buf.str();
+      } catch (const std::exception& e) {
+        fmt::print(stderr, "error: reading --input-file failed: {}\n", e.what());
+        return kExitInputData;
+      }
+    } else if (args[i] == "--yes" || args[i] == "-y") {
+      auto_yes = true;
     } else if (!args[i].empty() && args[i].front() == '-') {
       fmt::print(stderr, "error: unknown flag '{}'\n", args[i]);
       print_usage();
       return kExitUsage;
-    } else if (positional.empty()) {
-      positional = args[i];
     } else {
-      fmt::print(stderr, "error: unexpected positional argument '{}'\n", args[i]);
-      return kExitUsage;
+      positionals.push_back(args[i]);
     }
   }
 
@@ -295,19 +427,38 @@ int main(int argc, char** argv) {
     return cmd_version();
   }
   if (sub == "plugin") {
-    if (positional.empty() || positional.string() != "list") {
+    if (positionals.empty() || positionals[0] != "list") {
       fmt::print(stderr, "error: only `souxmar plugin list` is supported in v0.0.1\n");
       return kExitUsage;
     }
     return cmd_plugin_list(extra_paths);
   }
   if (sub == "run") {
-    if (positional.empty()) {
+    if (positionals.empty()) {
       fmt::print(stderr, "error: `souxmar run` requires a pipeline file\n");
       print_usage();
       return kExitUsage;
     }
-    return cmd_run(positional, use_cache, cache_dir_override, extra_paths);
+    return cmd_run(fs::path(positionals[0]), use_cache, cache_dir_override, extra_paths);
+  }
+  if (sub == "agent") {
+    if (positionals.empty()) {
+      fmt::print(stderr, "error: `souxmar agent` requires a sub-action (list | invoke)\n");
+      return kExitUsage;
+    }
+    if (positionals[0] == "list") {
+      return cmd_agent_list();
+    }
+    if (positionals[0] == "invoke") {
+      if (positionals.size() < 2) {
+        fmt::print(stderr, "error: `souxmar agent invoke` requires a tool name\n");
+        return kExitUsage;
+      }
+      return cmd_agent_invoke(positionals[1], input_yaml, auto_yes,
+                              use_cache, cache_dir_override, extra_paths);
+    }
+    fmt::print(stderr, "error: unknown agent action '{}'\n", positionals[0]);
+    return kExitUsage;
   }
 
   fmt::print(stderr, "error: unknown subcommand '{}'\n", sub);

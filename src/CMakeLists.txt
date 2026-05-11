@@ -5,6 +5,7 @@
 add_subdirectory(core)
 add_subdirectory(plugin-host)
 add_subdirectory(pipeline)
+add_subdirectory(ai)
 
 if(SOUXMAR_BUILD_CLI)
   add_subdirectory(cli)
@@ -14,5 +15,4 @@ endif()
 #   add_subdirectory(adapters)      # Sprint 1+
 #   add_subdirectory(plugins)       # Sprint 2+
 #   add_subdirectory(bindings/python) # Sprint 4
-#   add_subdirectory(ai)            # Sprint 4+
 #   add_subdirectory(desktop)       # Sprint 1 (separate build via Tauri)

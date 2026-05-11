@@ -19,6 +19,7 @@ add_executable(souxmar_unit_tests
   test_pipeline_runner.cpp
   test_parallel_runner.cpp
   test_c_abi_handles.cpp
+  test_ai_tools.cpp
 )
 
 target_link_libraries(souxmar_unit_tests
@@ -26,6 +27,7 @@ target_link_libraries(souxmar_unit_tests
     souxmar::core
     souxmar::plugin
     souxmar::pipeline
+    souxmar::ai
     souxmar::warnings
     souxmar::sanitizers
     GTest::gtest

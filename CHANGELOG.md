@@ -183,6 +183,35 @@ The plugin C ABI version is tracked separately and is independent of the project
 - Build:
   - `src/pipeline/CMakeLists.txt` adds `parallel_runner.cpp` and links `Threads::Threads` (PUBLIC, so consumers don't have to repeat the find).
 
+#### Sprint 4 push 3 — agent tool surface v1 + 5 tools
+
+- **`libsouxmar-ai`** new library (`src/ai/`, `include/souxmar/ai/tool.h`):
+  - `Tool` declaration: name, description, category, `Confirmation` policy (Auto / ConfirmOnce / ConfirmAlways), input/output schema docs, handler `std::function`.
+  - `ToolRegistry` — O(1) lookup by name, sorted `list()`, mutable so tests can override v1 defaults.
+  - `ToolResult` — structured `{data: Value, summary: string, error: optional<ToolError>}`. `ToolError` is `{code, message, suggestion}` per docs/AI_INTEGRATION.md ("model recovers, not retries").
+  - `ToolContext` — runtime services (`Registry*`, `IDispatcher*`, `Cache*`) + per-session metadata bag (`session_state: Value*` plus an opt-in owning slot via `take_session_state`) + focus handles (`mesh_handle`, `geometry_handle`, `field_handle`) that mesh/solve update as a side effect.
+  - `ConfirmationPolicy` — per-tool overrides, `confirmed_once` set, prompter callback. Default behaviour: tools at Confirmation > Auto without a prompter return `NOT_CONFIRMED` (recoverable, not a crash).
+  - `dispatch_tool(...)` — name lookup → confirmation gate → handler invocation with full exception isolation (every throw lands as a `ToolError{code="INTERNAL"}`).
+- **[agent-tool v1]** Five v1 tools (the docs/AI_INTEGRATION.md v1 catalogue):
+  - `read_geometry_summary` (Read, Auto) — reads inline geometry input or `session_state['geometry']`, returns counts + bbox + tag list.
+  - `mesh` (Mesh, Auto) — dispatches a registered `mesher.*` capability via `ToolContext.dispatcher`; stashes the resulting Mesh on `ctx.mesh_handle` for downstream tools; returns `{capability_id, num_nodes, num_cells}`.
+  - `set_bc` (BC, ConfirmOnce) — validates tag/type/value; appends a BC to `session_state['boundary_conditions']`; rejects unknown BC types with `INVALID_ARGUMENT`.
+  - `solve` (Solve, ConfirmAlways — the runtime / cost call) — requires a prior `mesh` call; dispatches `solver.*`; stashes the Field on `ctx.field_handle`; returns `{capability_id, location, kind, num_components}`. Wraps the session mesh as a synthetic upstream so `RegistryDispatcher`'s solver path picks it up by the `mesh: {from: ...}` convention.
+  - `screenshot_viewport` (Read, ConfirmOnce) — stub returning `NOT_AVAILABLE` in the headless library + CLI build, with a structured suggestion (the desktop app build supersedes it in a later push).
+- **`Value ↔ YAML` helpers** (`include/souxmar/pipeline/value.h`): `parse_value_yaml(src)` and `emit_value_yaml(value)` (deterministic indented emitter, recognises the `{from: stage_id}` StageRef shorthand). Used by the CLI agent shim and Python tests; stable across yaml-cpp versions because the emitter is hand-rolled.
+- **CLI** (`src/cli/main.cpp`):
+  - `souxmar agent list` — pretty-prints every registered tool with category + confirmation default.
+  - `souxmar agent invoke <tool> [--input <yaml>] [--input-file <path>] [--yes]` — parses inputs, discovers + loads plugins, constructs a ToolContext, invokes the tool, prints the summary + YAML-emitted result.
+  - Arg parser refactor: replaced the single positional with a `std::vector<std::string> positionals` so `agent invoke <tool>` works alongside `plugin list` and `run <pipeline>`.
+- **Python** (`bindings/python/src/pysouxmar.cpp`):
+  - New `pysouxmar.ai` submodule exposing `Confirmation`, `ToolError`, `ToolResult`, `Tool`, `ToolRegistry`, `ToolContext`, `ConfirmationPolicy`, `default_v1_tools`, `dispatch_tool`.
+  - `ToolContext.session_state` is a transparent property: assigning a Python dict takes ownership via the new `take_session_state` helper; reading returns a Python view of the current Value tree (so tools that mutate it during dispatch round-trip back).
+  - `pysouxmar.parse_value_yaml` / `emit_value_yaml` exposed for symmetric debugging.
+  - v1 limitations documented: `ConfirmationPolicy.prompter` not yet exposed (use `overrides` to whitelist); Mesh / Field handles stashed by mesh / solve are not yet inspectable from Python.
+- **Tests**:
+  - `tests/unit/test_ai_tools.cpp` — framework (Auto / ConfirmOnce / ConfirmAlways / DENIED / NOT_CONFIRMED / override / exception → INTERNAL), default v1 registry contents, every tool's success + error path (mesh against a fake mesher vtable, solve precondition, set_bc append semantics, screenshot stub), plus Value↔YAML round-trip.
+  - `bindings/python/tests/test_agent_tools.py` — Python mirror of the same surface, including a real-plugin mesh test (skips cleanly without built plugins).
+
 ### Changed
 
 - (None this release.)

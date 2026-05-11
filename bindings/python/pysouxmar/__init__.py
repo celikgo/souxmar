@@ -72,6 +72,13 @@ StageStatus        = _ext.StageStatus
 DispatchError      = _ext.DispatchError
 run_pipeline       = _ext.run_pipeline
 
+# YAML helpers (Value ↔ Python).
+parse_value_yaml = _ext.parse_value_yaml
+emit_value_yaml  = _ext.emit_value_yaml
+
+# Agent tool surface.
+ai = _ext.ai
+
 __all__ = [
     "version", "version_tuple", "abi_version",
     "parse_pipeline", "parse_pipeline_file",
@@ -85,4 +92,6 @@ __all__ = [
     "RegistryDispatcher", "RunOptions", "RunResult", "RunStatus",
     "StageRunResult", "StageStatus", "DispatchError",
     "run_pipeline",
+    "parse_value_yaml", "emit_value_yaml",
+    "ai",
 ]
