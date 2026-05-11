@@ -22,6 +22,10 @@
     {
       "name": "yaml-cpp",
       "version>=": "0.8.0"
+    },
+    {
+      "name": "libsodium",
+      "version>=": "1.0.18"
     }
   ],
   "default-features": [

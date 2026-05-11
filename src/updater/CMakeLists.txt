@@ -1,15 +1,24 @@
 # libsouxmar-update — auto-updater (Sprint 10 push 4 onward).
 #
-# Push 4 (this push): signed update manifest data model + parser +
-# structural validator. The verifier (libsodium ed25519) lands in
-# push 5; the update state machine + CLI subcommand in push 6;
-# rollback log in push 7. Each push adds source files to this list;
-# the public API surface lives under include/souxmar/update/.
+# Push 4: signed update manifest data model + parser + structural
+# validator (manifest.cpp). Push 5 (this push): ed25519 detached-
+# signature verifier wrapping libsodium (verifier.cpp). Push 6: state
+# machine + CLI subcommand. Push 7: rollback log. Each push adds
+# source files to this list; the public API surface lives under
+# include/souxmar/update/.
+#
+# libsodium is scoped *only* to this target — the ABI host, the
+# AI dispatcher, the pipeline runner all stay sodium-free.
+# ADR-0013 § "Why ed25519, detached signature" picks the algorithm;
+# ADR-0013 § "Signing key compromise" lists the risk model that
+# justifies pinning to one curve.
 
-find_package(tomlplusplus CONFIG REQUIRED)
+find_package(tomlplusplus     CONFIG REQUIRED)
+find_package(unofficial-sodium CONFIG REQUIRED)
 
 add_library(souxmar_update
   manifest.cpp
+  verifier.cpp
 )
 
 add_library(souxmar::update ALIAS souxmar_update)
@@ -28,6 +37,7 @@ target_link_libraries(souxmar_update
     souxmar::warnings
     souxmar::sanitizers
     tomlplusplus::tomlplusplus
+    unofficial-sodium::sodium
 )
 
 install(TARGETS souxmar_update

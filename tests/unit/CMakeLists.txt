@@ -1,5 +1,7 @@
 # Unit tests — fast, in-process, no I/O, no plugin loading.
 
+find_package(unofficial-sodium CONFIG REQUIRED)
+
 add_executable(souxmar_unit_tests
   test_version.cpp
   test_tag.cpp
@@ -33,6 +35,8 @@ add_executable(souxmar_unit_tests
   test_plugin_index.cpp
   # Sprint 10 push 4.
   test_update_manifest.cpp
+  # Sprint 10 push 5.
+  test_update_verifier.cpp
 )
 
 target_link_libraries(souxmar_unit_tests
@@ -44,6 +48,11 @@ target_link_libraries(souxmar_unit_tests
     souxmar::update
     souxmar::warnings
     souxmar::sanitizers
+    # Sprint 10 push 5 — the verifier tests generate keypairs +
+    # signatures at test time via libsodium directly; the production
+    # surface (souxmar::update) keeps libsodium PRIVATE so this is the
+    # only test target that pulls it in.
+    unofficial-sodium::sodium
     GTest::gtest
     GTest::gtest_main
 )
