@@ -1,0 +1,24 @@
+[plugin]
+id            = "dev.souxmar.examples.grid-mesher"
+name          = "Structured Grid Tetra Mesher"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/grid-mesher"
+
+description   = "Bounding-box-only tetrahedral mesher — N×N×N grid via the 5-tet hex decomposition."
+documentation = "https://souxmar.dev/docs/plugins/grid-mesher"
+tags          = ["mesher", "tetrahedral", "structured", "reference"]
+min_souxmar_abi_minor = 0
+
+[plugin.binary]
+file          = "libgrid_mesher.so"
+
+[plugin.capabilities]
+provides      = ["mesher.tetra.grid"]
+
+[plugin.threading]
+model         = "reentrant"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"

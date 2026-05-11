@@ -389,6 +389,23 @@ This push lands no code under `src/` — it is the contractual moment Sprint 5 h
 - **Build**: `cmake/SouxmarOptions.cmake`'s pre-existing `SOUXMAR_WITH_OPENCASCADE` option now gates `examples/plugins/occt-reader/`. The plugin's CMakeLists calls `find_package(OpenCASCADE QUIET)` and `return()`s with a `STATUS` message if OCCT isn't installed — clean skip, no noisy failure.
 - **Docs** (`docs/PLUGIN_SDK.md`): new Reader subsection documents the dual-output vtable contract and explicitly names this push as the first soak ratchet event.
 
+#### Sprint 6 push 5 — second tetrahedral mesher (`mesher.tetra.grid` + opt-in Gmsh)
+
+Closes the Sprint 6 plan exit criterion: **"A user can swap `mesher.tetra.native` for `mesher.tetra.gmsh` in pipeline YAML with no other changes; same result format."**
+
+- **`examples/plugins/grid-mesher/`** — eighth in-tree reference plugin, **always-on**. Registers `mesher.tetra.grid`; reads the input Geometry's bounding box, builds an N×N×N tetrahedral grid via the 5-tet hex decomposition (same one `benchmarks/bench_mesh_construction.cpp` uses). `options.target_size` derives N from the largest bbox axis; default N=4. Declared `reentrant` — pure functional over its inputs. Tag inheritance is left as `-1` (untagged); a real CAD-aware mesher (gmsh-mesher, occt+netgen, ...) propagates face tags from the source geometry per the PLUGIN_SDK contract.
+- **`examples/plugins/gmsh-mesher/`** — opt-in via `SOUXMAR_WITH_GMSH` + `find_package(Gmsh)`. Drives Gmsh's C++ API: `gmsh::model::occ::addBox` over the input bbox, `gmsh::model::mesh::generate(3)`, `getNodes` / `getElementsByType(4)` → souxmar mesh through the C ABI. Gmsh node tags are 1-based with gaps; the adapter remaps onto contiguous souxmar indices. Declared `single-threaded` because Gmsh holds process-global state (`gmsh::initialize()` is process-wide); the reentrancy guard serialises concurrent stages. `destroy_fn` calls `gmsh::finalize()` so the plugin doesn't leak past host exit. **Not built in default CI**; nightly Gmsh-bearing runners exercise it. The plugin's CMakeLists `find_package(Gmsh QUIET)` and `return()`s with a clean STATUS message when Gmsh isn't installed — `SOUXMAR_WITH_GMSH=ON` on a Gmsh-less machine produces a clear skip, not a noisy failure.
+- **`examples/swap-mesher/`** — `grid.yaml` and `gmsh.yaml` differ by one line:
+  ```diff
+  -    plugin: mesher.tetra.grid
+  +    plugin: mesher.tetra.gmsh
+  ```
+  README documents the contract: the upstream geometry stage, downstream postproc + write stages, input keys, and result schema are identical regardless of which mesher implements the namespace.
+- **`tests/integration/test_swap_mesher.cpp`** — the always-on gate. Builds a unit-cube Geometry programmatically (8 corner vertices via `souxmar_geometry_add_vertex`), dispatches `mesher.tetra.grid` with `target_size=0.5`, asserts the produced Mesh has the pinned shape (27 nodes / 40 tets — N=3 nodes per axis × 5 tets per cube). Negative test: missing-geometry input is rejected with a structured `DispatchError` from `dispatch_mesher`. The Gmsh variant runs nightly with the opt-in flag; default CI exercises the contract via the always-on side.
+- **Conformance gate**: `tests/integration/test_conformance.cpp` now asserts `grid-mesher` passes all 10 v1 checks (**8 in-tree plugins green**). The suite itself didn't change — the second mesher fits the same shape as the first.
+- **Build**: `examples/CMakeLists.txt` adds `plugins/grid-mesher` unconditionally; `plugins/gmsh-mesher` only when `SOUXMAR_WITH_GMSH=ON`. `tests/integration/CMakeLists.txt` depends on `grid_mesher`.
+- **No frozen-header surface was touched.** The mesher.* C ABI is unchanged; both new plugins build against the existing `souxmar-c/mesher.h`. ABI v1 freeze-candidate soak rolls forward.
+
 ### Changed
 
 - (None this release.)

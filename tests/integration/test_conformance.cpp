@@ -143,6 +143,15 @@ TEST_F(ConformanceGateTest, StlReaderPassesAllChecks) {
   expect_all_v1_checks_pass(plugin::run_conformance(*p));
 }
 
+// Sprint 6 push 5 — second tetrahedral mesher. The suite covers any
+// mesher.* plugin shape, not just hello-mesher's, so the bar is exactly
+// the same.
+TEST_F(ConformanceGateTest, GridMesherPassesAllChecks) {
+  const auto* p = find_plugin(discovery_, "dev.souxmar.examples.grid-mesher");
+  ASSERT_NE(p, nullptr);
+  expect_all_v1_checks_pass(plugin::run_conformance(*p));
+}
+
 // Negative: confirm that a deliberately-mismatched manifest (declared ABI
 // 99) trips C001 + Skips the rest. Builds on the discovered hello-mesher
 // to keep the test self-contained — we fabricate a DiscoveredPlugin in

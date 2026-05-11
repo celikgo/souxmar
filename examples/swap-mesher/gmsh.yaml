@@ -1,0 +1,26 @@
+# Sprint 6 push 5 — swap-mesher example, opt-in `mesher.tetra.gmsh` variant.
+# Diff vs grid.yaml is exactly one line. That's the contract.
+version: 1
+stages:
+  - id: read_geom
+    plugin: reader.step
+    input:
+      path: cube.step
+
+  - id: mesh
+    plugin: mesher.tetra.gmsh
+    input:
+      geometry:    { from: read_geom }
+      target_size: 0.25
+
+  - id: quality
+    plugin: postproc.mesh_quality
+    input:
+      mesh: { from: mesh }
+
+  - id: write
+    plugin: writer.vtu
+    input:
+      mesh:  { from: mesh }
+      field: { from: quality }
+      path:  cube_gmsh.vtu

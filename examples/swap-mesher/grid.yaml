@@ -1,0 +1,27 @@
+# Sprint 6 push 5 — swap-mesher example, always-on `mesher.tetra.grid` variant.
+# Identical to gmsh.yaml except for the mesher capability id; that's the
+# whole point of the mesher.* namespace contract.
+version: 1
+stages:
+  - id: read_geom
+    plugin: reader.step
+    input:
+      path: cube.step
+
+  - id: mesh
+    plugin: mesher.tetra.grid
+    input:
+      geometry:    { from: read_geom }
+      target_size: 0.25
+
+  - id: quality
+    plugin: postproc.mesh_quality
+    input:
+      mesh: { from: mesh }
+
+  - id: write
+    plugin: writer.vtu
+    input:
+      mesh:  { from: mesh }
+      field: { from: quality }
+      path:  cube_grid.vtu

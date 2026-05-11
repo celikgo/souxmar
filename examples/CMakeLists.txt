@@ -20,3 +20,9 @@ add_subdirectory(plugins/stl-reader)
 if(SOUXMAR_WITH_OPENCASCADE)
   add_subdirectory(plugins/occt-reader)
 endif()
+# Sprint 6 push 5 — second tetrahedral mesher proving the swap-test
+# contract. Always-on grid-mesher; opt-in Gmsh-backed counterpart.
+add_subdirectory(plugins/grid-mesher)
+if(SOUXMAR_WITH_GMSH)
+  add_subdirectory(plugins/gmsh-mesher)
+endif()
