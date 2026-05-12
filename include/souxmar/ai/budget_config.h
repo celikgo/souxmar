@@ -27,34 +27,34 @@
 
 #pragma once
 
+#include "souxmar/ai/audit_log.h"
+
 #include <filesystem>
 #include <optional>
 #include <string>
 #include <variant>
 
-#include "souxmar/ai/audit_log.h"
-
 namespace souxmar::ai {
 
 // Parsed [budget] section. Apply to a `SessionBudget` via apply_to().
 struct BudgetConfig {
-  std::size_t max_input_tokens  = 0;
+  std::size_t max_input_tokens = 0;
   std::size_t max_output_tokens = 0;
-  std::size_t max_total_tokens  = 0;
+  std::size_t max_total_tokens = 0;
 
   // Set the SessionBudget's max_* caps from this config. Leaves the
   // counters and the threshold callback untouched.
   void apply_to(SessionBudget& budget) const noexcept {
-    budget.max_input_tokens  = max_input_tokens;
+    budget.max_input_tokens = max_input_tokens;
     budget.max_output_tokens = max_output_tokens;
-    budget.max_total_tokens  = max_total_tokens;
+    budget.max_total_tokens = max_total_tokens;
   }
 };
 
 struct BudgetConfigError {
-  std::string                  message;
-  std::optional<std::size_t>   line;
-  std::string                  field;     // dotted path "budget.max_input_tokens"
+  std::string message;
+  std::optional<std::size_t> line;
+  std::string field;  // dotted path "budget.max_input_tokens"
 };
 
 using BudgetConfigResult = std::variant<BudgetConfig, BudgetConfigError>;
@@ -65,12 +65,11 @@ using BudgetConfigResult = std::variant<BudgetConfig, BudgetConfigError>;
 // Parse from a TOML file. FileIo failures (missing file, permission
 // denied) come back as BudgetConfigError with `message` describing the
 // underlying error.
-[[nodiscard]] BudgetConfigResult
-parse_budget_config_file(const std::filesystem::path& path);
+[[nodiscard]] BudgetConfigResult parse_budget_config_file(const std::filesystem::path& path);
 
 // Resolve the per-project default location: `<project_root>/.souxmar/budget.toml`
 // (or `<cwd>/.souxmar/budget.toml` if `project_root` is empty).
-[[nodiscard]] std::filesystem::path
-default_budget_config_path(const std::filesystem::path& project_root = {});
+[[nodiscard]] std::filesystem::path default_budget_config_path(
+    const std::filesystem::path& project_root = {});
 
 }  // namespace souxmar::ai

@@ -9,6 +9,8 @@
 
 #include "souxmar-c-bridge/updater.h"
 
+#include "souxmar/update/install_layout.h"
+
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -16,33 +18,32 @@
 #include <string>
 #include <system_error>
 
-#include "souxmar/update/install_layout.h"
-
 struct souxmar_bridge_update_status_t {
-  int32_t      state = SOUXMAR_BRIDGE_US_UNKNOWN;
-  std::string  current_version;
-  std::string  available_version;
-  std::string  detail;
+  int32_t state = SOUXMAR_BRIDGE_US_UNKNOWN;
+  std::string current_version;
+  std::string available_version;
+  std::string detail;
 };
 
 namespace {
 
-souxmar_bridge_update_status_t*
-new_status(int32_t        state,
-           std::string    current,
-           std::string    available,
-           std::string    detail) {
+souxmar_bridge_update_status_t* new_status(int32_t state,
+                                           std::string current,
+                                           std::string available,
+                                           std::string detail) {
   auto* out = new (std::nothrow) souxmar_bridge_update_status_t;
-  if (!out) return nullptr;
-  out->state             = state;
-  out->current_version   = std::move(current);
+  if (!out)
+    return nullptr;
+  out->state = state;
+  out->current_version = std::move(current);
   out->available_version = std::move(available);
-  out->detail            = std::move(detail);
+  out->detail = std::move(detail);
   return out;
 }
 
 void set_err(char** out_err, std::string_view msg) {
-  if (!out_err) return;
+  if (!out_err)
+    return;
   *out_err = static_cast<char*>(std::malloc(msg.size() + 1));
   if (*out_err) {
     std::memcpy(*out_err, msg.data(), msg.size());
@@ -52,11 +53,11 @@ void set_err(char** out_err, std::string_view msg) {
 
 }  // namespace
 
-extern "C"
-souxmar_bridge_update_status_t*
-souxmar_bridge_update_status_read(const char* target_root_c,
-                                  char**      out_err) {
-  if (out_err) *out_err = nullptr;
+extern "C" souxmar_bridge_update_status_t* souxmar_bridge_update_status_read(
+    const char* target_root_c,
+    char** out_err) {
+  if (out_err)
+    *out_err = nullptr;
   if (target_root_c == nullptr || target_root_c[0] == '\0') {
     set_err(out_err, "target_root is NULL or empty");
     return nullptr;
@@ -68,12 +69,11 @@ souxmar_bridge_update_status_read(const char* target_root_c,
     // Fresh install on a machine that hasn't run the updater
     // yet — return Unknown rather than NULL so the menu can
     // render "No update history; check again to see updates."
-    return new_status(
-        SOUXMAR_BRIDGE_US_UNKNOWN,
-        std::string{},
-        std::string{},
-        "No update install layout at this path. The auto-updater "
-        "has not yet run for this build.");
+    return new_status(SOUXMAR_BRIDGE_US_UNKNOWN,
+                      std::string{},
+                      std::string{},
+                      "No update install layout at this path. The auto-updater "
+                      "has not yet run for this build.");
   }
 
   souxmar::update::InstallLayout layout(target_root);
@@ -89,50 +89,37 @@ souxmar_bridge_update_status_read(const char* target_root_c,
   // "Current version vX.Y.Z" + "Check for updates" button which
   // triggers the CLI shell-out.
   if (current.empty()) {
-    return new_status(
-        SOUXMAR_BRIDGE_US_UNKNOWN,
-        std::string{},
-        std::string{},
-        "No current.txt in the install layout. Either this is a "
-        "fresh install or the layout is corrupted.");
+    return new_status(SOUXMAR_BRIDGE_US_UNKNOWN,
+                      std::string{},
+                      std::string{},
+                      "No current.txt in the install layout. Either this is a "
+                      "fresh install or the layout is corrupted.");
   }
 
   std::string detail = "Current version " + current +
                        ". Click 'Check for updates' to query the "
                        "release manifest.";
-  return new_status(
-      SOUXMAR_BRIDGE_US_UP_TO_DATE,
-      current,
-      std::string{},
-      std::move(detail));
+  return new_status(SOUXMAR_BRIDGE_US_UP_TO_DATE, current, std::string{}, std::move(detail));
 }
 
-extern "C"
-int32_t
-souxmar_bridge_update_state(const souxmar_bridge_update_status_t* s) {
+extern "C" int32_t souxmar_bridge_update_state(const souxmar_bridge_update_status_t* s) {
   return s ? s->state : SOUXMAR_BRIDGE_US_UNKNOWN;
 }
 
-extern "C"
-const char*
-souxmar_bridge_update_current_version(const souxmar_bridge_update_status_t* s) {
+extern "C" const char* souxmar_bridge_update_current_version(
+    const souxmar_bridge_update_status_t* s) {
   return s ? s->current_version.c_str() : "";
 }
 
-extern "C"
-const char*
-souxmar_bridge_update_available_version(const souxmar_bridge_update_status_t* s) {
+extern "C" const char* souxmar_bridge_update_available_version(
+    const souxmar_bridge_update_status_t* s) {
   return s ? s->available_version.c_str() : "";
 }
 
-extern "C"
-const char*
-souxmar_bridge_update_detail(const souxmar_bridge_update_status_t* s) {
+extern "C" const char* souxmar_bridge_update_detail(const souxmar_bridge_update_status_t* s) {
   return s ? s->detail.c_str() : "";
 }
 
-extern "C"
-void
-souxmar_bridge_update_status_free(souxmar_bridge_update_status_t* s) {
+extern "C" void souxmar_bridge_update_status_free(souxmar_bridge_update_status_t* s) {
   delete s;
 }

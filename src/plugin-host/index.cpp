@@ -32,28 +32,36 @@ namespace {
 std::string lower(std::string_view s) {
   std::string out;
   out.reserve(s.size());
-  for (char c : s) out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+  for (char c : s)
+    out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
   return out;
 }
 
 bool contains_case_insensitive(std::string_view haystack, std::string_view needle) {
-  if (needle.empty()) return true;
-  const auto hay  = lower(haystack);
+  if (needle.empty())
+    return true;
+  const auto hay = lower(haystack);
   const auto need = lower(needle);
   return hay.find(need) != std::string::npos;
 }
 
 ConformanceStatus parse_conformance(std::string_view s) noexcept {
-  if (s == "passed")  return ConformanceStatus::Passed;
-  if (s == "failed")  return ConformanceStatus::Failed;
+  if (s == "passed")
+    return ConformanceStatus::Passed;
+  if (s == "failed")
+    return ConformanceStatus::Failed;
   return ConformanceStatus::NotRun;
 }
 
 LifecycleStatus parse_status(std::string_view s) noexcept {
-  if (s == "active")         return LifecycleStatus::Active;
-  if (s == "maintained")     return LifecycleStatus::Maintained;
-  if (s == "unmaintained")   return LifecycleStatus::Unmaintained;
-  if (s == "archived")       return LifecycleStatus::Archived;
+  if (s == "active")
+    return LifecycleStatus::Active;
+  if (s == "maintained")
+    return LifecycleStatus::Maintained;
+  if (s == "unmaintained")
+    return LifecycleStatus::Unmaintained;
+  if (s == "archived")
+    return LifecycleStatus::Archived;
   return LifecycleStatus::Active;  // safe default — author can self-report later
 }
 
@@ -75,30 +83,32 @@ IndexEntry parse_one(const toml::table& tbl) {
   };
   auto optional_str = [&](const char* k) -> std::string {
     const auto* v = tbl.get(k);
-    if (!v) return {};
+    if (!v)
+      return {};
     auto sv = v->value<std::string>();
     return sv ? *sv : std::string{};
   };
   auto optional_bool = [&](const char* k, bool dv) -> bool {
     const auto* v = tbl.get(k);
-    if (!v) return dv;
+    if (!v)
+      return dv;
     auto bv = v->value<bool>();
     return bv ? *bv : dv;
   };
 
   IndexEntry e;
-  e.id          = required_str("id");
-  e.name        = required_str("name");
-  e.source      = required_str("source");
+  e.id = required_str("id");
+  e.name = required_str("name");
+  e.source = required_str("source");
   e.description = optional_str("description");
-  e.license     = optional_str("license");
-  e.homepage    = optional_str("homepage");
-  e.author      = optional_str("author");
+  e.license = optional_str("license");
+  e.homepage = optional_str("homepage");
+  e.author = optional_str("author");
   e.souxmar_versions = optional_str("souxmar_versions");
   e.conformance_date = optional_str("conformance_date");
   e.conformance = parse_conformance(optional_str("conformance"));
-  e.status      = parse_status(optional_str("status"));
-  e.paid        = optional_bool("paid", false);
+  e.status = parse_status(optional_str("status"));
+  e.paid = optional_bool("paid", false);
 
   // Capabilities: required, must be a non-empty array of strings.
   const auto* caps_node = tbl.get("capabilities");
@@ -111,7 +121,8 @@ IndexEntry parse_one(const toml::table& tbl) {
   }
   for (const auto& item : *caps_arr) {
     auto sv = item.value<std::string>();
-    if (sv) e.capabilities.push_back(*sv);
+    if (sv)
+      e.capabilities.push_back(*sv);
   }
   if (e.capabilities.empty()) {
     throw std::runtime_error("'capabilities' must contain at least one entry");
@@ -119,13 +130,11 @@ IndexEntry parse_one(const toml::table& tbl) {
   return e;
 }
 
-IndexLoadResult parse_toml_table(const toml::table& root,
-                                 std::string_view  ctx_label) {
+IndexLoadResult parse_toml_table(const toml::table& root, std::string_view ctx_label) {
   const auto* arr = root.get_as<toml::array>("plugin");
   if (!arr) {
     IndexParseError err;
-    err.message = std::string(ctx_label) +
-                  ": missing top-level [[plugin]] table-array";
+    err.message = std::string(ctx_label) + ": missing top-level [[plugin]] table-array";
     return err;
   }
   std::vector<IndexEntry> out;
@@ -135,16 +144,16 @@ IndexLoadResult parse_toml_table(const toml::table& root,
     const auto* tbl = node.as_table();
     if (!tbl) {
       IndexParseError err;
-      err.message = std::string(ctx_label) + ": [[plugin]] entry #" +
-                    std::to_string(idx) + " is not a table";
+      err.message =
+          std::string(ctx_label) + ": [[plugin]] entry #" + std::to_string(idx) + " is not a table";
       return err;
     }
     try {
       out.push_back(parse_one(*tbl));
     } catch (const std::exception& e) {
       IndexParseError err;
-      err.message = std::string(ctx_label) + ": [[plugin]] entry #" +
-                    std::to_string(idx) + ": " + e.what();
+      err.message =
+          std::string(ctx_label) + ": [[plugin]] entry #" + std::to_string(idx) + ": " + e.what();
       return err;
     }
     ++idx;
@@ -187,66 +196,78 @@ IndexLoadResult load_index_string(std::string_view toml_text) {
 }
 
 std::vector<IndexEntry> search_index(const std::vector<IndexEntry>& entries,
-                                     std::string_view               query,
-                                     std::string_view               capability_prefix) {
+                                     std::string_view query,
+                                     std::string_view capability_prefix) {
   std::vector<IndexEntry> out;
   out.reserve(entries.size());
   for (const auto& e : entries) {
     if (!capability_prefix.empty()) {
       bool any_match = false;
       for (const auto& c : e.capabilities) {
-        if (c.size() >= capability_prefix.size() &&
-            std::equal(capability_prefix.begin(), capability_prefix.end(),
-                       c.begin())) {
+        if (c.size() >= capability_prefix.size()
+            && std::equal(capability_prefix.begin(), capability_prefix.end(), c.begin())) {
           any_match = true;
           break;
         }
       }
-      if (!any_match) continue;
+      if (!any_match)
+        continue;
     }
     if (query.empty()) {
       out.push_back(e);
       continue;
     }
-    if (contains_case_insensitive(e.id,          query) ||
-        contains_case_insensitive(e.name,        query) ||
-        contains_case_insensitive(e.description, query) ||
-        contains_case_insensitive(e.author,      query)) {
+    if (contains_case_insensitive(e.id, query) || contains_case_insensitive(e.name, query)
+        || contains_case_insensitive(e.description, query)
+        || contains_case_insensitive(e.author, query)) {
       out.push_back(e);
       continue;
     }
     bool cap_hit = false;
     for (const auto& c : e.capabilities) {
-      if (contains_case_insensitive(c, query)) { cap_hit = true; break; }
+      if (contains_case_insensitive(c, query)) {
+        cap_hit = true;
+        break;
+      }
     }
-    if (cap_hit) out.push_back(e);
+    if (cap_hit)
+      out.push_back(e);
   }
   return out;
 }
 
 std::string_view to_string(ConformanceStatus s) noexcept {
   switch (s) {
-    case ConformanceStatus::Passed:  return "passed";
-    case ConformanceStatus::NotRun:  return "not_run";
-    case ConformanceStatus::Failed:  return "failed";
+    case ConformanceStatus::Passed:
+      return "passed";
+    case ConformanceStatus::NotRun:
+      return "not_run";
+    case ConformanceStatus::Failed:
+      return "failed";
   }
   return "unknown";
 }
 
 std::string_view to_string(LifecycleStatus s) noexcept {
   switch (s) {
-    case LifecycleStatus::Active:       return "active";
-    case LifecycleStatus::Maintained:   return "maintained";
-    case LifecycleStatus::Unmaintained: return "unmaintained";
-    case LifecycleStatus::Archived:     return "archived";
+    case LifecycleStatus::Active:
+      return "active";
+    case LifecycleStatus::Maintained:
+      return "maintained";
+    case LifecycleStatus::Unmaintained:
+      return "unmaintained";
+    case LifecycleStatus::Archived:
+      return "archived";
   }
   return "unknown";
 }
 
 std::string_view to_string(IndexIssueSeverity s) noexcept {
   switch (s) {
-    case IndexIssueSeverity::Error:    return "error";
-    case IndexIssueSeverity::Warning:  return "warning";
+    case IndexIssueSeverity::Error:
+      return "error";
+    case IndexIssueSeverity::Warning:
+      return "warning";
   }
   return "unknown";
 }
@@ -262,12 +283,15 @@ namespace {
 // URL grammar in depth. RFC 3986 compliance is the user's browser's
 // problem when they click the link.
 bool looks_like_http_url(std::string_view s) noexcept {
-  if (s.size() < 8) return false;  // "http://x" minimum
+  if (s.size() < 8)
+    return false;  // "http://x" minimum
   const bool https = s.starts_with("https://");
-  const bool http  = s.starts_with("http://");
-  if (!https && !http) return false;
+  const bool http = s.starts_with("http://");
+  if (!https && !http)
+    return false;
   const std::size_t prefix_len = https ? 8 : 7;
-  if (s.size() <= prefix_len) return false;
+  if (s.size() <= prefix_len)
+    return false;
   // First char after the scheme must be a host character (not '/').
   return s[prefix_len] != '/';
 }
@@ -277,12 +301,13 @@ bool looks_like_http_url(std::string_view s) noexcept {
 // non-empty; no spaces. Same shape souxmar_registry_add_* enforces
 // at registration time.
 bool looks_like_capability_id(std::string_view s) noexcept {
-  if (s.empty()) return false;
+  if (s.empty())
+    return false;
   for (char c : s) {
-    const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                    (c >= '0' && c <= '9') || c == '.' || c == '_' ||
-                    c == '-';
-    if (!ok) return false;
+    const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+                    || c == '.' || c == '_' || c == '-';
+    if (!ok)
+      return false;
   }
   // Must contain at least one '.' — a capability id without a namespace
   // ("mesh", "solve") would collide with the existing souxmar capability
@@ -293,8 +318,7 @@ bool looks_like_capability_id(std::string_view s) noexcept {
 
 }  // namespace
 
-std::vector<IndexValidationIssue>
-validate_index(const std::vector<IndexEntry>& entries) {
+std::vector<IndexValidationIssue> validate_index(const std::vector<IndexEntry>& entries) {
   std::vector<IndexValidationIssue> out;
 
   // Cross-entry: duplicate ids. Maintain a first-occurrence map so the
@@ -305,12 +329,11 @@ validate_index(const std::vector<IndexEntry>& entries) {
     auto it = seen_ids.find(entries[i].id);
     if (it != seen_ids.end()) {
       IndexValidationIssue iss;
-      iss.severity    = IndexIssueSeverity::Error;
+      iss.severity = IndexIssueSeverity::Error;
       iss.entry_index = i;
-      iss.field       = "id";
-      iss.message     = "duplicate id '" + entries[i].id +
-                        "' — first seen at entry #" +
-                        std::to_string(it->second);
+      iss.field = "id";
+      iss.message = "duplicate id '" + entries[i].id + "' — first seen at entry #"
+                    + std::to_string(it->second);
       out.push_back(std::move(iss));
     } else {
       seen_ids.emplace(entries[i].id, i);
@@ -326,30 +349,34 @@ validate_index(const std::vector<IndexEntry>& entries) {
     // mistake of pasting a local path or a `git@...` SSH URL.
     if (!looks_like_http_url(e.source)) {
       IndexValidationIssue iss;
-      iss.severity    = IndexIssueSeverity::Error;
+      iss.severity = IndexIssueSeverity::Error;
       iss.entry_index = i;
-      iss.field       = "source";
-      iss.message     = "source URL must start with http:// or https:// "
-                        "(got: '" + e.source + "')";
+      iss.field = "source";
+      iss.message =
+          "source URL must start with http:// or https:// "
+          "(got: '"
+          + e.source + "')";
       out.push_back(std::move(iss));
     }
     // homepage is optional; when present it must also look URL-shaped.
     if (!e.homepage.empty() && !looks_like_http_url(e.homepage)) {
       IndexValidationIssue iss;
-      iss.severity    = IndexIssueSeverity::Error;
+      iss.severity = IndexIssueSeverity::Error;
       iss.entry_index = i;
-      iss.field       = "homepage";
-      iss.message     = "homepage URL must start with http:// or https:// "
-                        "(got: '" + e.homepage + "')";
+      iss.field = "homepage";
+      iss.message =
+          "homepage URL must start with http:// or https:// "
+          "(got: '"
+          + e.homepage + "')";
       out.push_back(std::move(iss));
     }
     // Capabilities: each must look like a capability id.
     for (std::size_t c = 0; c < e.capabilities.size(); ++c) {
       if (!looks_like_capability_id(e.capabilities[c])) {
         IndexValidationIssue iss;
-        iss.severity    = IndexIssueSeverity::Error;
+        iss.severity = IndexIssueSeverity::Error;
         iss.entry_index = i;
-        iss.field       = "capabilities[" + std::to_string(c) + "]";
+        iss.field = "capabilities[" + std::to_string(c) + "]";
         iss.message     = "capability id '" + e.capabilities[c] +
                           "' is not a valid dotted reverse-DNS name "
                           "(alphanumeric + . + _ + -)";
@@ -362,12 +389,13 @@ validate_index(const std::vector<IndexEntry>& entries) {
     // omitted for a paid listing's free trial. Reviewer judgement.
     if (e.license.empty() && !e.paid) {
       IndexValidationIssue iss;
-      iss.severity    = IndexIssueSeverity::Warning;
+      iss.severity = IndexIssueSeverity::Warning;
       iss.entry_index = i;
-      iss.field       = "license";
-      iss.message     = "open-index entry has no license field — "
-                        "BUSINESS_MODEL.md requires OSI-licensed source "
-                        "for the open channel; reviewer should confirm";
+      iss.field = "license";
+      iss.message =
+          "open-index entry has no license field — "
+          "BUSINESS_MODEL.md requires OSI-licensed source "
+          "for the open channel; reviewer should confirm";
       out.push_back(std::move(iss));
     }
     // souxmar_versions: warn if empty. ABI v1 plugins should declare
@@ -375,11 +403,12 @@ validate_index(const std::vector<IndexEntry>& entries) {
     // author hasn't thought about forward compatibility.
     if (e.souxmar_versions.empty()) {
       IndexValidationIssue iss;
-      iss.severity    = IndexIssueSeverity::Warning;
+      iss.severity = IndexIssueSeverity::Warning;
       iss.entry_index = i;
-      iss.field       = "souxmar_versions";
-      iss.message     = "missing version range — recommended: "
-                        "'>=1.0,<2.0' for any plugin built against v1 ABI";
+      iss.field = "souxmar_versions";
+      iss.message =
+          "missing version range — recommended: "
+          "'>=1.0,<2.0' for any plugin built against v1 ABI";
       out.push_back(std::move(iss));
     }
     // Conformance: warn on `failed`. The PR can still merge — sometimes
@@ -387,11 +416,12 @@ validate_index(const std::vector<IndexEntry>& entries) {
     // reviewers should call it out.
     if (e.conformance == ConformanceStatus::Failed) {
       IndexValidationIssue iss;
-      iss.severity    = IndexIssueSeverity::Warning;
+      iss.severity = IndexIssueSeverity::Warning;
       iss.entry_index = i;
-      iss.field       = "conformance";
-      iss.message     = "conformance failed — listing remains visible but "
-                        "the badge will read 'failed' until reattested";
+      iss.field = "conformance";
+      iss.message =
+          "conformance failed — listing remains visible but "
+          "the badge will read 'failed' until reattested";
       out.push_back(std::move(iss));
     }
   }

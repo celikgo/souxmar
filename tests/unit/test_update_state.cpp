@@ -30,8 +30,7 @@ namespace {
 
 fs::path tmp_state_dir() {
   std::random_device rd;
-  auto base = fs::temp_directory_path() /
-              ("souxmar-update-state-test-" + std::to_string(rd()));
+  auto base = fs::temp_directory_path() / ("souxmar-update-state-test-" + std::to_string(rd()));
   fs::create_directories(base);
   return base;
 }
@@ -39,9 +38,9 @@ fs::path tmp_state_dir() {
 UpdateState make_filled_state() {
   UpdateState s;
   s.current_installed_version = "0.9.0";
-  s.max_version_ever_seen     = "0.9.1";
-  s.last_check_at             = "2026-05-11T14:00:00Z";
-  s.last_apply_at             = "2026-05-11T13:50:00Z";
+  s.max_version_ever_seen = "0.9.1";
+  s.last_check_at = "2026-05-11T14:00:00Z";
+  s.last_apply_at = "2026-05-11T13:50:00Z";
   return s;
 }
 
@@ -51,20 +50,16 @@ TEST(UpdateState, RenderProducesExpectedShape) {
   const auto s = make_filled_state();
   const auto t = render_update_state(s);
   EXPECT_NE(t.find("schema                    = 1"), std::string::npos);
-  EXPECT_NE(t.find("current_installed_version = \"0.9.0\""),
-            std::string::npos);
-  EXPECT_NE(t.find("max_version_ever_seen     = \"0.9.1\""),
-            std::string::npos);
-  EXPECT_NE(t.find("last_check_at             = \"2026-05-11T14:00:00Z\""),
-            std::string::npos);
+  EXPECT_NE(t.find("current_installed_version = \"0.9.0\""), std::string::npos);
+  EXPECT_NE(t.find("max_version_ever_seen     = \"0.9.1\""), std::string::npos);
+  EXPECT_NE(t.find("last_check_at             = \"2026-05-11T14:00:00Z\""), std::string::npos);
 }
 
 TEST(UpdateState, LoadMissingFileReturnsFreshDefaults) {
-  const auto dir  = tmp_state_dir();
+  const auto dir = tmp_state_dir();
   const auto path = dir / "no-such-file.toml";
   auto r = load_update_state(path);
-  ASSERT_TRUE(std::holds_alternative<UpdateState>(r))
-      << "expected default-state, got load error";
+  ASSERT_TRUE(std::holds_alternative<UpdateState>(r)) << "expected default-state, got load error";
   const auto& s = std::get<UpdateState>(r);
   EXPECT_TRUE(s.current_installed_version.empty());
   EXPECT_TRUE(s.max_version_ever_seen.empty());
@@ -72,9 +67,9 @@ TEST(UpdateState, LoadMissingFileReturnsFreshDefaults) {
 }
 
 TEST(UpdateState, RoundtripsThroughDisk) {
-  const auto dir  = tmp_state_dir();
+  const auto dir = tmp_state_dir();
   const auto path = dir / "update-state.toml";
-  const auto src  = make_filled_state();
+  const auto src = make_filled_state();
   ASSERT_TRUE(save_update_state(path, src));
   ASSERT_TRUE(fs::exists(path));
 
@@ -82,14 +77,14 @@ TEST(UpdateState, RoundtripsThroughDisk) {
   ASSERT_TRUE(std::holds_alternative<UpdateState>(r));
   const auto& dst = std::get<UpdateState>(r);
   EXPECT_EQ(dst.current_installed_version, src.current_installed_version);
-  EXPECT_EQ(dst.max_version_ever_seen,     src.max_version_ever_seen);
-  EXPECT_EQ(dst.last_check_at,             src.last_check_at);
-  EXPECT_EQ(dst.last_apply_at,             src.last_apply_at);
+  EXPECT_EQ(dst.max_version_ever_seen, src.max_version_ever_seen);
+  EXPECT_EQ(dst.last_check_at, src.last_check_at);
+  EXPECT_EQ(dst.last_apply_at, src.last_apply_at);
   fs::remove_all(dir);
 }
 
 TEST(UpdateState, SaveCreatesMissingParentDirectory) {
-  const auto dir  = tmp_state_dir();
+  const auto dir = tmp_state_dir();
   const auto deep = dir / "a" / "b" / "c" / "update-state.toml";
   ASSERT_FALSE(fs::exists(deep.parent_path()));
   ASSERT_TRUE(save_update_state(deep, make_filled_state()));
@@ -98,7 +93,7 @@ TEST(UpdateState, SaveCreatesMissingParentDirectory) {
 }
 
 TEST(UpdateState, RejectsUnknownSchemaVersion) {
-  const auto dir  = tmp_state_dir();
+  const auto dir = tmp_state_dir();
   const auto path = dir / "update-state.toml";
   {
     std::ofstream sink(path);
@@ -113,7 +108,7 @@ TEST(UpdateState, RejectsUnknownSchemaVersion) {
 }
 
 TEST(UpdateState, RejectsMalformedToml) {
-  const auto dir  = tmp_state_dir();
+  const auto dir = tmp_state_dir();
   const auto path = dir / "update-state.toml";
   {
     std::ofstream sink(path);
@@ -125,7 +120,7 @@ TEST(UpdateState, RejectsMalformedToml) {
 }
 
 TEST(UpdateState, RejectsMissingSchemaField) {
-  const auto dir  = tmp_state_dir();
+  const auto dir = tmp_state_dir();
   const auto path = dir / "update-state.toml";
   {
     std::ofstream sink(path);
@@ -133,15 +128,14 @@ TEST(UpdateState, RejectsMissingSchemaField) {
   }
   auto r = load_update_state(path);
   ASSERT_TRUE(std::holds_alternative<UpdateStateLoadError>(r));
-  EXPECT_NE(std::get<UpdateStateLoadError>(r).message.find("schema"),
-            std::string::npos);
+  EXPECT_NE(std::get<UpdateStateLoadError>(r).message.find("schema"), std::string::npos);
   fs::remove_all(dir);
 }
 
 TEST(UpdateState, IgnoresUnknownFieldsForwardCompat) {
   // A future client might add a new optional field; today's client
   // should ignore it cleanly, not refuse to load.
-  const auto dir  = tmp_state_dir();
+  const auto dir = tmp_state_dir();
   const auto path = dir / "update-state.toml";
   {
     std::ofstream sink(path);

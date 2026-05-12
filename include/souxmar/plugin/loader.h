@@ -9,21 +9,21 @@
 
 #pragma once
 
+#include "souxmar/plugin/discovery.h"
+#include "souxmar/plugin/manifest.h"
+#include "souxmar/plugin/registry.h"
+
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <variant>
 #include <vector>
 
-#include "souxmar/plugin/discovery.h"
-#include "souxmar/plugin/manifest.h"
-#include "souxmar/plugin/registry.h"
-
 namespace souxmar::plugin {
 
 struct LoadError {
-  std::filesystem::path  binary_path;
-  std::string            message;
+  std::filesystem::path binary_path;
+  std::string message;
 };
 
 class LoadedPlugin {
@@ -33,7 +33,7 @@ class LoadedPlugin {
   LoadedPlugin(LoadedPlugin&&) noexcept;
   LoadedPlugin& operator=(LoadedPlugin&&) noexcept;
 
-  LoadedPlugin(const LoadedPlugin&)            = delete;
+  LoadedPlugin(const LoadedPlugin&) = delete;
   LoadedPlugin& operator=(const LoadedPlugin&) = delete;
 
   [[nodiscard]] const Manifest& manifest() const noexcept;
@@ -61,7 +61,7 @@ class PluginLoader {
 
   ~PluginLoader();
 
-  PluginLoader(const PluginLoader&)            = delete;
+  PluginLoader(const PluginLoader&) = delete;
   PluginLoader& operator=(const PluginLoader&) = delete;
 
   // Load a discovered plugin. On success returns a move-only LoadedPlugin
@@ -70,8 +70,8 @@ class PluginLoader {
   std::variant<LoadedPlugin, LoadError> load(const DiscoveredPlugin& discovered);
 
  private:
-  Registry&    registry_;
-  std::string  host_version_;
+  Registry& registry_;
+  std::string host_version_;
 };
 
 }  // namespace souxmar::plugin

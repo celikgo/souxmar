@@ -16,9 +16,9 @@ TEST(Value, DefaultIsNull) {
 }
 
 TEST(Value, ScalarBuildersRoundtrip) {
-  EXPECT_EQ(Value::boolean(true).as_bool(),       true);
+  EXPECT_EQ(Value::boolean(true).as_bool(), true);
   EXPECT_DOUBLE_EQ(Value::number(1.5).as_number(), 1.5);
-  EXPECT_EQ(Value::string("abc").as_string(),     "abc");
+  EXPECT_EQ(Value::string("abc").as_string(), "abc");
   EXPECT_EQ(Value::stage_ref("import").as_stage().stage_id, "import");
 }
 
@@ -42,7 +42,7 @@ TEST(Value, TryAccessReturnsNullForWrongKind) {
   Value v = Value::string("hi");
   EXPECT_NE(v.try_string(), nullptr);
   EXPECT_EQ(v.try_number(), nullptr);
-  EXPECT_EQ(v.try_bool(),   nullptr);
+  EXPECT_EQ(v.try_bool(), nullptr);
 }
 
 TEST(Value, EqualityRespectsKindAndPayload) {
@@ -54,7 +54,7 @@ TEST(Value, EqualityRespectsKindAndPayload) {
 }
 
 TEST(Value, KindNameForLogging) {
-  EXPECT_EQ(kind_name(Value::Kind::Stage),  "stage-ref");
+  EXPECT_EQ(kind_name(Value::Kind::Stage), "stage-ref");
   EXPECT_EQ(kind_name(Value::Kind::Number), "number");
 }
 

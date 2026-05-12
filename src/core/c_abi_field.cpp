@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include "souxmar/core/field.h"
+
 #include "souxmar-c/field.h"
 
 #include <string>
-
-#include "souxmar/core/field.h"
 
 namespace {
 
@@ -25,11 +25,12 @@ souxmar_field_t* as_c(souxmar::core::Field* p) noexcept {
 extern "C" {
 
 souxmar_field_t* souxmar_field_new(const char* name,
-                                   uint8_t     location,
-                                   uint8_t     kind,
-                                   size_t      count,
-                                   size_t      num_time_steps) {
-  if (!name) return nullptr;
+                                   uint8_t location,
+                                   uint8_t kind,
+                                   size_t count,
+                                   size_t num_time_steps) {
+  if (!name)
+    return nullptr;
   try {
     return as_c(new souxmar::core::Field{
         std::string(name),
@@ -48,19 +49,22 @@ void souxmar_field_free(souxmar_field_t* field) {
 }
 
 const char* souxmar_field_name(const souxmar_field_t* field) {
-  if (!field) return nullptr;
+  if (!field)
+    return nullptr;
   // Field::name() returns string_view to the impl's stored std::string, so
   // .data() is null-terminated as long as the field exists.
   return as_cpp(field)->name().data();
 }
 
 uint8_t souxmar_field_location(const souxmar_field_t* field) {
-  if (!field) return 0;
+  if (!field)
+    return 0;
   return static_cast<uint8_t>(as_cpp(field)->location());
 }
 
 uint8_t souxmar_field_kind(const souxmar_field_t* field) {
-  if (!field) return 0;
+  if (!field)
+    return 0;
   return static_cast<uint8_t>(as_cpp(field)->kind());
 }
 

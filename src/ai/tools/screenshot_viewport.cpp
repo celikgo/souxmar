@@ -20,29 +20,28 @@ namespace souxmar::ai {
 
 Tool make_screenshot_viewport_tool() {
   Tool t;
-  t.name             = "screenshot_viewport";
-  t.description      =
+  t.name = "screenshot_viewport";
+  t.description =
       "Capture the current 3D viewport as a PNG and return its path. "
       "Requires the souxmar desktop build (headless / CLI agent: returns "
       "NOT_AVAILABLE).";
-  t.category         = "Read";
+  t.category = "Read";
   // Tagged "leaves machine" in the design doc — image goes to the AI
   // provider if the agent forwards it. ConfirmOnce per docs.
-  t.confirmation     = Confirmation::ConfirmOnce;
+  t.confirmation = Confirmation::ConfirmOnce;
   t.input_schema_doc =
       "{}    # current viewport is implicit; future revisions may take camera params";
   t.output_schema_doc =
       "{path: string,    # filesystem path to the captured PNG\n"
       " width, height: number}";
   t.handler = [](const pipeline::Value& /*inputs*/, ToolContext& /*ctx*/) -> ToolResult {
-    return ToolResult{
-        pipeline::Value::null_value(),
-        "viewport screenshot not available in this build",
-        ToolError{"NOT_AVAILABLE",
-            "screenshot_viewport requires the souxmar desktop application "
-            "(the headless library has no viewport)",
-            "run `souxmar` in the Tauri desktop build, or skip this tool "
-            "and continue without a screenshot"}};
+    return ToolResult{pipeline::Value::null_value(),
+                      "viewport screenshot not available in this build",
+                      ToolError{"NOT_AVAILABLE",
+                                "screenshot_viewport requires the souxmar desktop application "
+                                "(the headless library has no viewport)",
+                                "run `souxmar` in the Tauri desktop build, or skip this tool "
+                                "and continue without a screenshot"}};
   };
   return t;
 }

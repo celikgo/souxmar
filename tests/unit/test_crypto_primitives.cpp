@@ -9,14 +9,14 @@
 
 #include "souxmar/crypto/primitives.h"
 
-#include <sodium.h>
-
 #include <gtest/gtest.h>
 
 #include <array>
 #include <cstdint>
 #include <string>
 #include <vector>
+
+#include <sodium.h>
 
 using namespace souxmar::crypto;
 
@@ -30,8 +30,8 @@ std::vector<std::uint8_t> bytes_of(std::string_view s) {
 }  // namespace
 
 TEST(CryptoPrimitives, StatusStringRoundtrip) {
-  EXPECT_EQ(to_string(SignatureStatus::Ok),                "ok");
-  EXPECT_EQ(to_string(SignatureStatus::BadSignature),      "bad-signature");
+  EXPECT_EQ(to_string(SignatureStatus::Ok), "ok");
+  EXPECT_EQ(to_string(SignatureStatus::BadSignature), "bad-signature");
   EXPECT_EQ(to_string(SignatureStatus::MalformedSignature), "malformed-signature");
 }
 
@@ -55,9 +55,11 @@ TEST(CryptoPrimitives, Sha256MatchesNistAbc) {
 }
 
 TEST(CryptoPrimitives, Ed25519VerifyEndToEnd) {
-  if (sodium_init() < 0) ADD_FAILURE() << "sodium_init failed";
+  if (sodium_init() < 0)
+    ADD_FAILURE() << "sodium_init failed";
   std::array<std::uint8_t, crypto_sign_SEEDBYTES> seed{};
-  for (std::size_t i = 0; i < seed.size(); ++i) seed[i] = static_cast<std::uint8_t>(i);
+  for (std::size_t i = 0; i < seed.size(); ++i)
+    seed[i] = static_cast<std::uint8_t>(i);
   std::array<std::uint8_t, crypto_sign_PUBLICKEYBYTES> pk{};
   std::array<std::uint8_t, crypto_sign_SECRETKEYBYTES> sk{};
   crypto_sign_seed_keypair(pk.data(), sk.data(), seed.data());
@@ -81,14 +83,11 @@ TEST(CryptoPrimitives, Ed25519RejectsMalformedInputs) {
   std::vector<std::uint8_t> short_sig(63);
   std::vector<std::uint8_t> good_pk(32);
   const auto msg = bytes_of("hi");
-  EXPECT_EQ(ed25519_verify(msg, short_sig, good_pk),
-            SignatureStatus::MalformedSignature);
+  EXPECT_EQ(ed25519_verify(msg, short_sig, good_pk), SignatureStatus::MalformedSignature);
 
   std::vector<std::uint8_t> good_sig(64);
   std::vector<std::uint8_t> short_pk(31);
-  EXPECT_EQ(ed25519_verify(msg, good_sig, short_pk),
-            SignatureStatus::MalformedPublicKey);
+  EXPECT_EQ(ed25519_verify(msg, good_sig, short_pk), SignatureStatus::MalformedPublicKey);
 
-  EXPECT_EQ(ed25519_verify({}, good_sig, good_pk),
-            SignatureStatus::EmptyMessage);
+  EXPECT_EQ(ed25519_verify({}, good_sig, good_pk), SignatureStatus::EmptyMessage);
 }

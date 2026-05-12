@@ -22,7 +22,8 @@ constexpr char kPathSeparator = ':';
 
 std::vector<fs::path> split_path_env(const char* env_value) {
   std::vector<fs::path> out;
-  if (!env_value) return out;
+  if (!env_value)
+    return out;
   std::string s(env_value);
   std::size_t start = 0;
   for (std::size_t i = 0; i <= s.size(); ++i) {
@@ -58,8 +59,7 @@ std::optional<fs::path> user_plugins_dir() {
 }
 
 bool ends_with(std::string_view s, std::string_view suffix) {
-  return s.size() >= suffix.size() &&
-         s.substr(s.size() - suffix.size()) == suffix;
+  return s.size() >= suffix.size() && s.substr(s.size() - suffix.size()) == suffix;
 }
 
 // On the host platform, what binary extension do plugins typically use?
@@ -67,8 +67,7 @@ bool ends_with(std::string_view s, std::string_view suffix) {
 // value is authoritative — but we do a soft-validate so misnamed binaries
 // surface as a discovery rejection rather than a load-time crash.
 bool plausible_plugin_binary_name(std::string_view name) {
-  return ends_with(name, ".so")     || ends_with(name, ".dylib") ||
-         ends_with(name, ".dll");
+  return ends_with(name, ".so") || ends_with(name, ".dylib") || ends_with(name, ".dll");
 }
 
 }  // namespace
@@ -119,13 +118,14 @@ DiscoveryReport discover_plugins(const std::vector<fs::path>& search_paths) {
       if (ec) {
         DiscoveryRejection r{};
         r.candidate_path = root;
-        r.reason         = fmt::format("cannot iterate: {}", ec.message());
-        r.code           = DiscoveryRejectionCode::CannotIterateSearchPath;
+        r.reason = fmt::format("cannot iterate: {}", ec.message());
+        r.code = DiscoveryRejectionCode::CannotIterateSearchPath;
         report.rejected.push_back(std::move(r));
         ec.clear();
         break;
       }
-      if (!candidate.is_directory(ec)) continue;
+      if (!candidate.is_directory(ec))
+        continue;
 
       const auto manifest_path = candidate.path() / "souxmar-plugin.toml";
       if (!fs::exists(manifest_path, ec)) {
@@ -137,9 +137,9 @@ DiscoveryReport discover_plugins(const std::vector<fs::path>& search_paths) {
       if (auto* err = std::get_if<ParseError>(&result)) {
         DiscoveryRejection r{};
         r.candidate_path = manifest_path;
-        r.reason         = err->message;
-        r.code           = DiscoveryRejectionCode::ManifestParseFailed;
-        r.manifest_code  = err->code;
+        r.reason = err->message;
+        r.code = DiscoveryRejectionCode::ManifestParseFailed;
+        r.manifest_code = err->code;
         report.rejected.push_back(std::move(r));
         continue;
       }
@@ -150,19 +150,20 @@ DiscoveryReport discover_plugins(const std::vector<fs::path>& search_paths) {
       if (!fs::exists(binary_path, ec)) {
         DiscoveryRejection r{};
         r.candidate_path = manifest_path;
-        r.reason         = fmt::format("declared binary '{}' does not exist at '{}'",
-                                       manifest.binary_file, binary_path.string());
-        r.code           = DiscoveryRejectionCode::BinaryNotFound;
+        r.reason = fmt::format("declared binary '{}' does not exist at '{}'",
+                               manifest.binary_file,
+                               binary_path.string());
+        r.code = DiscoveryRejectionCode::BinaryNotFound;
         report.rejected.push_back(std::move(r));
         continue;
       }
       if (!plausible_plugin_binary_name(manifest.binary_file)) {
         DiscoveryRejection r{};
         r.candidate_path = manifest_path;
-        r.reason         = fmt::format(
-            "binary '{}' has unrecognised extension; expected .so / .dylib / .dll",
-            manifest.binary_file);
-        r.code           = DiscoveryRejectionCode::BinaryUnrecognisedExtension;
+        r.reason =
+            fmt::format("binary '{}' has unrecognised extension; expected .so / .dylib / .dll",
+                        manifest.binary_file);
+        r.code = DiscoveryRejectionCode::BinaryUnrecognisedExtension;
         report.rejected.push_back(std::move(r));
         continue;
       }
@@ -180,11 +181,16 @@ DiscoveryReport discover_plugins(const std::vector<fs::path>& search_paths) {
 
 std::string_view to_string(DiscoveryRejectionCode r) noexcept {
   switch (r) {
-    case DiscoveryRejectionCode::Unknown:                     return "unknown";
-    case DiscoveryRejectionCode::CannotIterateSearchPath:     return "cannot_iterate_search_path";
-    case DiscoveryRejectionCode::ManifestParseFailed:         return "manifest_parse_failed";
-    case DiscoveryRejectionCode::BinaryNotFound:              return "binary_not_found";
-    case DiscoveryRejectionCode::BinaryUnrecognisedExtension: return "binary_unrecognised_extension";
+    case DiscoveryRejectionCode::Unknown:
+      return "unknown";
+    case DiscoveryRejectionCode::CannotIterateSearchPath:
+      return "cannot_iterate_search_path";
+    case DiscoveryRejectionCode::ManifestParseFailed:
+      return "manifest_parse_failed";
+    case DiscoveryRejectionCode::BinaryNotFound:
+      return "binary_not_found";
+    case DiscoveryRejectionCode::BinaryUnrecognisedExtension:
+      return "binary_unrecognised_extension";
   }
   return "unknown";
 }

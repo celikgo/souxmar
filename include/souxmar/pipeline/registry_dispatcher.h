@@ -18,6 +18,12 @@
 
 #pragma once
 
+#include "souxmar/core/field.h"
+#include "souxmar/core/geometry.h"
+#include "souxmar/core/mesh.h"
+#include "souxmar/pipeline/runner.h"
+#include "souxmar/plugin/registry.h"
+
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -26,12 +32,6 @@
 #include <string_view>
 #include <vector>
 
-#include "souxmar/core/field.h"
-#include "souxmar/core/geometry.h"
-#include "souxmar/core/mesh.h"
-#include "souxmar/pipeline/runner.h"
-#include "souxmar/plugin/registry.h"
-
 namespace souxmar::pipeline {
 
 // Discriminated wrapper for stage outputs. Universal payload type for
@@ -39,18 +39,18 @@ namespace souxmar::pipeline {
 // type; it lives between the dispatcher and the runner.
 struct StageOutput {
   enum class Kind {
-    None     = 0,
-    Mesh     = 1,
+    None = 0,
+    Mesh = 1,
     Geometry = 2,
-    Field    = 3,
-    Path     = 4,
+    Field = 3,
+    Path = 4,
   };
 
-  Kind                                      kind = Kind::None;
-  std::shared_ptr<souxmar::core::Mesh>      mesh;
-  std::shared_ptr<souxmar::core::Geometry>  geometry;
-  std::shared_ptr<souxmar::core::Field>     field;
-  std::string                               path;
+  Kind kind = Kind::None;
+  std::shared_ptr<souxmar::core::Mesh> mesh;
+  std::shared_ptr<souxmar::core::Geometry> geometry;
+  std::shared_ptr<souxmar::core::Field> field;
+  std::string path;
 };
 
 class RegistryDispatcher : public IDispatcher {
@@ -68,8 +68,7 @@ class RegistryDispatcher : public IDispatcher {
   // Used by the parallel runner to attribute capabilities back to their
   // owning plugin and to honor manifest-declared threading models.
   std::string plugin_id(std::string_view capability_id) override;
-  ::souxmar::plugin::ThreadingModel
-  plugin_threading(std::string_view capability_id) override;
+  ::souxmar::plugin::ThreadingModel plugin_threading(std::string_view capability_id) override;
 
  private:
   plugin::Registry& registry_;
@@ -90,10 +89,9 @@ class RegistryDispatcher : public IDispatcher {
 //
 // Plug these into RunOptions::disk_backing.{serialize,deserialize}.
 
-[[nodiscard]] std::optional<std::vector<std::uint8_t>>
-serialize_stage_output(const std::shared_ptr<void>& payload);
+[[nodiscard]] std::optional<std::vector<std::uint8_t>> serialize_stage_output(
+    const std::shared_ptr<void>& payload);
 
-[[nodiscard]] std::shared_ptr<void>
-deserialize_stage_output(std::span<const std::uint8_t> blob);
+[[nodiscard]] std::shared_ptr<void> deserialize_stage_output(std::span<const std::uint8_t> blob);
 
 }  // namespace souxmar::pipeline

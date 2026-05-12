@@ -36,13 +36,20 @@ namespace souxmar::update {
 
 std::string_view to_string(SignatureStatus s) noexcept {
   switch (s) {
-    case SignatureStatus::Ok:                       return "ok";
-    case SignatureStatus::BadSignature:             return "bad-signature";
-    case SignatureStatus::UnknownKeyId:             return "unknown-key-id";
-    case SignatureStatus::MalformedSignature:       return "malformed-signature";
-    case SignatureStatus::MalformedPublicKey:       return "malformed-public-key";
-    case SignatureStatus::EmptyMessage:             return "empty-message";
-    case SignatureStatus::CryptoLibraryUnavailable: return "crypto-library-unavailable";
+    case SignatureStatus::Ok:
+      return "ok";
+    case SignatureStatus::BadSignature:
+      return "bad-signature";
+    case SignatureStatus::UnknownKeyId:
+      return "unknown-key-id";
+    case SignatureStatus::MalformedSignature:
+      return "malformed-signature";
+    case SignatureStatus::MalformedPublicKey:
+      return "malformed-public-key";
+    case SignatureStatus::EmptyMessage:
+      return "empty-message";
+    case SignatureStatus::CryptoLibraryUnavailable:
+      return "crypto-library-unavailable";
   }
   return "unknown";
 }
@@ -63,10 +70,11 @@ std::string hex_encode(std::span<const std::uint8_t> bytes) {
 // TrustStore
 // ============================================================================
 
-bool TrustStore::add(std::string                   id,
-                     std::span<const std::uint8_t> public_key) {
-  if (id.empty()) return false;
-  if (public_key.size() != kEd25519PublicKeyBytes) return false;
+bool TrustStore::add(std::string id, std::span<const std::uint8_t> public_key) {
+  if (id.empty())
+    return false;
+  if (public_key.size() != kEd25519PublicKeyBytes)
+    return false;
   TrustedKey k;
   k.public_key_id = std::move(id);
   k.public_key.assign(public_key.begin(), public_key.end());
@@ -76,14 +84,17 @@ bool TrustStore::add(std::string                   id,
 
 bool TrustStore::add_hex(std::string id, std::string_view hex_pubkey) {
   std::vector<std::uint8_t> decoded;
-  if (!hex_decode(hex_pubkey, decoded)) return false;
-  if (decoded.size() != kEd25519PublicKeyBytes) return false;
+  if (!hex_decode(hex_pubkey, decoded))
+    return false;
+  if (decoded.size() != kEd25519PublicKeyBytes)
+    return false;
   return add(std::move(id), decoded);
 }
 
 const TrustedKey* TrustStore::find(std::string_view id) const noexcept {
   for (const auto& k : keys_) {
-    if (k.public_key_id == id) return &k;
+    if (k.public_key_id == id)
+      return &k;
   }
   return nullptr;
 }
@@ -92,38 +103,40 @@ const TrustedKey* TrustStore::find(std::string_view id) const noexcept {
 // Verification
 // ============================================================================
 
-SignatureStatus
-verify_detached_ed25519(std::span<const std::uint8_t> message,
-                        std::span<const std::uint8_t> signature,
-                        std::span<const std::uint8_t> public_key) {
+SignatureStatus verify_detached_ed25519(std::span<const std::uint8_t> message,
+                                        std::span<const std::uint8_t> signature,
+                                        std::span<const std::uint8_t> public_key) {
   // Forwarder to libsouxmar-crypto. The enum value-set + ordering
   // match the primitive's (lookup-policy values like UnknownKeyId
   // never come up here — those only surface in
   // verify_manifest_signature).
   const auto s = crypto::ed25519_verify(message, signature, public_key);
   switch (s) {
-    case crypto::SignatureStatus::Ok:                       return SignatureStatus::Ok;
-    case crypto::SignatureStatus::BadSignature:             return SignatureStatus::BadSignature;
-    case crypto::SignatureStatus::MalformedSignature:       return SignatureStatus::MalformedSignature;
-    case crypto::SignatureStatus::MalformedPublicKey:       return SignatureStatus::MalformedPublicKey;
-    case crypto::SignatureStatus::EmptyMessage:             return SignatureStatus::EmptyMessage;
-    case crypto::SignatureStatus::CryptoLibraryUnavailable: return SignatureStatus::CryptoLibraryUnavailable;
+    case crypto::SignatureStatus::Ok:
+      return SignatureStatus::Ok;
+    case crypto::SignatureStatus::BadSignature:
+      return SignatureStatus::BadSignature;
+    case crypto::SignatureStatus::MalformedSignature:
+      return SignatureStatus::MalformedSignature;
+    case crypto::SignatureStatus::MalformedPublicKey:
+      return SignatureStatus::MalformedPublicKey;
+    case crypto::SignatureStatus::EmptyMessage:
+      return SignatureStatus::EmptyMessage;
+    case crypto::SignatureStatus::CryptoLibraryUnavailable:
+      return SignatureStatus::CryptoLibraryUnavailable;
   }
   return SignatureStatus::BadSignature;
 }
 
-SignatureStatus
-verify_manifest_signature(std::span<const std::uint8_t> manifest_bytes,
-                          std::span<const std::uint8_t> signature_bytes,
-                          std::string_view              key_id,
-                          const TrustStore&             trust) {
+SignatureStatus verify_manifest_signature(std::span<const std::uint8_t> manifest_bytes,
+                                          std::span<const std::uint8_t> signature_bytes,
+                                          std::string_view key_id,
+                                          const TrustStore& trust) {
   const TrustedKey* key = trust.find(key_id);
   if (key == nullptr) {
     return SignatureStatus::UnknownKeyId;
   }
-  return verify_detached_ed25519(manifest_bytes,
-                                 signature_bytes,
-                                 key->public_key);
+  return verify_detached_ed25519(manifest_bytes, signature_bytes, key->public_key);
 }
 
 }  // namespace souxmar::update

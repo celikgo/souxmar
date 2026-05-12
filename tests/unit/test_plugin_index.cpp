@@ -69,7 +69,7 @@ TEST(PluginIndex, ParseMinimalEntrySetsRequiredFields) {
   EXPECT_TRUE(e.license.empty());
   EXPECT_TRUE(e.author.empty());
   EXPECT_EQ(e.conformance, ConformanceStatus::NotRun);
-  EXPECT_EQ(e.status,      LifecycleStatus::Active);
+  EXPECT_EQ(e.status, LifecycleStatus::Active);
   EXPECT_FALSE(e.paid);
 }
 
@@ -110,8 +110,7 @@ capabilities = ["x.y"]
 )toml";
   auto result = load_index_string(kNoSource);
   ASSERT_TRUE(std::holds_alternative<IndexParseError>(result));
-  EXPECT_NE(std::get<IndexParseError>(result).message.find("source"),
-            std::string::npos)
+  EXPECT_NE(std::get<IndexParseError>(result).message.find("source"), std::string::npos)
       << "error message should name the missing field";
 }
 
@@ -125,8 +124,7 @@ capabilities = []
 )toml";
   auto result = load_index_string(kEmptyCaps);
   ASSERT_TRUE(std::holds_alternative<IndexParseError>(result));
-  EXPECT_NE(std::get<IndexParseError>(result).message.find("capabilities"),
-            std::string::npos);
+  EXPECT_NE(std::get<IndexParseError>(result).message.find("capabilities"), std::string::npos);
 }
 
 TEST(PluginIndex, MalformedTomlSurfacesParseError) {
@@ -189,15 +187,15 @@ TEST(PluginIndex, SearchPreservesInputOrder) {
 }
 
 TEST(PluginIndex, StatusStringsRoundtrip) {
-  EXPECT_EQ(to_string(LifecycleStatus::Active),       "active");
-  EXPECT_EQ(to_string(LifecycleStatus::Maintained),   "maintained");
+  EXPECT_EQ(to_string(LifecycleStatus::Active), "active");
+  EXPECT_EQ(to_string(LifecycleStatus::Maintained), "maintained");
   EXPECT_EQ(to_string(LifecycleStatus::Unmaintained), "unmaintained");
-  EXPECT_EQ(to_string(LifecycleStatus::Archived),     "archived");
-  EXPECT_EQ(to_string(ConformanceStatus::Passed),     "passed");
-  EXPECT_EQ(to_string(ConformanceStatus::NotRun),     "not_run");
-  EXPECT_EQ(to_string(ConformanceStatus::Failed),     "failed");
-  EXPECT_EQ(to_string(IndexIssueSeverity::Error),     "error");
-  EXPECT_EQ(to_string(IndexIssueSeverity::Warning),   "warning");
+  EXPECT_EQ(to_string(LifecycleStatus::Archived), "archived");
+  EXPECT_EQ(to_string(ConformanceStatus::Passed), "passed");
+  EXPECT_EQ(to_string(ConformanceStatus::NotRun), "not_run");
+  EXPECT_EQ(to_string(ConformanceStatus::Failed), "failed");
+  EXPECT_EQ(to_string(IndexIssueSeverity::Error), "error");
+  EXPECT_EQ(to_string(IndexIssueSeverity::Warning), "warning");
 }
 
 // -------- Sprint 10 push 3 — validate_index ---------------------------
@@ -209,11 +207,11 @@ namespace {
 // has its own tests above).
 IndexEntry make_min(std::string id) {
   IndexEntry e;
-  e.id     = std::move(id);
-  e.name   = "Test plugin";
+  e.id = std::move(id);
+  e.name = "Test plugin";
   e.source = "https://example.com/source";
   e.capabilities = {"mesher.tetra.example"};
-  e.license          = "Apache-2.0";
+  e.license = "Apache-2.0";
   e.souxmar_versions = ">=1.0,<2.0";
   return e;
 }
@@ -233,9 +231,9 @@ TEST(PluginIndexValidate, DuplicateIdIsError) {
   };
   auto issues = validate_index(entries);
   ASSERT_EQ(issues.size(), 1u);
-  EXPECT_EQ(issues[0].severity,    IndexIssueSeverity::Error);
+  EXPECT_EQ(issues[0].severity, IndexIssueSeverity::Error);
   EXPECT_EQ(issues[0].entry_index, 1u);  // points at the second occurrence
-  EXPECT_EQ(issues[0].field,       "id");
+  EXPECT_EQ(issues[0].field, "id");
   EXPECT_NE(issues[0].message.find("duplicate"), std::string::npos);
 }
 
@@ -246,7 +244,7 @@ TEST(PluginIndexValidate, BadSourceUrlIsError) {
   auto issues = validate_index(entries);
   ASSERT_EQ(issues.size(), 1u);
   EXPECT_EQ(issues[0].severity, IndexIssueSeverity::Error);
-  EXPECT_EQ(issues[0].field,    "source");
+  EXPECT_EQ(issues[0].field, "source");
 }
 
 TEST(PluginIndexValidate, BadHomepageUrlIsError) {
@@ -256,7 +254,7 @@ TEST(PluginIndexValidate, BadHomepageUrlIsError) {
   auto issues = validate_index(entries);
   ASSERT_EQ(issues.size(), 1u);
   EXPECT_EQ(issues[0].severity, IndexIssueSeverity::Error);
-  EXPECT_EQ(issues[0].field,    "homepage");
+  EXPECT_EQ(issues[0].field, "homepage");
 }
 
 TEST(PluginIndexValidate, EmptyHomepageIsOk) {
@@ -288,7 +286,7 @@ TEST(PluginIndexValidate, MissingLicenseOnFreeEntryIsWarning) {
   auto issues = validate_index(entries);
   ASSERT_EQ(issues.size(), 1u);
   EXPECT_EQ(issues[0].severity, IndexIssueSeverity::Warning);
-  EXPECT_EQ(issues[0].field,    "license");
+  EXPECT_EQ(issues[0].field, "license");
 }
 
 TEST(PluginIndexValidate, MissingLicenseOnPaidEntryIsOk) {
@@ -296,7 +294,7 @@ TEST(PluginIndexValidate, MissingLicenseOnPaidEntryIsOk) {
   // marketplace handles the license-key flow separately).
   auto e = make_min("com.example.paid");
   e.license = "";
-  e.paid    = true;
+  e.paid = true;
   std::vector<IndexEntry> entries = {std::move(e)};
   auto issues = validate_index(entries);
   EXPECT_TRUE(issues.empty());
@@ -309,7 +307,7 @@ TEST(PluginIndexValidate, MissingVersionRangeIsWarning) {
   auto issues = validate_index(entries);
   ASSERT_EQ(issues.size(), 1u);
   EXPECT_EQ(issues[0].severity, IndexIssueSeverity::Warning);
-  EXPECT_EQ(issues[0].field,    "souxmar_versions");
+  EXPECT_EQ(issues[0].field, "souxmar_versions");
 }
 
 TEST(PluginIndexValidate, FailedConformanceIsWarningNotError) {
@@ -319,26 +317,28 @@ TEST(PluginIndexValidate, FailedConformanceIsWarningNotError) {
   auto issues = validate_index(entries);
   ASSERT_EQ(issues.size(), 1u);
   EXPECT_EQ(issues[0].severity, IndexIssueSeverity::Warning);
-  EXPECT_EQ(issues[0].field,    "conformance");
+  EXPECT_EQ(issues[0].field, "conformance");
 }
 
 TEST(PluginIndexValidate, MultipleIssuesAllReported) {
   // One entry with three errors + one warning. Validator should
   // report every issue, not stop at the first.
   auto e = make_min("com.example.disaster");
-  e.source           = "not-a-url";
-  e.homepage         = "also-not-a-url";
-  e.capabilities     = {"bad cap"};
+  e.source = "not-a-url";
+  e.homepage = "also-not-a-url";
+  e.capabilities = {"bad cap"};
   e.souxmar_versions = "";
   std::vector<IndexEntry> entries = {std::move(e)};
   auto issues = validate_index(entries);
   ASSERT_EQ(issues.size(), 4u);
   std::size_t errors = 0, warnings = 0;
   for (const auto& iss : issues) {
-    if (iss.severity == IndexIssueSeverity::Error)   ++errors;
-    if (iss.severity == IndexIssueSeverity::Warning) ++warnings;
+    if (iss.severity == IndexIssueSeverity::Error)
+      ++errors;
+    if (iss.severity == IndexIssueSeverity::Warning)
+      ++warnings;
   }
-  EXPECT_EQ(errors,   3u);
+  EXPECT_EQ(errors, 3u);
   EXPECT_EQ(warnings, 1u);
 }
 

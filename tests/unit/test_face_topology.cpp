@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include "souxmar/core/element_type.h"
 #include "souxmar/core/face_topology.h"
 
 #include <gtest/gtest.h>
@@ -7,8 +8,6 @@
 #include <algorithm>
 #include <array>
 #include <set>
-
-#include "souxmar/core/element_type.h"
 
 using namespace souxmar::core;
 
@@ -57,9 +56,11 @@ TEST(Hex8Faces, EveryVertexAppearsInExactlyThreeFaces) {
   const auto t = face_node_table(ElementType::Hex8);
   std::array<int, 8> count{};
   for (const auto& f : t) {
-    for (std::uint8_t i = 0; i < f.vertex_count; ++i) count[f.cell_local_idx[i]]++;
+    for (std::uint8_t i = 0; i < f.vertex_count; ++i)
+      count[f.cell_local_idx[i]]++;
   }
-  for (int c : count) EXPECT_EQ(c, 3);
+  for (int c : count)
+    EXPECT_EQ(c, 3);
 }
 
 TEST(FaceTopology, Prism6HasTwoTrisAndThreeQuads) {
@@ -67,8 +68,10 @@ TEST(FaceTopology, Prism6HasTwoTrisAndThreeQuads) {
   ASSERT_EQ(t.size(), 5u);
   int tris = 0, quads = 0;
   for (const auto& f : t) {
-    if (f.vertex_count == 3) ++tris;
-    else if (f.vertex_count == 4) ++quads;
+    if (f.vertex_count == 3)
+      ++tris;
+    else if (f.vertex_count == 4)
+      ++quads;
   }
   EXPECT_EQ(tris, 2);
   EXPECT_EQ(quads, 3);
@@ -79,8 +82,10 @@ TEST(FaceTopology, Pyramid5HasOneQuadAndFourTris) {
   ASSERT_EQ(t.size(), 5u);
   int tris = 0, quads = 0;
   for (const auto& f : t) {
-    if (f.vertex_count == 3) ++tris;
-    else if (f.vertex_count == 4) ++quads;
+    if (f.vertex_count == 3)
+      ++tris;
+    else if (f.vertex_count == 4)
+      ++quads;
   }
   EXPECT_EQ(tris, 4);
   EXPECT_EQ(quads, 1);
@@ -123,8 +128,8 @@ TEST(FaceTopology, FaceCountMatchesElementInfo) {
   // The face count this header reports for 3D elements must match
   // num_faces() in element_type.h — the two surfaces are independent
   // sources of truth and divergence is a real bug.
-  EXPECT_EQ(face_node_table(ElementType::Tet4).size(),     num_faces(ElementType::Tet4));
-  EXPECT_EQ(face_node_table(ElementType::Hex8).size(),     num_faces(ElementType::Hex8));
-  EXPECT_EQ(face_node_table(ElementType::Prism6).size(),   num_faces(ElementType::Prism6));
+  EXPECT_EQ(face_node_table(ElementType::Tet4).size(), num_faces(ElementType::Tet4));
+  EXPECT_EQ(face_node_table(ElementType::Hex8).size(), num_faces(ElementType::Hex8));
+  EXPECT_EQ(face_node_table(ElementType::Prism6).size(), num_faces(ElementType::Prism6));
   EXPECT_EQ(face_node_table(ElementType::Pyramid5).size(), num_faces(ElementType::Pyramid5));
 }

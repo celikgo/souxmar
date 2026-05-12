@@ -26,8 +26,7 @@
 
 #include "souxmar/update/verifier.h"
 
-#include <sodium.h>
-
+#include "test_config.h"
 #include <gtest/gtest.h>
 
 #include <array>
@@ -40,7 +39,7 @@
 #include <string>
 #include <vector>
 
-#include "test_config.h"
+#include <sodium.h>
 
 namespace fs = std::filesystem;
 
@@ -66,16 +65,16 @@ int run_cli(const std::string& full_cmd) {
 #if defined(_WIN32)
   return rc;
 #else
-  if (rc < 0) return rc;
+  if (rc < 0)
+    return rc;
   return (rc >> 8) & 0xFF;
 #endif
 }
 
 fs::path tmp_dir(std::string_view tag) {
   std::random_device rd;
-  auto base = fs::temp_directory_path() /
-              ("souxmar-update-cli-test-" + std::string(tag) + "-" +
-               std::to_string(rd()));
+  auto base = fs::temp_directory_path()
+              / ("souxmar-update-cli-test-" + std::string(tag) + "-" + std::to_string(rd()));
   fs::create_directories(base);
   return base;
 }
@@ -86,7 +85,8 @@ struct Keypair {
 };
 
 Keypair make_keypair() {
-  if (sodium_init() < 0) ADD_FAILURE() << "sodium_init failed";
+  if (sodium_init() < 0)
+    ADD_FAILURE() << "sodium_init failed";
   // Deterministic seed — see test_update_verifier.cpp.
   std::array<std::uint8_t, crypto_sign_SEEDBYTES> seed{};
   for (std::size_t i = 0; i < seed.size(); ++i) {
@@ -103,7 +103,7 @@ std::string hex_encode(const std::uint8_t* p, std::size_t n) {
   out.resize(n * 2);
   for (std::size_t i = 0; i < n; ++i) {
     out[2 * i + 0] = kHex[(p[i] >> 4) & 0x0F];
-    out[2 * i + 1] = kHex[p[i]        & 0x0F];
+    out[2 * i + 1] = kHex[p[i] & 0x0F];
   }
   return out;
 }
@@ -112,9 +112,11 @@ std::string sign_hex(const std::string& message,
                      const std::array<std::uint8_t, crypto_sign_SECRETKEYBYTES>& sk) {
   std::array<std::uint8_t, crypto_sign_BYTES> sig{};
   unsigned long long sig_len = 0;
-  crypto_sign_detached(sig.data(), &sig_len,
+  crypto_sign_detached(sig.data(),
+                       &sig_len,
                        reinterpret_cast<const std::uint8_t*>(message.data()),
-                       message.size(), sk.data());
+                       message.size(),
+                       sk.data());
   return hex_encode(sig.data(), crypto_sign_BYTES);
 }
 
@@ -153,9 +155,7 @@ algorithm     = "ed25519"
 public_key_id = "release-test"
 )toml";
 
-std::string replace_all(std::string s,
-                        std::string_view needle,
-                        std::string_view repl) {
+std::string replace_all(std::string s, std::string_view needle, std::string_view repl) {
   std::size_t pos = 0;
   while ((pos = s.find(needle, pos)) != std::string::npos) {
     s.replace(pos, needle.size(), repl);
@@ -166,8 +166,7 @@ std::string replace_all(std::string s,
 
 void write_file(const fs::path& p, std::string_view content) {
   std::ofstream sink(p, std::ios::binary | std::ios::trunc);
-  sink.write(content.data(),
-             static_cast<std::streamsize>(content.size()));
+  sink.write(content.data(), static_cast<std::streamsize>(content.size()));
 }
 
 std::string read_file(const fs::path& p) {
@@ -181,9 +180,10 @@ class UpdateCheckCli : public ::testing::Test {
  protected:
   void SetUp() override {
     work_ = tmp_dir("workdir");
-    kp_   = make_keypair();
+    kp_ = make_keypair();
     pubkey_hex_ = hex_encode(kp_.pk.data(), kp_.pk.size());
   }
+
   void TearDown() override {
     std::error_code ec;
     fs::remove_all(work_, ec);
@@ -191,14 +191,14 @@ class UpdateCheckCli : public ::testing::Test {
 
   // Write a manifest with the given version + expiry; sign it; return
   // the paths to the manifest + signature.
-  struct Pair { fs::path manifest; fs::path signature; };
+  struct Pair {
+    fs::path manifest;
+    fs::path signature;
+  };
 
-  Pair write_signed(const std::string& version,
-                    const std::string& expires_at) {
-    auto manifest_text =
-        replace_all(kManifestTemplate, "{VERSION}", version);
-    manifest_text =
-        replace_all(std::move(manifest_text), "{EXPIRES}", expires_at);
+  Pair write_signed(const std::string& version, const std::string& expires_at) {
+    auto manifest_text = replace_all(kManifestTemplate, "{VERSION}", version);
+    manifest_text = replace_all(std::move(manifest_text), "{EXPIRES}", expires_at);
     const auto manifest = work_ / ("manifest-" + version + ".toml");
     write_file(manifest, manifest_text);
 
@@ -210,45 +210,39 @@ class UpdateCheckCli : public ::testing::Test {
 
   std::string cli_base() const {
     return shell_quote(SOUXMAR_TEST_CLI_BINARY) + " update check"
-         + " --trusted-key release-test=" + pubkey_hex_
-         + " --platform linux/x86_64"
-         + " --state " + shell_quote(work_ / "no-such-state.toml");
+           + " --trusted-key release-test=" + pubkey_hex_ + " --platform linux/x86_64" + " --state "
+           + shell_quote(work_ / "no-such-state.toml");
   }
 
-  fs::path  work_;
-  Keypair   kp_{};
+  fs::path work_;
+  Keypair kp_{};
   std::string pubkey_hex_;
 };
 
 }  // namespace
 
 TEST_F(UpdateCheckCli, ValidManifestProducesApplyDecision) {
-  const auto p   = write_signed("0.9.0", "2026-12-31T00:00:00Z");
+  const auto p = write_signed("0.9.0", "2026-12-31T00:00:00Z");
   const auto log = work_ / "out.log";
-  const std::string cmd = cli_base()
-      + " --manifest "  + shell_quote(p.manifest)
-      + " --signature " + shell_quote(p.signature)
-      + " --current-version 0.8.5"
-      + " --as-of 2026-05-12T00:00:00Z"
-      + " > "           + shell_quote(log) + " 2>&1";
+  const std::string cmd = cli_base() + " --manifest " + shell_quote(p.manifest) + " --signature "
+                          + shell_quote(p.signature) + " --current-version 0.8.5"
+                          + " --as-of 2026-05-12T00:00:00Z" + " > " + shell_quote(log) + " 2>&1";
 
   const int rc = run_cli(cmd);
   const auto out = read_file(log);
   ASSERT_EQ(rc, 0) << "CLI output:\n" << out;
-  EXPECT_NE(out.find("update available"),     std::string::npos) << out;
-  EXPECT_NE(out.find("-> 0.9.0"),             std::string::npos) << out;
+  EXPECT_NE(out.find("update available"), std::string::npos) << out;
+  EXPECT_NE(out.find("-> 0.9.0"), std::string::npos) << out;
   EXPECT_NE(out.find("linux-x86_64.tar.zst"), std::string::npos) << out;
 }
 
 TEST_F(UpdateCheckCli, AlreadyUpToDateExitsZeroWithMessage) {
-  const auto p   = write_signed("0.9.0", "2026-12-31T00:00:00Z");
+  const auto p = write_signed("0.9.0", "2026-12-31T00:00:00Z");
   const auto log = work_ / "out.log";
-  const std::string cmd = cli_base()
-      + " --manifest "  + shell_quote(p.manifest)
-      + " --signature " + shell_quote(p.signature)
-      + " --current-version 1.0.0"   // ahead of offered
-      + " --as-of 2026-05-12T00:00:00Z"
-      + " > "           + shell_quote(log) + " 2>&1";
+  const std::string cmd = cli_base() + " --manifest " + shell_quote(p.manifest) + " --signature "
+                          + shell_quote(p.signature)
+                          + " --current-version 1.0.0"  // ahead of offered
+                          + " --as-of 2026-05-12T00:00:00Z" + " > " + shell_quote(log) + " 2>&1";
 
   const int rc = run_cli(cmd);
   const auto out = read_file(log);
@@ -262,34 +256,27 @@ TEST_F(UpdateCheckCli, TamperedManifestFailsVerification) {
   auto manifest_text = read_file(p.manifest);
   auto pos = manifest_text.find("\"0.9.0\"");
   ASSERT_NE(pos, std::string::npos);
-  manifest_text[pos + 4] = '1';   // "0.9.0" -> "0.9.1"
+  manifest_text[pos + 4] = '1';  // "0.9.0" -> "0.9.1"
   write_file(p.manifest, manifest_text);
 
   const auto log = work_ / "out.log";
-  const std::string cmd = cli_base()
-      + " --manifest "  + shell_quote(p.manifest)
-      + " --signature " + shell_quote(p.signature)
-      + " --current-version 0.8.5"
-      + " --as-of 2026-05-12T00:00:00Z"
-      + " > "           + shell_quote(log) + " 2>&1";
+  const std::string cmd = cli_base() + " --manifest " + shell_quote(p.manifest) + " --signature "
+                          + shell_quote(p.signature) + " --current-version 0.8.5"
+                          + " --as-of 2026-05-12T00:00:00Z" + " > " + shell_quote(log) + " 2>&1";
 
   const int rc = run_cli(cmd);
   const auto out = read_file(log);
   EXPECT_EQ(rc, 76 /* kExitSignatureBad */) << out;
-  EXPECT_NE(out.find("signature verification failed"),
-            std::string::npos) << out;
+  EXPECT_NE(out.find("signature verification failed"), std::string::npos) << out;
 }
 
 TEST_F(UpdateCheckCli, ExpiredManifestRefused) {
   // expires_at *before* --as-of — the apply gate must reject.
-  const auto p   = write_signed("0.9.0", "2026-04-01T00:00:00Z");
+  const auto p = write_signed("0.9.0", "2026-04-01T00:00:00Z");
   const auto log = work_ / "out.log";
-  const std::string cmd = cli_base()
-      + " --manifest "  + shell_quote(p.manifest)
-      + " --signature " + shell_quote(p.signature)
-      + " --current-version 0.8.5"
-      + " --as-of 2026-05-12T00:00:00Z"
-      + " > "           + shell_quote(log) + " 2>&1";
+  const std::string cmd = cli_base() + " --manifest " + shell_quote(p.manifest) + " --signature "
+                          + shell_quote(p.signature) + " --current-version 0.8.5"
+                          + " --as-of 2026-05-12T00:00:00Z" + " > " + shell_quote(log) + " 2>&1";
 
   const int rc = run_cli(cmd);
   const auto out = read_file(log);
@@ -298,23 +285,20 @@ TEST_F(UpdateCheckCli, ExpiredManifestRefused) {
 }
 
 TEST_F(UpdateCheckCli, JsonModeEmitsStructuredOutput) {
-  const auto p   = write_signed("0.9.0", "2026-12-31T00:00:00Z");
+  const auto p = write_signed("0.9.0", "2026-12-31T00:00:00Z");
   const auto log = work_ / "out.log";
-  const std::string cmd = cli_base()
-      + " --manifest "  + shell_quote(p.manifest)
-      + " --signature " + shell_quote(p.signature)
-      + " --current-version 0.8.5"
-      + " --as-of 2026-05-12T00:00:00Z"
-      + " --json"
-      + " > "           + shell_quote(log) + " 2>&1";
+  const std::string cmd = cli_base() + " --manifest " + shell_quote(p.manifest) + " --signature "
+                          + shell_quote(p.signature) + " --current-version 0.8.5"
+                          + " --as-of 2026-05-12T00:00:00Z" + " --json" + " > " + shell_quote(log)
+                          + " 2>&1";
 
   const int rc = run_cli(cmd);
   const auto out = read_file(log);
   ASSERT_EQ(rc, 0) << out;
-  EXPECT_NE(out.find("\"status\":\"apply\""),     std::string::npos) << out;
-  EXPECT_NE(out.find("\"version\":\"0.9.0\""),    std::string::npos) << out;
-  EXPECT_NE(out.find("\"os\":\"linux\""),         std::string::npos) << out;
-  EXPECT_NE(out.find("\"arch\":\"x86_64\""),      std::string::npos) << out;
+  EXPECT_NE(out.find("\"status\":\"apply\""), std::string::npos) << out;
+  EXPECT_NE(out.find("\"version\":\"0.9.0\""), std::string::npos) << out;
+  EXPECT_NE(out.find("\"os\":\"linux\""), std::string::npos) << out;
+  EXPECT_NE(out.find("\"arch\":\"x86_64\""), std::string::npos) << out;
 }
 
 TEST_F(UpdateCheckCli, ApplyWithoutDryRunIsNotYetImplemented) {
@@ -322,41 +306,32 @@ TEST_F(UpdateCheckCli, ApplyWithoutDryRunIsNotYetImplemented) {
   // message until push 7 wires the downloader. A future patch that
   // accidentally enables `apply` would have to update this test
   // first.
-  const auto p   = write_signed("0.9.0", "2026-12-31T00:00:00Z");
+  const auto p = write_signed("0.9.0", "2026-12-31T00:00:00Z");
   const auto log = work_ / "out.log";
 
-  std::string base = shell_quote(SOUXMAR_TEST_CLI_BINARY) +
-      " update apply" +
-      " --trusted-key release-test=" + pubkey_hex_ +
-      " --platform linux/x86_64" +
-      " --state " + shell_quote(work_ / "no-such-state.toml") +
-      " --manifest "  + shell_quote(p.manifest) +
-      " --signature " + shell_quote(p.signature) +
-      " --current-version 0.8.5" +
-      " --as-of 2026-05-12T00:00:00Z" +
-      " > "           + shell_quote(log) + " 2>&1";
+  std::string base = shell_quote(SOUXMAR_TEST_CLI_BINARY) + " update apply"
+                     + " --trusted-key release-test=" + pubkey_hex_ + " --platform linux/x86_64"
+                     + " --state " + shell_quote(work_ / "no-such-state.toml") + " --manifest "
+                     + shell_quote(p.manifest) + " --signature " + shell_quote(p.signature)
+                     + " --current-version 0.8.5" + " --as-of 2026-05-12T00:00:00Z" + " > "
+                     + shell_quote(log) + " 2>&1";
 
   const int rc = run_cli(base);
   const auto out = read_file(log);
   EXPECT_NE(rc, 0) << "expected non-zero exit; output:\n" << out;
-  EXPECT_NE(out.find("push 7"), std::string::npos)
-      << "expected guidance message; output:\n" << out;
+  EXPECT_NE(out.find("push 7"), std::string::npos) << "expected guidance message; output:\n" << out;
 }
 
 TEST_F(UpdateCheckCli, ApplyWithDryRunMatchesCheck) {
-  const auto p   = write_signed("0.9.0", "2026-12-31T00:00:00Z");
+  const auto p = write_signed("0.9.0", "2026-12-31T00:00:00Z");
   const auto log = work_ / "out.log";
 
-  std::string cmd = shell_quote(SOUXMAR_TEST_CLI_BINARY) +
-      " update apply --dry-run" +
-      " --trusted-key release-test=" + pubkey_hex_ +
-      " --platform linux/x86_64" +
-      " --state " + shell_quote(work_ / "no-such-state.toml") +
-      " --manifest "  + shell_quote(p.manifest) +
-      " --signature " + shell_quote(p.signature) +
-      " --current-version 0.8.5" +
-      " --as-of 2026-05-12T00:00:00Z" +
-      " > "           + shell_quote(log) + " 2>&1";
+  std::string cmd = shell_quote(SOUXMAR_TEST_CLI_BINARY) + " update apply --dry-run"
+                    + " --trusted-key release-test=" + pubkey_hex_ + " --platform linux/x86_64"
+                    + " --state " + shell_quote(work_ / "no-such-state.toml") + " --manifest "
+                    + shell_quote(p.manifest) + " --signature " + shell_quote(p.signature)
+                    + " --current-version 0.8.5" + " --as-of 2026-05-12T00:00:00Z" + " > "
+                    + shell_quote(log) + " 2>&1";
 
   const int rc = run_cli(cmd);
   const auto out = read_file(log);

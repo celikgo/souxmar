@@ -16,22 +16,23 @@ class Topology::Impl {
   std::vector<std::int32_t> per_kind[4];
 
   struct Key {
-    TopologyKind  kind;
+    TopologyKind kind;
     std::uint32_t index;
     bool operator==(const Key&) const noexcept = default;
   };
+
   struct KeyHash {
     std::size_t operator()(const Key& k) const noexcept {
-      return std::hash<std::uint64_t>{}(
-          (static_cast<std::uint64_t>(k.kind) << 32) | k.index);
+      return std::hash<std::uint64_t>{}((static_cast<std::uint64_t>(k.kind) << 32) | k.index);
     }
   };
 
-  std::unordered_map<Key, EntityTag,   KeyHash> tags;
+  std::unordered_map<Key, EntityTag, KeyHash> tags;
   std::unordered_map<Key, std::string, KeyHash> names;
 };
 
 Topology::Topology() : impl_(std::make_unique<Impl>()) {}
+
 Topology::~Topology() = default;
 Topology::Topology(Topology&&) noexcept = default;
 Topology& Topology::operator=(Topology&&) noexcept = default;
@@ -77,7 +78,8 @@ void Topology::set_name(TopologyRef ref, std::string name) {
 
 bool Topology::empty() const noexcept {
   for (const auto& bucket : impl_->per_kind) {
-    if (!bucket.empty()) return false;
+    if (!bucket.empty())
+      return false;
   }
   return true;
 }

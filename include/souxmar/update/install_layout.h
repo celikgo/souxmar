@@ -77,10 +77,10 @@ class InstallLayout {
   // Read `current.txt`. Returns empty string if the file is missing
   // (fresh install, nothing applied yet) — distinguishable from a
   // present-but-empty file by checking has_current().
-  [[nodiscard]] std::string  read_current_version()  const;
-  [[nodiscard]] std::string  read_previous_version() const;
-  [[nodiscard]] bool         has_current()  const;
-  [[nodiscard]] bool         has_previous() const;
+  [[nodiscard]] std::string read_current_version() const;
+  [[nodiscard]] std::string read_previous_version() const;
+  [[nodiscard]] bool has_current() const;
+  [[nodiscard]] bool has_previous() const;
 
   // Enumerate installed versions on disk (the immediate children of
   // versions/). Order is filesystem-defined; callers that care sort
@@ -91,7 +91,7 @@ class InstallLayout {
   // The atomic-switch refuses to flip current.txt to a version that
   // doesn't satisfy this — guards against a half-cleaned-up state
   // where current.txt names a directory that was removed.
-  [[nodiscard]] bool         has_version_payload(const std::string& v) const;
+  [[nodiscard]] bool has_version_payload(const std::string& v) const;
 
   // Materialise versions/<version>/payload with the given bytes. Goes
   // through staging/<version>.<rand>/ + rename to make a power-loss
@@ -126,24 +126,25 @@ class InstallLayout {
   // of `apply` to keep the install root small. Returns the list of
   // versions reaped; an empty list is a success (nothing to reap),
   // not an error.
-  [[nodiscard]] std::vector<std::string>
-  gc_unreferenced(std::span<const std::string> protect_versions = {});
+  [[nodiscard]] std::vector<std::string> gc_unreferenced(
+      std::span<const std::string> protect_versions = {});
 
   // Path accessors — exposed so the launcher can find the binary to
   // exec and the rollback-log can compute its own filename.
   [[nodiscard]] const std::filesystem::path& root() const noexcept {
     return root_;
   }
+
   [[nodiscard]] std::filesystem::path payload_path(const std::string& v) const;
   [[nodiscard]] std::filesystem::path rollback_log_path() const;
 
  private:
   std::filesystem::path root_;
 
-  std::filesystem::path current_marker_path()  const;
+  std::filesystem::path current_marker_path() const;
   std::filesystem::path previous_marker_path() const;
-  std::filesystem::path versions_dir()         const;
-  std::filesystem::path staging_dir()          const;
+  std::filesystem::path versions_dir() const;
+  std::filesystem::path staging_dir() const;
 };
 
 // Sha256 helper. Returns a lowercase 64-char hex digest. Used by

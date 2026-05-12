@@ -29,8 +29,7 @@ TEST(ContentHash, ContextDistinguishes) {
 }
 
 TEST(ContentHash, DifferentNumbersDiffer) {
-  EXPECT_NE(hash_inputs("c", Value::number(1.0), {}),
-            hash_inputs("c", Value::number(2.0), {}));
+  EXPECT_NE(hash_inputs("c", Value::number(1.0), {}), hash_inputs("c", Value::number(2.0), {}));
 }
 
 TEST(ContentHash, UpstreamHashChangePropagates) {
@@ -74,7 +73,10 @@ TEST(ContentHash, DigestIsStableAndUses32Bytes) {
   // proving the digest is the real SHA-256 output and not a uint64 seed.
   bool tail_nonzero = false;
   for (std::size_t i = 8; i < 32; ++i) {
-    if (h.bytes()[i] != 0) { tail_nonzero = true; break; }
+    if (h.bytes()[i] != 0) {
+      tail_nonzero = true;
+      break;
+    }
   }
   EXPECT_TRUE(tail_nonzero);
 }
@@ -122,13 +124,14 @@ class DiskCacheTest : public ::testing::Test {
  protected:
   void SetUp() override {
     std::random_device rd;
-    dir_ = fs::temp_directory_path() /
-           ("souxmar-diskcache-test-" + std::to_string(rd()));
+    dir_ = fs::temp_directory_path() / ("souxmar-diskcache-test-" + std::to_string(rd()));
   }
+
   void TearDown() override {
     std::error_code ec;
     fs::remove_all(dir_, ec);
   }
+
   fs::path dir_;
 };
 

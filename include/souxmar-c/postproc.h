@@ -29,25 +29,25 @@
 SOUXMAR_C_BEGIN
 
 typedef struct souxmar_postproc_options {
-  int64_t random_seed;     /* deterministic-mode seed; <0 means non-deterministic */
-  double  tolerance;       /* postproc tolerance; <= 0 means use plugin default   */
-  int32_t max_iterations;  /* iterative cap; <= 0 means use plugin default        */
+  int64_t random_seed;    /* deterministic-mode seed; <0 means non-deterministic */
+  double tolerance;       /* postproc tolerance; <= 0 means use plugin default   */
+  int32_t max_iterations; /* iterative cap; <= 0 means use plugin default        */
 } souxmar_postproc_options_t;
 
 typedef souxmar_status_t (*souxmar_postproc_compute_fn)(
-    const souxmar_mesh_t*               mesh,
-    const souxmar_field_t*              input_field,  /* never NULL: dispatcher enforces */
-    const souxmar_value_t*              inputs,       /* stage input map (mesh/field removed) */
-    const souxmar_postproc_options_t*   options,
-    souxmar_field_t**                   out_field,    /* on success: ownership transfers to host */
-    void*                               user_data);
+    const souxmar_mesh_t* mesh,
+    const souxmar_field_t* input_field, /* never NULL: dispatcher enforces */
+    const souxmar_value_t* inputs,      /* stage input map (mesh/field removed) */
+    const souxmar_postproc_options_t* options,
+    souxmar_field_t** out_field, /* on success: ownership transfers to host */
+    void* user_data);
 
 typedef void (*souxmar_postproc_destroy_fn)(void* user_data);
 
 typedef struct souxmar_postproc_vtable {
-  int32_t                       abi_version;  /* MUST equal SOUXMAR_ABI_VERSION_MAJOR */
-  souxmar_postproc_compute_fn   compute_fn;
-  souxmar_postproc_destroy_fn   destroy_fn;   /* may be NULL                          */
+  int32_t abi_version; /* MUST equal SOUXMAR_ABI_VERSION_MAJOR */
+  souxmar_postproc_compute_fn compute_fn;
+  souxmar_postproc_destroy_fn destroy_fn; /* may be NULL                          */
 } souxmar_postproc_vtable_t;
 
 SOUXMAR_C_END

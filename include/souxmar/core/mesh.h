@@ -12,14 +12,14 @@
 
 #pragma once
 
+#include "souxmar/core/element_type.h"
+#include "souxmar/core/tag.h"
+
 #include <array>
 #include <cstdint>
 #include <memory>
 #include <span>
 #include <vector>
-
-#include "souxmar/core/element_type.h"
-#include "souxmar/core/tag.h"
 
 namespace souxmar::core {
 
@@ -31,7 +31,7 @@ class Mesh {
   Mesh(Mesh&&) noexcept;
   Mesh& operator=(Mesh&&) noexcept;
 
-  Mesh(const Mesh&)            = delete;
+  Mesh(const Mesh&) = delete;
   Mesh& operator=(const Mesh&) = delete;
 
   // -------- Capacity --------
@@ -46,9 +46,7 @@ class Mesh {
   // Add a cell of `type`, referencing `node_indices` (must have
   // num_nodes(type) entries). Optional `tag` records which Geometry / Topology
   // entity this cell descends from — preserved for BC and material lookup.
-  CellIndex add_cell(ElementType                       type,
-                     std::span<const NodeIndex>        node_indices,
-                     EntityTag                         tag = {});
+  CellIndex add_cell(ElementType type, std::span<const NodeIndex> node_indices, EntityTag tag = {});
 
   // -------- Read access --------
 
@@ -58,9 +56,9 @@ class Mesh {
   [[nodiscard]] std::array<double, 3> node(NodeIndex index) const;
   [[nodiscard]] std::span<const double> nodes_flat() const noexcept;  // size = 3 * num_nodes
 
-  [[nodiscard]] ElementType                cell_type(CellIndex index) const noexcept;
+  [[nodiscard]] ElementType cell_type(CellIndex index) const noexcept;
   [[nodiscard]] std::span<const NodeIndex> cell_nodes(CellIndex index) const;
-  [[nodiscard]] EntityTag                  cell_tag(CellIndex index) const noexcept;
+  [[nodiscard]] EntityTag cell_tag(CellIndex index) const noexcept;
 
   // -------- Per-face tags (ADR-0012, ABI minor v1.3) --------
   //
@@ -72,18 +70,18 @@ class Mesh {
   // std::invalid_argument if the local face index exceeds the cell's
   // face count.
 
-  [[nodiscard]] EntityTag face_tag(CellIndex cell,
-                                   std::uint8_t local_face) const noexcept;
+  [[nodiscard]] EntityTag face_tag(CellIndex cell, std::uint8_t local_face) const noexcept;
   void set_face_tag(CellIndex cell, std::uint8_t local_face, EntityTag tag);
 
   // Iterate every explicitly-tagged face. Each entry is
   // ((cell, local_face), tag). Order is unspecified — consumers that
   // need a stable order sort the returned vector themselves.
   struct TaggedFace {
-    CellIndex     cell;
-    std::uint8_t  local_face;
-    EntityTag     tag;
+    CellIndex cell;
+    std::uint8_t local_face;
+    EntityTag tag;
   };
+
   [[nodiscard]] std::vector<TaggedFace> tagged_faces() const;
 
   // Histogram of element types present, in canonical numeric order.

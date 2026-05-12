@@ -31,15 +31,15 @@ SOUXMAR_C_BEGIN
 typedef struct souxmar_field_stream_t souxmar_field_stream_t;
 
 souxmar_field_stream_t* souxmar_field_stream_open(const souxmar_field_t* field);
-void                     souxmar_field_stream_close(souxmar_field_stream_t* stream);
+void souxmar_field_stream_close(souxmar_field_stream_t* stream);
 
-size_t  souxmar_field_stream_count(const souxmar_field_stream_t* s);
+size_t souxmar_field_stream_count(const souxmar_field_stream_t* s);
 uint8_t souxmar_field_stream_components(const souxmar_field_stream_t* s);
 
 /* out_min / out_max must each point to a buffer of `components` doubles. */
 souxmar_status_t souxmar_field_stream_range(const souxmar_field_stream_t* s,
-                                             double* out_min,
-                                             double* out_max);
+                                            double* out_min,
+                                            double* out_max);
 
 /* Borrowed C string. Owned by the stream; valid until close.
  * Returns "" if the field has no unit attached. */
@@ -47,7 +47,8 @@ const char* souxmar_field_stream_units(const souxmar_field_stream_t* s);
 
 /* SoA read. out_capacity must be >= count * components. */
 souxmar_status_t souxmar_field_stream_values(const souxmar_field_stream_t* s,
-                                              float* out, size_t out_capacity);
+                                             float* out,
+                                             size_t out_capacity);
 
 SOUXMAR_C_END
 #endif /* SOUXMAR_C_FIELD_STREAM_H */

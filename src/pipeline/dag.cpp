@@ -18,10 +18,12 @@ void collect_into(const Value& v, std::vector<std::string>& out) {
       out.push_back(v.as_stage().stage_id);
       break;
     case Value::Kind::List:
-      for (const auto& item : v.as_list()) collect_into(item, out);
+      for (const auto& item : v.as_list())
+        collect_into(item, out);
       break;
     case Value::Kind::Map:
-      for (const auto& [_, child] : v.as_map()) collect_into(child, out);
+      for (const auto& [_, child] : v.as_map())
+        collect_into(child, out);
       break;
     default:
       break;
@@ -57,7 +59,7 @@ DagResult validate(const Pipeline& pipeline) {
   // Build adjacency: edge from referenced stage -> referring stage
   // (because we want topological sort to schedule referenced stages first).
   std::vector<std::vector<std::size_t>> children(pipeline.stages.size());
-  std::vector<std::size_t>              in_degree(pipeline.stages.size(), 0);
+  std::vector<std::size_t> in_degree(pipeline.stages.size(), 0);
 
   for (std::size_t i = 0; i < pipeline.stages.size(); ++i) {
     const auto& s = pipeline.stages[i];
@@ -65,14 +67,14 @@ DagResult validate(const Pipeline& pipeline) {
     std::unordered_set<std::string> uniq_refs(refs.begin(), refs.end());
     for (const auto& ref_id : uniq_refs) {
       if (ref_id == s.id) {
-        errors.push_back({fmt::format(
-            "stage '{}' references itself via `from: {}`", s.id, s.id), s.id});
+        errors.push_back(
+            {fmt::format("stage '{}' references itself via `from: {}`", s.id, s.id), s.id});
         continue;
       }
       auto it = id_to_index.find(ref_id);
       if (it == id_to_index.end()) {
-        errors.push_back({fmt::format(
-            "stage '{}' references unknown stage '{}'", s.id, ref_id), s.id});
+        errors.push_back(
+            {fmt::format("stage '{}' references unknown stage '{}'", s.id, ref_id), s.id});
         continue;
       }
       const auto producer = it->second;
@@ -91,7 +93,8 @@ DagResult validate(const Pipeline& pipeline) {
 
   std::vector<std::size_t> ready;
   for (std::size_t i = 0; i < pipeline.stages.size(); ++i) {
-    if (in_degree[i] == 0) ready.push_back(i);
+    if (in_degree[i] == 0)
+      ready.push_back(i);
   }
   // For determinism, process ready stages in original-declaration order.
   std::sort(ready.begin(), ready.end());
@@ -113,11 +116,12 @@ DagResult validate(const Pipeline& pipeline) {
     // Cycle exists. Identify the stages still with non-zero in-degree.
     std::vector<std::string> cycle_members;
     for (std::size_t i = 0; i < pipeline.stages.size(); ++i) {
-      if (in_degree[i] > 0) cycle_members.push_back(pipeline.stages[i].id);
+      if (in_degree[i] > 0)
+        cycle_members.push_back(pipeline.stages[i].id);
     }
-    errors.push_back({fmt::format(
-        "pipeline contains a cycle involving stages: {}",
-        fmt::join(cycle_members, ", ")), ""});
+    errors.push_back({fmt::format("pipeline contains a cycle involving stages: {}",
+                                  fmt::join(cycle_members, ", ")),
+                      ""});
     return errors;
   }
 

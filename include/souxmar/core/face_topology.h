@@ -20,20 +20,20 @@
 
 #pragma once
 
+#include "souxmar/core/element_type.h"
+
 #include <array>
 #include <cstdint>
 #include <span>
-
-#include "souxmar/core/element_type.h"
 
 namespace souxmar::core {
 
 struct LocalFace {
   // 3 for triangular faces, 4 for quadrilateral faces.
-  std::uint8_t                 vertex_count = 0;
+  std::uint8_t vertex_count = 0;
   // Cell-local vertex indices, listed CCW from outside the cell.
   // Slots [vertex_count..3] are unused for triangular faces.
-  std::array<std::uint8_t, 4>  cell_local_idx{{0, 0, 0, 0}};
+  std::array<std::uint8_t, 4> cell_local_idx{{0, 0, 0, 0}};
 };
 
 // Returns the per-element-type face table. Empty span for element

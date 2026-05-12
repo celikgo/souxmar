@@ -19,29 +19,29 @@
 
 #include "souxmar/core/field_stream.h"
 
+#include "souxmar/core/field.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <string>
 #include <vector>
 
-#include "souxmar/core/field.h"
-
 namespace souxmar::core {
 
 class FieldStream::Impl {
  public:
-  std::size_t       count       = 0;
-  std::uint8_t      components  = 0;
+  std::size_t count = 0;
+  std::uint8_t components = 0;
   std::vector<double> rmin;       // size = components
   std::vector<double> rmax;       // size = components
-  std::vector<float>  values_f32; // size = count * components
-  std::string         units;
+  std::vector<float> values_f32;  // size = count * components
+  std::string units;
 
   explicit Impl(const Field& field) {
-    count      = field.count();
+    count = field.count();
     components = field.components();
-    units      = "";  // RFC-002 Open Q1 follow-up
+    units = "";  // RFC-002 Open Q1 follow-up
 
     if (count == 0 || components == 0) {
       return;
@@ -63,29 +63,44 @@ class FieldStream::Impl {
     for (std::size_t i = 0; i < count; ++i) {
       for (std::uint8_t c = 0; c < components; ++c) {
         const double v = src[i * components + c];
-        if (v < rmin[c]) rmin[c] = v;
-        if (v > rmax[c]) rmax[c] = v;
+        if (v < rmin[c])
+          rmin[c] = v;
+        if (v > rmax[c])
+          rmax[c] = v;
         values_f32[i * components + c] = static_cast<float>(v);
       }
     }
   }
 };
 
-FieldStream::FieldStream(const Field& field)
-    : impl_(std::make_unique<Impl>(field)) {}
+FieldStream::FieldStream(const Field& field) : impl_(std::make_unique<Impl>(field)) {}
 
-FieldStream::~FieldStream()                                  = default;
-FieldStream::FieldStream(FieldStream&&) noexcept            = default;
+FieldStream::~FieldStream() = default;
+FieldStream::FieldStream(FieldStream&&) noexcept = default;
 FieldStream& FieldStream::operator=(FieldStream&&) noexcept = default;
 
-std::size_t  FieldStream::count()      const noexcept { return impl_->count; }
-std::uint8_t FieldStream::components() const noexcept { return impl_->components; }
+std::size_t FieldStream::count() const noexcept {
+  return impl_->count;
+}
 
-std::span<const double> FieldStream::range_min() const noexcept { return impl_->rmin; }
-std::span<const double> FieldStream::range_max() const noexcept { return impl_->rmax; }
+std::uint8_t FieldStream::components() const noexcept {
+  return impl_->components;
+}
 
-std::string_view FieldStream::units() const noexcept { return impl_->units; }
+std::span<const double> FieldStream::range_min() const noexcept {
+  return impl_->rmin;
+}
 
-std::span<const float> FieldStream::values() const noexcept { return impl_->values_f32; }
+std::span<const double> FieldStream::range_max() const noexcept {
+  return impl_->rmax;
+}
+
+std::string_view FieldStream::units() const noexcept {
+  return impl_->units;
+}
+
+std::span<const float> FieldStream::values() const noexcept {
+  return impl_->values_f32;
+}
 
 }  // namespace souxmar::core

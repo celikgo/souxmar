@@ -3,6 +3,8 @@
 // libsouxmar-c-bridge auto_updater_menu surface smoke test.
 // Sprint 15 push 4.
 
+#include "souxmar-c-bridge/pipeline.h"
+#include "souxmar-c-bridge/updater.h"
 #include <gtest/gtest.h>
 
 #include <cstdlib>
@@ -12,18 +14,14 @@
 #include <random>
 #include <string>
 
-#include "souxmar-c-bridge/pipeline.h"
-#include "souxmar-c-bridge/updater.h"
-
 namespace fs = std::filesystem;
 
 namespace {
 
 fs::path scratch_root(std::string_view tag) {
   std::random_device rd;
-  fs::path dir = fs::temp_directory_path() /
-                 ("souxmar-bridge-update-" + std::string(tag) + "-" +
-                  std::to_string(rd()));
+  fs::path dir = fs::temp_directory_path()
+                 / ("souxmar-bridge-update-" + std::string(tag) + "-" + std::to_string(rd()));
   fs::create_directories(dir);
   return dir;
 }
@@ -40,7 +38,7 @@ TEST(CBridgeUpdater, NonexistentTargetRootReturnsUnknown) {
   ASSERT_NE(s, nullptr) << "expected an Unknown status, not NULL";
   EXPECT_EQ(err, nullptr);
   EXPECT_EQ(souxmar_bridge_update_state(s), SOUXMAR_BRIDGE_US_UNKNOWN);
-  EXPECT_STREQ(souxmar_bridge_update_current_version(s),   "");
+  EXPECT_STREQ(souxmar_bridge_update_current_version(s), "");
   EXPECT_STREQ(souxmar_bridge_update_available_version(s), "");
   EXPECT_NE(std::strlen(souxmar_bridge_update_detail(s)), 0u);
   souxmar_bridge_update_status_free(s);
@@ -83,9 +81,9 @@ TEST(CBridgeUpdater, TargetRootWithCurrentTxtReportsUpToDate) {
 
 TEST(CBridgeUpdater, NullHandleAccessorsReturnSafeDefaults) {
   EXPECT_EQ(souxmar_bridge_update_state(nullptr), SOUXMAR_BRIDGE_US_UNKNOWN);
-  EXPECT_STREQ(souxmar_bridge_update_current_version(nullptr),   "");
+  EXPECT_STREQ(souxmar_bridge_update_current_version(nullptr), "");
   EXPECT_STREQ(souxmar_bridge_update_available_version(nullptr), "");
-  EXPECT_STREQ(souxmar_bridge_update_detail(nullptr),            "");
+  EXPECT_STREQ(souxmar_bridge_update_detail(nullptr), "");
 }
 
 TEST(CBridgeUpdater, FreeNullIsSafe) {

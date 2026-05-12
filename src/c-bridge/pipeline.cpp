@@ -15,15 +15,15 @@
 
 #include "souxmar-c-bridge/pipeline.h"
 
+#include "souxmar/pipeline/parser.h"
+#include "souxmar/pipeline/pipeline.h"
+
 #include <cstdlib>
 #include <cstring>
 #include <new>
 #include <string>
 #include <variant>
 #include <vector>
-
-#include "souxmar/pipeline/parser.h"
-#include "souxmar/pipeline/pipeline.h"
 
 namespace {
 
@@ -56,15 +56,16 @@ extern "C" uint32_t souxmar_bridge_abi_version(void) {
   return 3;
 }
 
-extern "C"
-souxmar_bridge_pipeline_t*
-souxmar_bridge_pipeline_parse(const char* yaml, char** out_err) {
-  if (out_err) *out_err = nullptr;
+extern "C" souxmar_bridge_pipeline_t* souxmar_bridge_pipeline_parse(const char* yaml,
+                                                                    char** out_err) {
+  if (out_err)
+    *out_err = nullptr;
   if (yaml == nullptr) {
     if (out_err) {
       const char* msg = "yaml pointer is NULL";
       *out_err = static_cast<char*>(std::malloc(std::strlen(msg) + 1));
-      if (*out_err) std::memcpy(*out_err, msg, std::strlen(msg) + 1);
+      if (*out_err)
+        std::memcpy(*out_err, msg, std::strlen(msg) + 1);
     }
     return nullptr;
   }
@@ -77,7 +78,8 @@ souxmar_bridge_pipeline_parse(const char* yaml, char** out_err) {
     if (out_err) {
       const auto& m = err->message;
       *out_err = static_cast<char*>(std::malloc(m.size() + 1));
-      if (*out_err) std::memcpy(*out_err, m.c_str(), m.size() + 1);
+      if (*out_err)
+        std::memcpy(*out_err, m.c_str(), m.size() + 1);
     }
     return nullptr;
   }
@@ -89,7 +91,8 @@ souxmar_bridge_pipeline_parse(const char* yaml, char** out_err) {
     if (out_err) {
       const char* msg = "bridge: out of memory";
       *out_err = static_cast<char*>(std::malloc(std::strlen(msg) + 1));
-      if (*out_err) std::memcpy(*out_err, msg, std::strlen(msg) + 1);
+      if (*out_err)
+        std::memcpy(*out_err, msg, std::strlen(msg) + 1);
     }
     return nullptr;
   }
@@ -100,24 +103,25 @@ souxmar_bridge_pipeline_parse(const char* yaml, char** out_err) {
   return out;
 }
 
-extern "C"
-uint32_t
-souxmar_bridge_pipeline_stage_count(const souxmar_bridge_pipeline_t* p) {
-  if (p == nullptr) return 0;
+extern "C" uint32_t souxmar_bridge_pipeline_stage_count(const souxmar_bridge_pipeline_t* p) {
+  if (p == nullptr)
+    return 0;
   return static_cast<uint32_t>(p->stages.size());
 }
 
-extern "C"
-int32_t
-souxmar_bridge_pipeline_stage_at(const souxmar_bridge_pipeline_t* p,
-                                 uint32_t                          i,
-                                 const char**                      out_id,
-                                 const char**                      out_plugin) {
-  if (p == nullptr) return -1;
-  if (i >= p->stages.size()) return -1;
+extern "C" int32_t souxmar_bridge_pipeline_stage_at(const souxmar_bridge_pipeline_t* p,
+                                                    uint32_t i,
+                                                    const char** out_id,
+                                                    const char** out_plugin) {
+  if (p == nullptr)
+    return -1;
+  if (i >= p->stages.size())
+    return -1;
   const auto& s = p->stages[i];
-  if (out_id)     *out_id     = s.id.c_str();
-  if (out_plugin) *out_plugin = s.plugin.c_str();
+  if (out_id)
+    *out_id = s.id.c_str();
+  if (out_plugin)
+    *out_plugin = s.plugin.c_str();
   return 0;
 }
 

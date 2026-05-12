@@ -23,11 +23,15 @@ class TempDir {
     path_ = fs::temp_directory_path() / name;
     fs::create_directories(path_);
   }
+
   ~TempDir() {
     std::error_code ec;
     fs::remove_all(path_, ec);
   }
-  const fs::path& path() const { return path_; }
+
+  const fs::path& path() const {
+    return path_;
+  }
 
  private:
   fs::path path_;
@@ -39,7 +43,9 @@ void write_file(const fs::path& p, std::string_view content) {
   out << content;
 }
 
-void touch(const fs::path& p) { write_file(p, ""); }
+void touch(const fs::path& p) {
+  write_file(p, "");
+}
 
 constexpr std::string_view kValidManifest = R"toml(
 [plugin]
@@ -95,8 +101,7 @@ TEST(Discovery, MissingBinaryRejected) {
   EXPECT_TRUE(report.loaded.empty());
   ASSERT_EQ(report.rejected.size(), 1u);
   EXPECT_NE(report.rejected[0].reason.find("does not exist"), std::string::npos);
-  EXPECT_EQ(report.rejected[0].code,
-            DiscoveryRejectionCode::BinaryNotFound);
+  EXPECT_EQ(report.rejected[0].code, DiscoveryRejectionCode::BinaryNotFound);
 }
 
 TEST(Discovery, InvalidExtensionRejected) {
@@ -124,8 +129,7 @@ provides = ["mesher.x"]
   EXPECT_TRUE(report.loaded.empty());
   ASSERT_EQ(report.rejected.size(), 1u);
   EXPECT_NE(report.rejected[0].reason.find("extension"), std::string::npos);
-  EXPECT_EQ(report.rejected[0].code,
-            DiscoveryRejectionCode::BinaryUnrecognisedExtension);
+  EXPECT_EQ(report.rejected[0].code, DiscoveryRejectionCode::BinaryUnrecognisedExtension);
 }
 
 TEST(Discovery, MalformedManifestRejectedWithReason) {
@@ -138,8 +142,7 @@ TEST(Discovery, MalformedManifestRejectedWithReason) {
   EXPECT_TRUE(report.loaded.empty());
   ASSERT_EQ(report.rejected.size(), 1u);
   EXPECT_FALSE(report.rejected[0].reason.empty());
-  EXPECT_EQ(report.rejected[0].code,
-            DiscoveryRejectionCode::ManifestParseFailed);
+  EXPECT_EQ(report.rejected[0].code, DiscoveryRejectionCode::ManifestParseFailed);
   ASSERT_TRUE(report.rejected[0].manifest_code.has_value());
   EXPECT_EQ(*report.rejected[0].manifest_code, ManifestRejection::TomlSyntax);
 }
@@ -168,11 +171,9 @@ provides = ["garbage.foo"]
   auto report = discover_plugins({td.path()});
   EXPECT_TRUE(report.loaded.empty());
   ASSERT_EQ(report.rejected.size(), 1u);
-  EXPECT_EQ(report.rejected[0].code,
-            DiscoveryRejectionCode::ManifestParseFailed);
+  EXPECT_EQ(report.rejected[0].code, DiscoveryRejectionCode::ManifestParseFailed);
   ASSERT_TRUE(report.rejected[0].manifest_code.has_value());
-  EXPECT_EQ(*report.rejected[0].manifest_code,
-            ManifestRejection::InvalidCapabilityNamespace);
+  EXPECT_EQ(*report.rejected[0].manifest_code, ManifestRejection::InvalidCapabilityNamespace);
 }
 
 TEST(Discovery, DirectoryWithoutManifestSilentlyIgnored) {
@@ -198,10 +199,10 @@ TEST(Discovery, MultipleSearchRootsAggregated) {
 
 TEST(DefaultSearchPaths, AllSlotsOff) {
   DiscoveryOptions opts;
-  opts.include_env_path       = false;
+  opts.include_env_path = false;
   opts.include_install_prefix = false;
-  opts.include_user_prefix    = false;
-  opts.include_cwd            = false;
+  opts.include_user_prefix = false;
+  opts.include_cwd = false;
   EXPECT_TRUE(default_search_paths(opts).empty());
 }
 

@@ -57,16 +57,16 @@ namespace souxmar::ai {
 // every message it receives.
 struct ChatMessage {
   enum class Role : std::uint8_t {
-    System    = 0,
-    User      = 1,
+    System = 0,
+    User = 1,
     Assistant = 2,
-    Tool      = 3,   // tool-result message, replying to a prior tool call
+    Tool = 3,  // tool-result message, replying to a prior tool call
   };
-  Role         role = Role::User;
-  std::string  content;
+  Role role = Role::User;
+  std::string content;
   // For Role::Tool: the id of the tool call this message responds to.
   // Empty for non-Tool roles.
-  std::string  tool_call_id;
+  std::string tool_call_id;
 };
 
 [[nodiscard]] std::string_view to_string(ChatMessage::Role) noexcept;
@@ -76,9 +76,9 @@ struct ChatMessage {
 // against the tool's input schema. Multiple tool calls per
 // assistant turn are allowed.
 struct ToolCall {
-  std::string  id;              // provider-assigned identifier
-  std::string  name;            // matches Tool::name
-  std::string  arguments_json;  // raw JSON; dispatcher parses
+  std::string id;              // provider-assigned identifier
+  std::string name;            // matches Tool::name
+  std::string arguments_json;  // raw JSON; dispatcher parses
 };
 
 // Response from one chat_completion call. Either the assistant
@@ -86,51 +86,51 @@ struct ToolCall {
 // or more tool calls (`text` may be empty), or both (some providers
 // emit a "thinking" prefix alongside the call list).
 struct ChatResponse {
-  std::string             text;
-  std::vector<ToolCall>   tool_calls;
+  std::string text;
+  std::vector<ToolCall> tool_calls;
   // Provider-reported token counts; zero when the provider doesn't
   // expose them (Ollama, today).
-  std::uint64_t           input_tokens  = 0;
-  std::uint64_t           output_tokens = 0;
+  std::uint64_t input_tokens = 0;
+  std::uint64_t output_tokens = 0;
   // Wall-clock latency the *provider* took. The eval-suite's
   // dispatcher records this end-to-end for the latency gate.
   std::chrono::milliseconds latency{0};
   // True iff the response was truncated (max-tokens reached).
-  bool                    truncated     = false;
+  bool truncated = false;
 };
 
 enum class ProviderErrorKind : std::uint8_t {
   // Provider returned a non-2xx HTTP status that wasn't a typed
   // rate-limit. The detail string carries the body.
-  ProviderHttpError       = 0,
-  RateLimited             = 1,
+  ProviderHttpError = 0,
+  RateLimited = 1,
   // The local Ollama daemon refused the connection (not running).
-  LocalDaemonUnreachable  = 2,
+  LocalDaemonUnreachable = 2,
   // The model name doesn't exist in the daemon's library; Ollama
   // returns this as a 404 with a typed body.
-  ModelNotFound           = 3,
+  ModelNotFound = 3,
   // The HTTP client (curl subprocess) failed to spawn or returned
   // a non-zero exit unrelated to the HTTP status. Diagnostic only.
-  HttpClientFailed        = 4,
+  HttpClientFailed = 4,
   // The provider's response body couldn't be parsed (malformed
   // JSON, missing required field).
-  MalformedResponse       = 5,
+  MalformedResponse = 5,
   // The provider returned a response shape we don't know how to
   // map onto ChatResponse (e.g. a model that doesn't speak the
   // function-calling protocol Ollama exposes).
-  ProtocolMismatch        = 6,
+  ProtocolMismatch = 6,
   // The caller passed a request the provider couldn't honour
   // (empty messages, contradictory tool schemas, etc.).
-  BadRequest              = 7,
+  BadRequest = 7,
   // The request exceeded the provider's context limit.
-  ContextLengthExceeded   = 8,
+  ContextLengthExceeded = 8,
 };
 
 [[nodiscard]] std::string_view to_string(ProviderErrorKind) noexcept;
 
 struct ProviderError {
-  ProviderErrorKind  kind = ProviderErrorKind::ProviderHttpError;
-  std::string        message;
+  ProviderErrorKind kind = ProviderErrorKind::ProviderHttpError;
+  std::string message;
 };
 
 using ChatResult = std::variant<ChatResponse, ProviderError>;
@@ -145,14 +145,14 @@ using ChatResult = std::variant<ChatResponse, ProviderError>;
 // Provider's constructor takes whatever credential / endpoint
 // material it needs.
 struct ChatRequest {
-  std::string                  model;        // provider-specific model id
-  std::vector<ChatMessage>     messages;
+  std::string model;  // provider-specific model id
+  std::vector<ChatMessage> messages;
   // Tool catalogue. Each entry is a tool::Tool name; the provider
   // resolves it against the registry it was constructed with.
-  std::vector<std::string>     tool_names;
+  std::vector<std::string> tool_names;
   // Sampling knobs. Providers that don't support a field clamp
   // silently.
-  std::optional<double>        temperature;
+  std::optional<double> temperature;
   std::optional<std::uint32_t> max_tokens;
 };
 
@@ -174,12 +174,10 @@ class Provider {
   // in which case `chat_completion()` would also fail with
   // LocalDaemonUnreachable. Used by `souxmar-eval --provider X
   // --list-models`.
-  [[nodiscard]] virtual std::vector<std::string>
-  available_models() const = 0;
+  [[nodiscard]] virtual std::vector<std::string> available_models() const = 0;
 
   // Run one inference. Synchronous.
-  [[nodiscard]] virtual ChatResult
-  chat_completion(const ChatRequest& req) = 0;
+  [[nodiscard]] virtual ChatResult chat_completion(const ChatRequest& req) = 0;
 };
 
 // ---- StubProvider ----------------------------------------------------
@@ -195,20 +193,22 @@ class StubProvider final : public Provider {
 
   void program_reply(std::string_view model,
                      std::string_view trigger_substring,
-                     ChatResponse     reply);
+                     ChatResponse reply);
 
   [[nodiscard]] std::string_view name() const noexcept override {
     return "stub";
   }
+
   [[nodiscard]] std::vector<std::string> available_models() const override;
   [[nodiscard]] ChatResult chat_completion(const ChatRequest& req) override;
 
  private:
   struct Programmed {
-    std::string  model;
-    std::string  trigger;
+    std::string model;
+    std::string trigger;
     ChatResponse reply;
   };
+
   std::vector<Programmed> table_;
 };
 
@@ -225,13 +225,13 @@ class StubProvider final : public Provider {
 struct OllamaProviderOptions {
   // HTTP endpoint of the Ollama daemon. Caller provides; the
   // shell-out flow concatenates with /api/chat.
-  std::string                   endpoint = "http://localhost:11434";
+  std::string endpoint = "http://localhost:11434";
   // Per-call timeout. Local inference on smaller hardware can take
   // tens of seconds for the first token; 120s is a comfortable
   // default. Override via SOUXMAR_OLLAMA_TIMEOUT_SECS.
-  std::chrono::seconds          timeout{120};
+  std::chrono::seconds timeout{120};
   // Path to the curl binary. Defaults to `curl` resolved via $PATH.
-  std::string                   curl_binary;
+  std::string curl_binary;
 };
 
 class OllamaProvider final : public Provider {
@@ -241,15 +241,15 @@ class OllamaProvider final : public Provider {
   [[nodiscard]] std::string_view name() const noexcept override {
     return "ollama";
   }
+
   [[nodiscard]] std::vector<std::string> available_models() const override;
   [[nodiscard]] ChatResult chat_completion(const ChatRequest& req) override;
 
   // Render a ChatRequest to the JSON body Ollama's /api/chat
   // endpoint expects. Exposed for unit-testing the encoder without
   // a live daemon.
-  [[nodiscard]] static std::string render_request_body(
-      const ChatRequest& req,
-      const std::vector<Tool>& tool_definitions);
+  [[nodiscard]] static std::string render_request_body(const ChatRequest& req,
+                                                       const std::vector<Tool>& tool_definitions);
 
   // Parse Ollama's /api/chat JSON response into a ChatResponse.
   // Returns ProviderError on malformed input.

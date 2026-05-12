@@ -5,6 +5,18 @@
 // CFD-bearing matrix (Docker image with OpenFOAM v12 pre-staged);
 // the default-CI bar lives here.
 
+#include "souxmar/core/field.h"
+#include "souxmar/core/geometry.h"
+#include "souxmar/core/mesh.h"
+#include "souxmar/pipeline/registry_dispatcher.h"
+#include "souxmar/pipeline/runner.h"
+#include "souxmar/plugin/discovery.h"
+#include "souxmar/plugin/loader.h"
+#include "souxmar/plugin/registry.h"
+
+#include "souxmar-c/geometry.h"
+
+#include "test_config.h"
 #include <gtest/gtest.h>
 
 #include <array>
@@ -16,28 +28,17 @@
 #include <utility>
 #include <variant>
 
-#include "souxmar-c/geometry.h"
-#include "souxmar/core/field.h"
-#include "souxmar/core/geometry.h"
-#include "souxmar/core/mesh.h"
-#include "souxmar/pipeline/registry_dispatcher.h"
-#include "souxmar/pipeline/runner.h"
-#include "souxmar/plugin/discovery.h"
-#include "souxmar/plugin/loader.h"
-#include "souxmar/plugin/registry.h"
-
-#include "test_config.h"
-
 namespace fs = std::filesystem;
 using namespace souxmar;
 
 namespace {
 
-plugin::LoadedPlugin load_by_id(plugin::PluginLoader&             loader,
-                                const plugin::DiscoveryReport&    report,
-                                const std::string&                want_id) {
+plugin::LoadedPlugin load_by_id(plugin::PluginLoader& loader,
+                                const plugin::DiscoveryReport& report,
+                                const std::string& want_id) {
   for (const auto& d : report.loaded) {
-    if (d.manifest.id != want_id) continue;
+    if (d.manifest.id != want_id)
+      continue;
     auto r = loader.load(d);
     if (auto* e = std::get_if<plugin::LoadError>(&r)) {
       throw std::runtime_error("load failed for " + want_id + ": " + e->message);
@@ -50,15 +51,20 @@ plugin::LoadedPlugin load_by_id(plugin::PluginLoader&             loader,
 std::shared_ptr<souxmar::core::Geometry> build_unit_cube_geometry() {
   auto* g = souxmar_geometry_new();
   const double corners[8][3] = {
-      {0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {1, 1, 0},
-      {0, 0, 1}, {1, 0, 1}, {0, 1, 1}, {1, 1, 1},
+      {0, 0, 0},
+      {1, 0, 0},
+      {0, 1, 0},
+      {1, 1, 0},
+      {0, 0, 1},
+      {1, 0, 1},
+      {0, 1, 1},
+      {1, 1, 1},
   };
   for (const auto& c : corners) {
     souxmar_geometry_add_vertex(g, c);
   }
   return std::shared_ptr<souxmar::core::Geometry>(
-      reinterpret_cast<souxmar::core::Geometry*>(g),
-      [](souxmar::core::Geometry* p) {
+      reinterpret_cast<souxmar::core::Geometry*>(g), [](souxmar::core::Geometry* p) {
         souxmar_geometry_free(reinterpret_cast<souxmar_geometry_t*>(p));
       });
 }
@@ -66,21 +72,20 @@ std::shared_ptr<souxmar::core::Geometry> build_unit_cube_geometry() {
 }  // namespace
 
 TEST(CfdStubEndToEnd, ProducesUniformVelocityField) {
-  const fs::path plugins_root =
-      fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
+  const fs::path plugins_root = fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
   const auto discovery = plugin::discover_plugins({plugins_root});
   ASSERT_FALSE(discovery.loaded.empty()) << plugins_root;
 
-  plugin::Registry      registry;
-  plugin::PluginLoader  loader(registry, "test-host/0.0.0");
+  plugin::Registry registry;
+  plugin::PluginLoader loader(registry, "test-host/0.0.0");
   auto _grid = load_by_id(loader, discovery, "dev.souxmar.examples.grid-mesher");
-  auto _cfd  = load_by_id(loader, discovery, "dev.souxmar.examples.cfd-stub");
+  auto _cfd = load_by_id(loader, discovery, "dev.souxmar.examples.cfd-stub");
 
-  ASSERT_NE(registry.find_mesher("mesher.tetra.grid"),     nullptr);
-  ASSERT_NE(registry.find_solver("solver.cfd.simple"),      nullptr);
+  ASSERT_NE(registry.find_mesher("mesher.tetra.grid"), nullptr);
+  ASSERT_NE(registry.find_solver("solver.cfd.simple"), nullptr);
 
-  auto geom_so      = std::make_shared<pipeline::StageOutput>();
-  geom_so->kind     = pipeline::StageOutput::Kind::Geometry;
+  auto geom_so = std::make_shared<pipeline::StageOutput>();
+  geom_so->kind = pipeline::StageOutput::Kind::Geometry;
   geom_so->geometry = build_unit_cube_geometry();
   std::map<std::string, std::shared_ptr<void>> upstream;
   upstream.emplace("__test_geom__", std::static_pointer_cast<void>(geom_so));
@@ -89,12 +94,10 @@ TEST(CfdStubEndToEnd, ProducesUniformVelocityField) {
 
   // mesh
   std::map<std::string, pipeline::Value> mesh_in;
-  mesh_in.emplace("geometry",    pipeline::Value::stage_ref("__test_geom__"));
+  mesh_in.emplace("geometry", pipeline::Value::stage_ref("__test_geom__"));
   mesh_in.emplace("target_size", pipeline::Value::number(0.5));
-  auto mesh_dr = dispatcher.dispatch(
-      pipeline::DispatchContext{"mesher.tetra.grid",
-                                pipeline::Value::map(std::move(mesh_in)),
-                                upstream});
+  auto mesh_dr = dispatcher.dispatch(pipeline::DispatchContext{
+      "mesher.tetra.grid", pipeline::Value::map(std::move(mesh_in)), upstream});
   ASSERT_TRUE(std::holds_alternative<pipeline::DispatchSuccess>(mesh_dr));
   auto mesh_payload = std::get<pipeline::DispatchSuccess>(mesh_dr);
   upstream.emplace("__mesh__", mesh_payload);
@@ -104,13 +107,11 @@ TEST(CfdStubEndToEnd, ProducesUniformVelocityField) {
   // cfd-stub
   const double magnitude = 2.5;
   std::map<std::string, pipeline::Value> cfd_in;
-  cfd_in.emplace("mesh",               pipeline::Value::stage_ref("__mesh__"));
+  cfd_in.emplace("mesh", pipeline::Value::stage_ref("__mesh__"));
   cfd_in.emplace("velocity_magnitude", pipeline::Value::number(magnitude));
   // flow_direction defaults to +x
-  auto cfd_dr = dispatcher.dispatch(
-      pipeline::DispatchContext{"solver.cfd.simple",
-                                pipeline::Value::map(std::move(cfd_in)),
-                                upstream});
+  auto cfd_dr = dispatcher.dispatch(pipeline::DispatchContext{
+      "solver.cfd.simple", pipeline::Value::map(std::move(cfd_in)), upstream});
   ASSERT_TRUE(std::holds_alternative<pipeline::DispatchSuccess>(cfd_dr));
 
   auto cfd_payload = std::get<pipeline::DispatchSuccess>(cfd_dr);
@@ -119,17 +120,17 @@ TEST(CfdStubEndToEnd, ProducesUniformVelocityField) {
   ASSERT_NE(cfd_out->field, nullptr);
 
   const auto& field = *cfd_out->field;
-  EXPECT_EQ(field.location(),      souxmar::core::FieldLocation::Nodal);
-  EXPECT_EQ(field.kind(),          souxmar::core::FieldKind::Vector);
-  EXPECT_EQ(field.components(),    3u);
+  EXPECT_EQ(field.location(), souxmar::core::FieldLocation::Nodal);
+  EXPECT_EQ(field.kind(), souxmar::core::FieldKind::Vector);
+  EXPECT_EQ(field.components(), 3u);
   EXPECT_EQ(field.num_time_steps(), 1u);
 
   // Every node carries (magnitude, 0, 0).
   for (std::size_t n = 0; n < field.count(); ++n) {
     const auto u = field.at(n, 0);
     EXPECT_DOUBLE_EQ(u[0], magnitude) << "node " << n;
-    EXPECT_DOUBLE_EQ(u[1], 0.0)       << "node " << n;
-    EXPECT_DOUBLE_EQ(u[2], 0.0)       << "node " << n;
+    EXPECT_DOUBLE_EQ(u[1], 0.0) << "node " << n;
+    EXPECT_DOUBLE_EQ(u[2], 0.0) << "node " << n;
   }
 }
 
@@ -139,13 +140,12 @@ TEST(CfdStubEndToEnd, ProducesUniformVelocityField) {
 // matching nodes is the routed value (zero for the wall, the
 // patch's inlet velocity for the inlet).
 TEST(CfdStubEndToEnd, PerPatchBcRoutingAppliesWallAndInlet) {
-  const fs::path plugins_root =
-      fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
+  const fs::path plugins_root = fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
   const auto discovery = plugin::discover_plugins({plugins_root});
-  plugin::Registry      registry;
-  plugin::PluginLoader  loader(registry, "test-host/0.0.0");
+  plugin::Registry registry;
+  plugin::PluginLoader loader(registry, "test-host/0.0.0");
   auto _hello = load_by_id(loader, discovery, "dev.souxmar.examples.hello-mesher");
-  auto _cfd   = load_by_id(loader, discovery, "dev.souxmar.examples.cfd-stub");
+  auto _cfd = load_by_id(loader, discovery, "dev.souxmar.examples.cfd-stub");
 
   pipeline::RegistryDispatcher dispatcher(registry);
   std::map<std::string, std::shared_ptr<void>> upstream;
@@ -157,22 +157,17 @@ TEST(CfdStubEndToEnd, PerPatchBcRoutingAppliesWallAndInlet) {
   //   face 2: nodes (0,1,3)
   //   face 3: nodes (0,2,1)
   auto mesh_dr = dispatcher.dispatch(
-      pipeline::DispatchContext{"mesher.tetra.hello",
-                                pipeline::Value::map({}),
-                                upstream});
+      pipeline::DispatchContext{"mesher.tetra.hello", pipeline::Value::map({}), upstream});
   ASSERT_TRUE(std::holds_alternative<pipeline::DispatchSuccess>(mesh_dr));
   auto mesh_payload = std::get<pipeline::DispatchSuccess>(mesh_dr);
   upstream.emplace("__mesh__", mesh_payload);
-  auto* mesh_so_mut =
-      const_cast<pipeline::StageOutput*>(
-        static_cast<const pipeline::StageOutput*>(mesh_payload.get()));
+  auto* mesh_so_mut = const_cast<pipeline::StageOutput*>(
+      static_cast<const pipeline::StageOutput*>(mesh_payload.get()));
   ASSERT_NE(mesh_so_mut->mesh, nullptr);
 
   // Stamp face_tags: face 0 → wall (tag 7); face 2 → inlet (tag 9).
-  mesh_so_mut->mesh->set_face_tag(souxmar::core::CellIndex{0}, 0,
-                                   souxmar::core::EntityTag{7});
-  mesh_so_mut->mesh->set_face_tag(souxmar::core::CellIndex{0}, 2,
-                                   souxmar::core::EntityTag{9});
+  mesh_so_mut->mesh->set_face_tag(souxmar::core::CellIndex{0}, 0, souxmar::core::EntityTag{7});
+  mesh_so_mut->mesh->set_face_tag(souxmar::core::CellIndex{0}, 2, souxmar::core::EntityTag{9});
 
   // Build the per-patch BC list. The cfd-stub reads list-of-maps.
   std::vector<pipeline::Value> patches;
@@ -182,8 +177,8 @@ TEST(CfdStubEndToEnd, PerPatchBcRoutingAppliesWallAndInlet) {
     bc.emplace("type", pipeline::Value::string("wall"));
     std::map<std::string, pipeline::Value> entry;
     entry.emplace("name", pipeline::Value::string("the-wall"));
-    entry.emplace("tag",  pipeline::Value::number(7));
-    entry.emplace("bc",   pipeline::Value::map(std::move(bc)));
+    entry.emplace("tag", pipeline::Value::number(7));
+    entry.emplace("bc", pipeline::Value::map(std::move(bc)));
     patches.push_back(pipeline::Value::map(std::move(entry)));
   }
   {
@@ -193,25 +188,23 @@ TEST(CfdStubEndToEnd, PerPatchBcRoutingAppliesWallAndInlet) {
         pipeline::Value::number(0.0),
     };
     std::map<std::string, pipeline::Value> bc;
-    bc.emplace("type",     pipeline::Value::string("inlet"));
+    bc.emplace("type", pipeline::Value::string("inlet"));
     bc.emplace("velocity", pipeline::Value::list(std::move(vel)));
     std::map<std::string, pipeline::Value> entry;
     entry.emplace("name", pipeline::Value::string("the-inlet"));
-    entry.emplace("tag",  pipeline::Value::number(9));
-    entry.emplace("bc",   pipeline::Value::map(std::move(bc)));
+    entry.emplace("tag", pipeline::Value::number(9));
+    entry.emplace("bc", pipeline::Value::map(std::move(bc)));
     patches.push_back(pipeline::Value::map(std::move(entry)));
   }
 
   // Bulk magnitude is 1.0 (default); inlet velocity is 4.0 in +x
   // (overriding the bulk).
   std::map<std::string, pipeline::Value> cfd_in;
-  cfd_in.emplace("mesh",    pipeline::Value::stage_ref("__mesh__"));
+  cfd_in.emplace("mesh", pipeline::Value::stage_ref("__mesh__"));
   cfd_in.emplace("patches", pipeline::Value::list(std::move(patches)));
 
-  auto cfd_dr = dispatcher.dispatch(
-      pipeline::DispatchContext{"solver.cfd.simple",
-                                pipeline::Value::map(std::move(cfd_in)),
-                                upstream});
+  auto cfd_dr = dispatcher.dispatch(pipeline::DispatchContext{
+      "solver.cfd.simple", pipeline::Value::map(std::move(cfd_in)), upstream});
   ASSERT_TRUE(std::holds_alternative<pipeline::DispatchSuccess>(cfd_dr));
   auto cfd_payload = std::get<pipeline::DispatchSuccess>(cfd_dr);
   const auto* cfd_out = static_cast<const pipeline::StageOutput*>(cfd_payload.get());
@@ -251,22 +244,19 @@ TEST(CfdStubEndToEnd, PerPatchBcRoutingAppliesWallAndInlet) {
 }
 
 TEST(CfdStubEndToEnd, FlowDirectionInputAccepted) {
-  const fs::path plugins_root =
-      fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
+  const fs::path plugins_root = fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
   const auto discovery = plugin::discover_plugins({plugins_root});
-  plugin::Registry      registry;
-  plugin::PluginLoader  loader(registry, "test-host/0.0.0");
+  plugin::Registry registry;
+  plugin::PluginLoader loader(registry, "test-host/0.0.0");
   auto _hello = load_by_id(loader, discovery, "dev.souxmar.examples.hello-mesher");
-  auto _cfd   = load_by_id(loader, discovery, "dev.souxmar.examples.cfd-stub");
+  auto _cfd = load_by_id(loader, discovery, "dev.souxmar.examples.cfd-stub");
 
   // hello-mesher → cfd-stub with a vertical flow direction.
   pipeline::RegistryDispatcher dispatcher(registry);
   std::map<std::string, std::shared_ptr<void>> upstream;
 
   auto mesh_dr = dispatcher.dispatch(
-      pipeline::DispatchContext{"mesher.tetra.hello",
-                                pipeline::Value::map({}),
-                                upstream});
+      pipeline::DispatchContext{"mesher.tetra.hello", pipeline::Value::map({}), upstream});
   ASSERT_TRUE(std::holds_alternative<pipeline::DispatchSuccess>(mesh_dr));
   upstream.emplace("__mesh__", std::get<pipeline::DispatchSuccess>(mesh_dr));
 
@@ -276,13 +266,11 @@ TEST(CfdStubEndToEnd, FlowDirectionInputAccepted) {
       pipeline::Value::number(1.0),
   };
   std::map<std::string, pipeline::Value> cfd_in;
-  cfd_in.emplace("mesh",               pipeline::Value::stage_ref("__mesh__"));
+  cfd_in.emplace("mesh", pipeline::Value::stage_ref("__mesh__"));
   cfd_in.emplace("velocity_magnitude", pipeline::Value::number(3.0));
-  cfd_in.emplace("flow_direction",     pipeline::Value::list(std::move(dir)));
-  auto cfd_dr = dispatcher.dispatch(
-      pipeline::DispatchContext{"solver.cfd.simple",
-                                pipeline::Value::map(std::move(cfd_in)),
-                                upstream});
+  cfd_in.emplace("flow_direction", pipeline::Value::list(std::move(dir)));
+  auto cfd_dr = dispatcher.dispatch(pipeline::DispatchContext{
+      "solver.cfd.simple", pipeline::Value::map(std::move(cfd_in)), upstream});
   ASSERT_TRUE(std::holds_alternative<pipeline::DispatchSuccess>(cfd_dr));
 
   auto cfd_payload = std::get<pipeline::DispatchSuccess>(cfd_dr);

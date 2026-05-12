@@ -14,8 +14,6 @@
 
 #include "souxmar/update/verifier.h"
 
-#include <sodium.h>
-
 #include <gtest/gtest.h>
 
 #include <array>
@@ -24,6 +22,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <sodium.h>
 
 using namespace souxmar::update;
 
@@ -44,8 +44,7 @@ constexpr const char* kSecondSeedHex =
 
 // A short message that stands in for a manifest. The verifier doesn't
 // care that it's not actually TOML — it hashes raw bytes.
-constexpr std::string_view kMessage =
-    "schema = 1\n[release]\nversion = \"0.9.0\"\n";
+constexpr std::string_view kMessage = "schema = 1\n[release]\nversion = \"0.9.0\"\n";
 
 // Decode a hex literal to bytes; ADD_FAILURE() on bad input so a
 // typo in a test seed surfaces as a clear assertion rather than an
@@ -78,8 +77,7 @@ Keypair make_keypair(std::string_view seed_hex) {
     ADD_FAILURE() << "make_keypair: wrong seed length " << seed.size();
   }
   Keypair k;
-  const int rc = crypto_sign_seed_keypair(k.pk.data(), k.sk.data(),
-                                          seed.data());
+  const int rc = crypto_sign_seed_keypair(k.pk.data(), k.sk.data(), seed.data());
   if (rc != 0) {
     ADD_FAILURE() << "crypto_sign_seed_keypair returned " << rc;
   }
@@ -87,18 +85,15 @@ Keypair make_keypair(std::string_view seed_hex) {
 }
 
 // Sign `msg` with `sk`, return a 64-byte detached signature.
-std::array<std::uint8_t, crypto_sign_BYTES>
-sign_detached(std::span<const std::uint8_t>                              msg,
-              const std::array<std::uint8_t, crypto_sign_SECRETKEYBYTES>& sk) {
+std::array<std::uint8_t, crypto_sign_BYTES> sign_detached(
+    std::span<const std::uint8_t> msg,
+    const std::array<std::uint8_t, crypto_sign_SECRETKEYBYTES>& sk) {
   std::array<std::uint8_t, crypto_sign_BYTES> sig{};
   unsigned long long sig_len = 0;
-  const int rc = crypto_sign_detached(sig.data(), &sig_len,
-                                      msg.data(),
-                                      static_cast<unsigned long long>(msg.size()),
-                                      sk.data());
+  const int rc = crypto_sign_detached(
+      sig.data(), &sig_len, msg.data(), static_cast<unsigned long long>(msg.size()), sk.data());
   if (rc != 0 || sig_len != crypto_sign_BYTES) {
-    ADD_FAILURE() << "crypto_sign_detached failed rc=" << rc
-                  << " sig_len=" << sig_len;
+    ADD_FAILURE() << "crypto_sign_detached failed rc=" << rc << " sig_len=" << sig_len;
   }
   return sig;
 }
@@ -114,12 +109,12 @@ std::span<const std::uint8_t> as_bytes(std::string_view s) noexcept {
 // ===========================================================================
 
 TEST(UpdateVerifier, StatusStringRoundtrip) {
-  EXPECT_EQ(to_string(SignatureStatus::Ok),                       "ok");
-  EXPECT_EQ(to_string(SignatureStatus::BadSignature),             "bad-signature");
-  EXPECT_EQ(to_string(SignatureStatus::UnknownKeyId),             "unknown-key-id");
-  EXPECT_EQ(to_string(SignatureStatus::MalformedSignature),       "malformed-signature");
-  EXPECT_EQ(to_string(SignatureStatus::MalformedPublicKey),       "malformed-public-key");
-  EXPECT_EQ(to_string(SignatureStatus::EmptyMessage),             "empty-message");
+  EXPECT_EQ(to_string(SignatureStatus::Ok), "ok");
+  EXPECT_EQ(to_string(SignatureStatus::BadSignature), "bad-signature");
+  EXPECT_EQ(to_string(SignatureStatus::UnknownKeyId), "unknown-key-id");
+  EXPECT_EQ(to_string(SignatureStatus::MalformedSignature), "malformed-signature");
+  EXPECT_EQ(to_string(SignatureStatus::MalformedPublicKey), "malformed-public-key");
+  EXPECT_EQ(to_string(SignatureStatus::EmptyMessage), "empty-message");
   EXPECT_EQ(to_string(SignatureStatus::CryptoLibraryUnavailable), "crypto-library-unavailable");
 }
 
@@ -137,8 +132,8 @@ TEST(UpdateVerifierHex, DecodesCanonical32BytePubkey) {
   std::vector<std::uint8_t> out;
   EXPECT_TRUE(hex_decode(kSeedHex, out));
   ASSERT_EQ(out.size(), 32u);
-  EXPECT_EQ(out[0],  0x00);
-  EXPECT_EQ(out[1],  0x11);
+  EXPECT_EQ(out[0], 0x00);
+  EXPECT_EQ(out[1], 0x11);
   EXPECT_EQ(out[15], 0xFF);
   EXPECT_EQ(out[16], 0xFF);
   EXPECT_EQ(out[31], 0x00);
@@ -184,8 +179,7 @@ TEST(UpdateVerifierTrustStore, AddHexRoundtrip) {
   TrustStore ts;
   EXPECT_TRUE(ts.empty());
 
-  ASSERT_TRUE(ts.add_hex("release-2026",
-                         hex_encode({kp.pk.data(), kp.pk.size()})));
+  ASSERT_TRUE(ts.add_hex("release-2026", hex_encode({kp.pk.data(), kp.pk.size()})));
   EXPECT_EQ(ts.size(), 1u);
 
   const auto* k = ts.find("release-2026");
@@ -202,8 +196,7 @@ TEST(UpdateVerifierTrustStore, FindReturnsNullForUnknownId) {
   EXPECT_EQ(ts.find("anything"), nullptr);
 
   const auto kp = make_keypair(kSeedHex);
-  ASSERT_TRUE(ts.add_hex("release-2026",
-                         hex_encode({kp.pk.data(), kp.pk.size()})));
+  ASSERT_TRUE(ts.add_hex("release-2026", hex_encode({kp.pk.data(), kp.pk.size()})));
   EXPECT_EQ(ts.find("release-2027"), nullptr);
   EXPECT_NE(ts.find("release-2026"), nullptr);
 }
@@ -229,8 +222,8 @@ TEST(UpdateVerifierTrustStore, RejectsWrongLengthRawPublicKey) {
 TEST(UpdateVerifierTrustStore, RejectsMalformedHexPubkey) {
   TrustStore ts;
   EXPECT_FALSE(ts.add_hex("k", "not-hex"));
-  EXPECT_FALSE(ts.add_hex("k", "abc"));               // odd length
-  EXPECT_FALSE(ts.add_hex("k", std::string(60, 'a')));// hex-valid but too short
+  EXPECT_FALSE(ts.add_hex("k", "abc"));                 // odd length
+  EXPECT_FALSE(ts.add_hex("k", std::string(60, 'a')));  // hex-valid but too short
   EXPECT_TRUE(ts.empty());
 }
 
@@ -238,10 +231,8 @@ TEST(UpdateVerifierTrustStore, KeysIterationPreservesInsertionOrder) {
   const auto kp1 = make_keypair(kSeedHex);
   const auto kp2 = make_keypair(kSecondSeedHex);
   TrustStore ts;
-  ASSERT_TRUE(ts.add_hex("release-2026",
-                         hex_encode({kp1.pk.data(), kp1.pk.size()})));
-  ASSERT_TRUE(ts.add_hex("release-2027",
-                         hex_encode({kp2.pk.data(), kp2.pk.size()})));
+  ASSERT_TRUE(ts.add_hex("release-2026", hex_encode({kp1.pk.data(), kp1.pk.size()})));
+  ASSERT_TRUE(ts.add_hex("release-2027", hex_encode({kp2.pk.data(), kp2.pk.size()})));
   ASSERT_EQ(ts.keys().size(), 2u);
   EXPECT_EQ(ts.keys()[0].public_key_id, "release-2026");
   EXPECT_EQ(ts.keys()[1].public_key_id, "release-2027");
@@ -252,11 +243,10 @@ TEST(UpdateVerifierTrustStore, KeysIterationPreservesInsertionOrder) {
 // ===========================================================================
 
 TEST(UpdateVerifier, HappyPathVerifies) {
-  const auto kp  = make_keypair(kSeedHex);
+  const auto kp = make_keypair(kSeedHex);
   const auto sig = sign_detached(as_bytes(kMessage), kp.sk);
-  EXPECT_EQ(verify_detached_ed25519(as_bytes(kMessage),
-                                    {sig.data(),    sig.size()},
-                                    {kp.pk.data(),  kp.pk.size()}),
+  EXPECT_EQ(verify_detached_ed25519(
+                as_bytes(kMessage), {sig.data(), sig.size()}, {kp.pk.data(), kp.pk.size()}),
             SignatureStatus::Ok);
 }
 
@@ -267,13 +257,12 @@ TEST(UpdateVerifier, DeterministicSignatureRoundtrip) {
   // implementation. If this test ever starts flaking, libsodium has
   // either been patched to nondeterministic mode or the test fixture
   // has been mis-wired.
-  const auto kp   = make_keypair(kSeedHex);
+  const auto kp = make_keypair(kSeedHex);
   const auto sig1 = sign_detached(as_bytes(kMessage), kp.sk);
   const auto sig2 = sign_detached(as_bytes(kMessage), kp.sk);
   EXPECT_EQ(sig1, sig2);
-  EXPECT_EQ(verify_detached_ed25519(as_bytes(kMessage),
-                                    {sig1.data(), sig1.size()},
-                                    {kp.pk.data(), kp.pk.size()}),
+  EXPECT_EQ(verify_detached_ed25519(
+                as_bytes(kMessage), {sig1.data(), sig1.size()}, {kp.pk.data(), kp.pk.size()}),
             SignatureStatus::Ok);
 }
 
@@ -286,33 +275,30 @@ TEST(UpdateVerifier, RejectsSignatureFromWrongKey) {
   const auto kp2 = make_keypair(kSecondSeedHex);
   const auto sig = sign_detached(as_bytes(kMessage), kp1.sk);
   // Verify against kp2.pk — must fail.
-  EXPECT_EQ(verify_detached_ed25519(as_bytes(kMessage),
-                                    {sig.data(),    sig.size()},
-                                    {kp2.pk.data(), kp2.pk.size()}),
+  EXPECT_EQ(verify_detached_ed25519(
+                as_bytes(kMessage), {sig.data(), sig.size()}, {kp2.pk.data(), kp2.pk.size()}),
             SignatureStatus::BadSignature);
 }
 
 TEST(UpdateVerifier, RejectsTamperedMessage) {
-  const auto kp  = make_keypair(kSeedHex);
+  const auto kp = make_keypair(kSeedHex);
   const auto sig = sign_detached(as_bytes(kMessage), kp.sk);
   std::string tampered(kMessage);
   // Flip the version-string from "0.9.0" to "0.9.1".
   auto pos = tampered.find("0.9.0");
   ASSERT_NE(pos, std::string::npos);
   tampered[pos + 4] = '1';
-  EXPECT_EQ(verify_detached_ed25519(as_bytes(tampered),
-                                    {sig.data(),    sig.size()},
-                                    {kp.pk.data(),  kp.pk.size()}),
+  EXPECT_EQ(verify_detached_ed25519(
+                as_bytes(tampered), {sig.data(), sig.size()}, {kp.pk.data(), kp.pk.size()}),
             SignatureStatus::BadSignature);
 }
 
 TEST(UpdateVerifier, RejectsTamperedSignature) {
-  const auto kp  = make_keypair(kSeedHex);
-  auto       sig = sign_detached(as_bytes(kMessage), kp.sk);
+  const auto kp = make_keypair(kSeedHex);
+  auto sig = sign_detached(as_bytes(kMessage), kp.sk);
   sig[0] ^= 0x01;  // flip a single bit
-  EXPECT_EQ(verify_detached_ed25519(as_bytes(kMessage),
-                                    {sig.data(),   sig.size()},
-                                    {kp.pk.data(), kp.pk.size()}),
+  EXPECT_EQ(verify_detached_ed25519(
+                as_bytes(kMessage), {sig.data(), sig.size()}, {kp.pk.data(), kp.pk.size()}),
             SignatureStatus::BadSignature);
 }
 
@@ -323,51 +309,41 @@ TEST(UpdateVerifier, RejectsTamperedSignature) {
 TEST(UpdateVerifier, RejectsShortSignature) {
   const auto kp = make_keypair(kSeedHex);
   const std::vector<std::uint8_t> short_sig(63, 0xAB);
-  EXPECT_EQ(verify_detached_ed25519(as_bytes(kMessage),
-                                    short_sig,
-                                    {kp.pk.data(), kp.pk.size()}),
+  EXPECT_EQ(verify_detached_ed25519(as_bytes(kMessage), short_sig, {kp.pk.data(), kp.pk.size()}),
             SignatureStatus::MalformedSignature);
 }
 
 TEST(UpdateVerifier, RejectsLongSignature) {
   const auto kp = make_keypair(kSeedHex);
   const std::vector<std::uint8_t> long_sig(65, 0xCD);
-  EXPECT_EQ(verify_detached_ed25519(as_bytes(kMessage),
-                                    long_sig,
-                                    {kp.pk.data(), kp.pk.size()}),
+  EXPECT_EQ(verify_detached_ed25519(as_bytes(kMessage), long_sig, {kp.pk.data(), kp.pk.size()}),
             SignatureStatus::MalformedSignature);
 }
 
 TEST(UpdateVerifier, RejectsShortPublicKey) {
-  const auto kp  = make_keypair(kSeedHex);
+  const auto kp = make_keypair(kSeedHex);
   const auto sig = sign_detached(as_bytes(kMessage), kp.sk);
   const std::vector<std::uint8_t> short_pk(31, 0x00);
-  EXPECT_EQ(verify_detached_ed25519(as_bytes(kMessage),
-                                    {sig.data(), sig.size()},
-                                    short_pk),
+  EXPECT_EQ(verify_detached_ed25519(as_bytes(kMessage), {sig.data(), sig.size()}, short_pk),
             SignatureStatus::MalformedPublicKey);
 }
 
 TEST(UpdateVerifier, RejectsLongPublicKey) {
-  const auto kp  = make_keypair(kSeedHex);
+  const auto kp = make_keypair(kSeedHex);
   const auto sig = sign_detached(as_bytes(kMessage), kp.sk);
   const std::vector<std::uint8_t> long_pk(33, 0x00);
-  EXPECT_EQ(verify_detached_ed25519(as_bytes(kMessage),
-                                    {sig.data(), sig.size()},
-                                    long_pk),
+  EXPECT_EQ(verify_detached_ed25519(as_bytes(kMessage), {sig.data(), sig.size()}, long_pk),
             SignatureStatus::MalformedPublicKey);
 }
 
 TEST(UpdateVerifier, RejectsEmptyMessage) {
-  const auto kp  = make_keypair(kSeedHex);
+  const auto kp = make_keypair(kSeedHex);
   // Sign a real message so the signature is structurally valid; we
   // want to be sure the empty-message rejection comes from our
   // length gate, not from libsodium's verify path.
   const auto sig = sign_detached(as_bytes(kMessage), kp.sk);
   const std::span<const std::uint8_t> empty{};
-  EXPECT_EQ(verify_detached_ed25519(empty,
-                                    {sig.data(),   sig.size()},
-                                    {kp.pk.data(), kp.pk.size()}),
+  EXPECT_EQ(verify_detached_ed25519(empty, {sig.data(), sig.size()}, {kp.pk.data(), kp.pk.size()}),
             SignatureStatus::EmptyMessage);
 }
 
@@ -381,10 +357,8 @@ TEST(UpdateVerifier, RejectsEmptyMessage) {
 
 TEST(UpdateVerifier, MalformedSignatureBeatsMalformedPublicKey) {
   const std::vector<std::uint8_t> short_sig(63, 0xAB);
-  const std::vector<std::uint8_t> short_pk(31,  0xCD);
-  EXPECT_EQ(verify_detached_ed25519(as_bytes(kMessage),
-                                    short_sig,
-                                    short_pk),
+  const std::vector<std::uint8_t> short_pk(31, 0xCD);
+  EXPECT_EQ(verify_detached_ed25519(as_bytes(kMessage), short_sig, short_pk),
             SignatureStatus::MalformedSignature);
 }
 
@@ -394,8 +368,7 @@ TEST(UpdateVerifier, MalformedPublicKeyBeatsEmptyMessage) {
   const std::vector<std::uint8_t> sig(64, 0xAB);
   const std::vector<std::uint8_t> short_pk(31, 0xCD);
   const std::span<const std::uint8_t> empty{};
-  EXPECT_EQ(verify_detached_ed25519(empty, sig, short_pk),
-            SignatureStatus::MalformedPublicKey);
+  EXPECT_EQ(verify_detached_ed25519(empty, sig, short_pk), SignatureStatus::MalformedPublicKey);
 }
 
 // ===========================================================================
@@ -403,16 +376,13 @@ TEST(UpdateVerifier, MalformedPublicKeyBeatsEmptyMessage) {
 // ===========================================================================
 
 TEST(UpdateVerifierHighLevel, HappyPathFromTrustStoreLookup) {
-  const auto kp  = make_keypair(kSeedHex);
+  const auto kp = make_keypair(kSeedHex);
   const auto sig = sign_detached(as_bytes(kMessage), kp.sk);
   TrustStore ts;
-  ASSERT_TRUE(ts.add_hex("release-2026",
-                         hex_encode({kp.pk.data(), kp.pk.size()})));
-  EXPECT_EQ(verify_manifest_signature(as_bytes(kMessage),
-                                      {sig.data(), sig.size()},
-                                      "release-2026",
-                                      ts),
-            SignatureStatus::Ok);
+  ASSERT_TRUE(ts.add_hex("release-2026", hex_encode({kp.pk.data(), kp.pk.size()})));
+  EXPECT_EQ(
+      verify_manifest_signature(as_bytes(kMessage), {sig.data(), sig.size()}, "release-2026", ts),
+      SignatureStatus::Ok);
 }
 
 TEST(UpdateVerifierHighLevel, RejectsUnknownKeyIdBeforeCrypto) {
@@ -420,30 +390,25 @@ TEST(UpdateVerifierHighLevel, RejectsUnknownKeyIdBeforeCrypto) {
   // The lookup-by-id fires before any crypto work — this is what
   // gives the state machine in push 6 a fast path when a manifest
   // names a key id we don't recognise.
-  const auto kp  = make_keypair(kSeedHex);
+  const auto kp = make_keypair(kSeedHex);
   const auto sig = sign_detached(as_bytes(kMessage), kp.sk);
   TrustStore ts;  // empty
-  EXPECT_EQ(verify_manifest_signature(as_bytes(kMessage),
-                                      {sig.data(), sig.size()},
-                                      "release-2026",
-                                      ts),
-            SignatureStatus::UnknownKeyId);
+  EXPECT_EQ(
+      verify_manifest_signature(as_bytes(kMessage), {sig.data(), sig.size()}, "release-2026", ts),
+      SignatureStatus::UnknownKeyId);
 }
 
 TEST(UpdateVerifierHighLevel, RejectsKeyIdMismatch) {
   // The store has key release-2026; the manifest names release-2027.
   // Verification path picks the store's keys, not the manifest's
   // claim — so the wrong id is UnknownKeyId, not BadSignature.
-  const auto kp  = make_keypair(kSeedHex);
+  const auto kp = make_keypair(kSeedHex);
   const auto sig = sign_detached(as_bytes(kMessage), kp.sk);
   TrustStore ts;
-  ASSERT_TRUE(ts.add_hex("release-2026",
-                         hex_encode({kp.pk.data(), kp.pk.size()})));
-  EXPECT_EQ(verify_manifest_signature(as_bytes(kMessage),
-                                      {sig.data(), sig.size()},
-                                      "release-2027",
-                                      ts),
-            SignatureStatus::UnknownKeyId);
+  ASSERT_TRUE(ts.add_hex("release-2026", hex_encode({kp.pk.data(), kp.pk.size()})));
+  EXPECT_EQ(
+      verify_manifest_signature(as_bytes(kMessage), {sig.data(), sig.size()}, "release-2027", ts),
+      SignatureStatus::UnknownKeyId);
 }
 
 TEST(UpdateVerifierHighLevel, BadSignaturePropagatesThroughHighLevelCall) {
@@ -452,11 +417,8 @@ TEST(UpdateVerifierHighLevel, BadSignaturePropagatesThroughHighLevelCall) {
   // Sign with kp1.sk but list kp2.pk under the same id in the store.
   const auto sig = sign_detached(as_bytes(kMessage), kp1.sk);
   TrustStore ts;
-  ASSERT_TRUE(ts.add_hex("release-2026",
-                         hex_encode({kp2.pk.data(), kp2.pk.size()})));
-  EXPECT_EQ(verify_manifest_signature(as_bytes(kMessage),
-                                      {sig.data(), sig.size()},
-                                      "release-2026",
-                                      ts),
-            SignatureStatus::BadSignature);
+  ASSERT_TRUE(ts.add_hex("release-2026", hex_encode({kp2.pk.data(), kp2.pk.size()})));
+  EXPECT_EQ(
+      verify_manifest_signature(as_bytes(kMessage), {sig.data(), sig.size()}, "release-2026", ts),
+      SignatureStatus::BadSignature);
 }

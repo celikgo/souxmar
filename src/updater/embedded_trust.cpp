@@ -29,8 +29,7 @@ TrustStore embedded_trust_store() {
   // key (local devs / CI smoke), that key lives in this slot —
   // build_uses_dev_key() lets release pipelines reject those builds
   // before they ever produce artefacts.
-  (void)ts.add_hex(std::string(kEmbeddedReleaseKeyId),
-                   std::string_view{kEmbeddedReleasePubkeyHex});
+  (void)ts.add_hex(std::string(kEmbeddedReleaseKeyId), std::string_view{kEmbeddedReleasePubkeyHex});
   return ts;
 }
 

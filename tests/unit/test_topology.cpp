@@ -13,8 +13,8 @@ namespace {
 TEST(Topology, FreshIsEmpty) {
   Topology t;
   EXPECT_TRUE(t.empty());
-  for (auto k : {TopologyKind::Vertex, TopologyKind::Edge,
-                 TopologyKind::Face, TopologyKind::Region}) {
+  for (auto k :
+       {TopologyKind::Vertex, TopologyKind::Edge, TopologyKind::Face, TopologyKind::Region}) {
     EXPECT_EQ(t.count(k), 0u);
   }
 }
@@ -41,8 +41,7 @@ TEST(Topology, TagAndNameRoundtrip) {
 
 TEST(Topology, OutOfRangeSetThrows) {
   Topology t;
-  EXPECT_THROW(t.set_tag(TopologyRef{TopologyKind::Region, 0}, EntityTag{1}),
-               std::out_of_range);
+  EXPECT_THROW(t.set_tag(TopologyRef{TopologyKind::Region, 0}, EntityTag{1}), std::out_of_range);
 }
 
 TEST(Topology, MoveTransfers) {

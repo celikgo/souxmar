@@ -82,12 +82,10 @@ size_t souxmar_buffer_alignment(void);
  * souxmar_status_t around the operation.
  */
 
-#define SOUXMAR_BUFFER_FLAG_READONLY  ((uint32_t)1u << 0)
-#define SOUXMAR_BUFFER_FLAG_CREATE    ((uint32_t)1u << 1)
+#define SOUXMAR_BUFFER_FLAG_READONLY ((uint32_t)1u << 0)
+#define SOUXMAR_BUFFER_FLAG_CREATE ((uint32_t)1u << 1)
 
-souxmar_buffer_t* souxmar_buffer_new_mmap(const char* path,
-                                          size_t      size_bytes,
-                                          uint32_t    flags);
+souxmar_buffer_t* souxmar_buffer_new_mmap(const char* path, size_t size_bytes, uint32_t flags);
 
 /* Returns 1 if the buffer's data comes from a file mapping (created
  * by souxmar_buffer_new_mmap), 0 if it's heap-backed (the v1 path),

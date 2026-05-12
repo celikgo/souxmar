@@ -19,7 +19,10 @@ namespace souxmar::core {
 struct EntityTag {
   std::int32_t value{-1};
 
-  [[nodiscard]] constexpr bool valid() const noexcept { return value >= 0; }
+  [[nodiscard]] constexpr bool valid() const noexcept {
+    return value >= 0;
+  }
+
   [[nodiscard]] constexpr bool operator==(const EntityTag&) const noexcept = default;
   [[nodiscard]] constexpr auto operator<=>(const EntityTag&) const noexcept = default;
 };

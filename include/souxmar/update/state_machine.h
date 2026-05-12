@@ -49,14 +49,14 @@ namespace souxmar::update {
 // macros; an `as-of`-style override does *not* exist (you can't
 // download a linux/aarch64 binary onto a windows/x86_64 machine).
 struct HostPlatform {
-  Os    os;
-  Arch  arch;
+  Os os;
+  Arch arch;
 };
 
 [[nodiscard]] HostPlatform detect_host_platform() noexcept;
 
-[[nodiscard]] std::optional<HostPlatform>
-parse_host_platform(std::string_view os_arch);  // "linux/x86_64" form
+[[nodiscard]] std::optional<HostPlatform> parse_host_platform(
+    std::string_view os_arch);  // "linux/x86_64" form
 
 // ---- TimeSource ---------------------------------------------------------
 //
@@ -78,8 +78,8 @@ class SystemTimeSource final : public TimeSource {
 
 class FixedTimeSource final : public TimeSource {
  public:
-  explicit FixedTimeSource(std::chrono::system_clock::time_point t) noexcept
-      : t_(t) {}
+  explicit FixedTimeSource(std::chrono::system_clock::time_point t) noexcept : t_(t) {}
+
   [[nodiscard]] std::chrono::system_clock::time_point now() const override {
     return t_;
   }
@@ -97,8 +97,8 @@ class FixedTimeSource final : public TimeSource {
 // because the manifest format ADR pins this exact shape and accepting
 // looser forms would mask a release-pipeline bug.
 
-[[nodiscard]] std::optional<std::chrono::system_clock::time_point>
-parse_rfc3339_utc(std::string_view s);
+[[nodiscard]] std::optional<std::chrono::system_clock::time_point> parse_rfc3339_utc(
+    std::string_view s);
 
 // Format a time_point back to the canonical "YYYY-MM-DDTHH:MM:SSZ"
 // shape. Used by the audit-log writer (push 7) and by `--json`
@@ -117,8 +117,7 @@ parse_rfc3339_utc(std::string_view s);
 // rejected by the state machine (BelowMinPrevious / similar) rather
 // than silently treated as zero.
 
-[[nodiscard]] std::optional<int>
-compare_versions(std::string_view a, std::string_view b);
+[[nodiscard]] std::optional<int> compare_versions(std::string_view a, std::string_view b);
 
 // ---- Apply-gate I/O types ------------------------------------------------
 
@@ -130,8 +129,8 @@ compare_versions(std::string_view a, std::string_view b);
 // refuse any manifest offering a strictly lower version. See
 // ADR-0013 § "Replay-after-rollback attack" for the threat model.
 struct CurrentInstall {
-  std::string  current_version;
-  std::string  max_version_ever_seen;
+  std::string current_version;
+  std::string max_version_ever_seen;
   HostPlatform platform;
 };
 
@@ -145,38 +144,38 @@ enum class RefusalReason : std::uint8_t {
   // "you're up to date" rather than "an update is available".
   AlreadyOnOrAheadOfOffered = 0,
   // channel.expires_at parses cleanly and is in the past.
-  Expired                   = 1,
+  Expired = 1,
   // channel.expires_at is non-empty but does not match the canonical
   // RFC-3339 UTC shape. Treated as a refusal (suspicious — looks
   // like an attempted freshness window that the release pipeline
   // mangled) rather than as "no expiry set".
-  ExpiredInvalidTime        = 2,
+  ExpiredInvalidTime = 2,
   // current_version < release.min_previous_version.
-  BelowMinPrevious          = 3,
+  BelowMinPrevious = 3,
   // release.version < max_version_ever_seen. Defends against a
   // mirror serving a stale-but-still-in-its-window manifest as a
   // downgrade vector.
-  ReplayDowngrade           = 4,
+  ReplayDowngrade = 4,
   // No [[artifact]] entry matches the host's (os, arch). The
   // release pipeline either skipped this platform deliberately
   // (rare; release notes should say so) or has a bug.
-  NoArtifactForPlatform     = 5,
+  NoArtifactForPlatform = 5,
   // release.version is not MAJOR.MINOR.PATCH numeric. Belt-and-
   // braces — the manifest validator already gates this, but the
   // state machine is layered downstream of a signature-verified
   // manifest and still rejects malformed-version manifests so a
   // would-be exploit path through a hand-crafted-but-validly-signed
   // manifest still trips the gate.
-  MalformedOfferedVersion   = 6,
+  MalformedOfferedVersion = 6,
   // current_version is non-empty but not MAJOR.MINOR.PATCH numeric.
   // The caller (CLI / desktop app) is expected to normalise — see
   // compare_versions docstring above.
-  MalformedCurrentVersion   = 7,
+  MalformedCurrentVersion = 7,
   // max_version_ever_seen is non-empty but not MAJOR.MINOR.PATCH
   // numeric. Indicates the state file is corrupted; the CLI
   // surfaces this as "your install is in an inconsistent state,
   // run `souxmar update reset-state` (lands in push 7)".
-  MalformedReplayFloor      = 8,
+  MalformedReplayFloor = 8,
 };
 
 [[nodiscard]] std::string_view to_string(RefusalReason) noexcept;
@@ -185,7 +184,7 @@ enum class RefusalReason : std::uint8_t {
 // detail strings are diagnostic — never parse them.
 struct UpdateRefusal {
   RefusalReason reason;
-  std::string   detail;
+  std::string detail;
 };
 
 // "Apply this manifest" verdict. The picked artifact is the one
@@ -193,9 +192,9 @@ struct UpdateRefusal {
 // through verbatim from the manifest — push 7's downloader hashes
 // against artifact.sha256 byte-for-byte.
 struct UpdateApply {
-  std::string  version;       // = manifest.release.version
-  Artifact     artifact;      // the one matching host platform
-  bool         mandatory;     // = manifest.release.mandatory
+  std::string version;  // = manifest.release.version
+  Artifact artifact;    // the one matching host platform
+  bool mandatory;       // = manifest.release.mandatory
 };
 
 using UpdateDecision = std::variant<UpdateApply, UpdateRefusal>;
@@ -209,17 +208,19 @@ using UpdateDecision = std::variant<UpdateApply, UpdateRefusal>;
 //   1. release.version  well-formed?              (else MalformedOfferedVersion)
 //   2. current_version  well-formed (if non-empty)? (else MalformedCurrentVersion)
 //   3. max_seen         well-formed (if non-empty)? (else MalformedReplayFloor)
-//   4. release.version <= current_version?         (else fall through; if true, AlreadyOnOrAheadOfOffered)
+//   4. release.version <= current_version?         (else fall through; if true,
+//   AlreadyOnOrAheadOfOffered)
 //   5. channel.expires_at parses?                  (empty is OK; malformed => ExpiredInvalidTime)
 //   6. now              < expires_at?              (else Expired)
-//   7. min_previous_version <= current_version?    (else BelowMinPrevious; skipped if either side empty)
-//   8. max_seen <= release.version?                (else ReplayDowngrade; skipped if max_seen empty)
+//   7. min_previous_version <= current_version?    (else BelowMinPrevious; skipped if either side
+//   empty)
+//   8. max_seen <= release.version?                (else ReplayDowngrade; skipped if max_seen
+//   empty)
 //   9. host (os, arch) matches an artifact?        (else NoArtifactForPlatform)
 //   else Apply.
 
-[[nodiscard]] UpdateDecision
-apply_gate(const Manifest&        m,
-           const CurrentInstall&  install,
-           const TimeSource&      clock);
+[[nodiscard]] UpdateDecision apply_gate(const Manifest& m,
+                                        const CurrentInstall& install,
+                                        const TimeSource& clock);
 
 }  // namespace souxmar::update

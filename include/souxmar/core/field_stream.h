@@ -36,12 +36,12 @@ class FieldStream {
   FieldStream(FieldStream&&) noexcept;
   FieldStream& operator=(FieldStream&&) noexcept;
 
-  FieldStream(const FieldStream&)            = delete;
+  FieldStream(const FieldStream&) = delete;
   FieldStream& operator=(const FieldStream&) = delete;
 
   // Number of locations (one value-per-component-per-location).
-  [[nodiscard]] std::size_t  count()       const noexcept;
-  [[nodiscard]] std::uint8_t components()  const noexcept;
+  [[nodiscard]] std::size_t count() const noexcept;
+  [[nodiscard]] std::uint8_t components() const noexcept;
 
   // Per-component min/max in f64. Size of each span = components().
   [[nodiscard]] std::span<const double> range_min() const noexcept;

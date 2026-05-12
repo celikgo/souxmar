@@ -50,13 +50,11 @@ struct souxmar_sketch_t;
  * ==================================================================== */
 
 souxmar_brep_session_t* souxmar_brep_session_open(void);
-void                     souxmar_brep_session_close(souxmar_brep_session_t* session);
+void souxmar_brep_session_close(souxmar_brep_session_t* session);
 
-souxmar_status_t souxmar_brep_import_step(souxmar_brep_session_t* session,
-                                          const char*              path);
+souxmar_status_t souxmar_brep_import_step(souxmar_brep_session_t* session, const char* path);
 
-souxmar_status_t souxmar_brep_import_iges(souxmar_brep_session_t* session,
-                                          const char*              path);
+souxmar_status_t souxmar_brep_import_iges(souxmar_brep_session_t* session, const char* path);
 
 /* Snapshot the session's body graph into a souxmar_geometry_t. The
  * session retains ownership of its BREP; the geometry is a discrete
@@ -67,22 +65,21 @@ souxmar_geometry_t* souxmar_brep_to_geometry(const souxmar_brep_session_t* sessi
 size_t souxmar_brep_num_bodies(const souxmar_brep_session_t* session);
 
 souxmar_status_t souxmar_brep_body_id(const souxmar_brep_session_t* session,
-                                       size_t                         index,
-                                       uint64_t*                      out_body_id);
+                                      size_t index,
+                                      uint64_t* out_body_id);
 
 souxmar_status_t souxmar_brep_body_bounds(const souxmar_brep_session_t* session,
-                                           uint64_t                       body_id,
-                                           double                         out_min[3],
-                                           double                         out_max[3]);
+                                          uint64_t body_id,
+                                          double out_min[3],
+                                          double out_max[3]);
 
-const char* souxmar_brep_body_name(const souxmar_brep_session_t* session,
-                                    uint64_t                       body_id);
+const char* souxmar_brep_body_name(const souxmar_brep_session_t* session, uint64_t body_id);
 
 /* Tessellation for the renderer; deflection in model units. */
 souxmar_status_t souxmar_brep_tessellate(souxmar_brep_session_t* session,
-                                          uint64_t                 body_id,
-                                          double                   deflection,
-                                          souxmar_mesh_t**         out_surface_mesh);
+                                         uint64_t body_id,
+                                         double deflection,
+                                         souxmar_mesh_t** out_surface_mesh);
 
 /* ====================================================================
  * v1.8 — Feature operations
@@ -99,69 +96,68 @@ souxmar_status_t souxmar_brep_tessellate(souxmar_brep_session_t* session,
  * ==================================================================== */
 
 uint64_t souxmar_brep_extrude(souxmar_brep_session_t* session,
-                               const struct souxmar_sketch_t* sketch,
-                               double                   distance,
-                               uint8_t                  direction,
-                               uint8_t                  operation,
-                               uint64_t                 target_body_id,
-                               souxmar_status_t*        out_status);
+                              const struct souxmar_sketch_t* sketch,
+                              double distance,
+                              uint8_t direction,
+                              uint8_t operation,
+                              uint64_t target_body_id,
+                              souxmar_status_t* out_status);
 
 uint64_t souxmar_brep_revolve(souxmar_brep_session_t* session,
-                               const struct souxmar_sketch_t* sketch,
-                               uint32_t                 axis_line_id,
-                               double                   angle_rad,
-                               uint8_t                  operation,
-                               uint64_t                 target_body_id,
-                               souxmar_status_t*        out_status);
+                              const struct souxmar_sketch_t* sketch,
+                              uint32_t axis_line_id,
+                              double angle_rad,
+                              uint8_t operation,
+                              uint64_t target_body_id,
+                              souxmar_status_t* out_status);
 
 uint64_t souxmar_brep_sweep(souxmar_brep_session_t* session,
-                             const struct souxmar_sketch_t* profile,
-                             const struct souxmar_sketch_t* path,
-                             uint8_t                  operation,
-                             uint64_t                 target_body_id,
-                             souxmar_status_t*        out_status);
+                            const struct souxmar_sketch_t* profile,
+                            const struct souxmar_sketch_t* path,
+                            uint8_t operation,
+                            uint64_t target_body_id,
+                            souxmar_status_t* out_status);
 
 uint64_t souxmar_brep_loft(souxmar_brep_session_t* session,
-                            const struct souxmar_sketch_t** profiles,
-                            size_t                    profile_count,
-                            uint8_t                   operation,
-                            uint64_t                  target_body_id,
-                            souxmar_status_t*         out_status);
+                           const struct souxmar_sketch_t** profiles,
+                           size_t profile_count,
+                           uint8_t operation,
+                           uint64_t target_body_id,
+                           souxmar_status_t* out_status);
 
 souxmar_status_t souxmar_brep_fillet(souxmar_brep_session_t* session,
-                                      uint64_t                 body_id,
-                                      const uint64_t*          edge_ids,
-                                      size_t                   edge_count,
-                                      double                   radius);
+                                     uint64_t body_id,
+                                     const uint64_t* edge_ids,
+                                     size_t edge_count,
+                                     double radius);
 
 souxmar_status_t souxmar_brep_chamfer(souxmar_brep_session_t* session,
-                                       uint64_t                 body_id,
-                                       const uint64_t*          edge_ids,
-                                       size_t                   edge_count,
-                                       double                   distance);
+                                      uint64_t body_id,
+                                      const uint64_t* edge_ids,
+                                      size_t edge_count,
+                                      double distance);
 
 souxmar_status_t souxmar_brep_boolean(souxmar_brep_session_t* session,
-                                       uint64_t                 target_body_id,
-                                       uint64_t                 tool_body_id,
-                                       uint8_t                  operation);
+                                      uint64_t target_body_id,
+                                      uint64_t tool_body_id,
+                                      uint8_t operation);
 
 souxmar_status_t souxmar_brep_pattern_linear(souxmar_brep_session_t* session,
-                                              const uint64_t*          source_body_ids,
-                                              size_t                   source_count,
-                                              const double             direction[3],
-                                              double                   spacing,
-                                              uint32_t                 count);
+                                             const uint64_t* source_body_ids,
+                                             size_t source_count,
+                                             const double direction[3],
+                                             double spacing,
+                                             uint32_t count);
 
 souxmar_status_t souxmar_brep_pattern_circular(souxmar_brep_session_t* session,
-                                                const uint64_t*         source_body_ids,
-                                                size_t                  source_count,
-                                                const double            axis_origin[3],
-                                                const double            axis_direction[3],
-                                                double                  angle_rad,
-                                                uint32_t                count);
+                                               const uint64_t* source_body_ids,
+                                               size_t source_count,
+                                               const double axis_origin[3],
+                                               const double axis_direction[3],
+                                               double angle_rad,
+                                               uint32_t count);
 
-souxmar_status_t souxmar_brep_delete_body(souxmar_brep_session_t* session,
-                                           uint64_t                 body_id);
+souxmar_status_t souxmar_brep_delete_body(souxmar_brep_session_t* session, uint64_t body_id);
 
 SOUXMAR_C_END
 #endif /* SOUXMAR_C_BREP_H */

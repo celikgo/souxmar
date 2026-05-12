@@ -38,21 +38,26 @@ size_t souxmar_surface_stream_vertex_count(const souxmar_surface_stream_t* s);
 size_t souxmar_surface_stream_triangle_count(const souxmar_surface_stream_t* s);
 
 souxmar_status_t souxmar_surface_stream_bounds(const souxmar_surface_stream_t* s,
-                                                double out_min[3],
-                                                double out_max[3]);
+                                               double out_min[3],
+                                               double out_max[3]);
 
 /* SoA reads. Out buffers are sized by the count functions above; passing
  * an undersized capacity returns SOUXMAR_E_INVALID_ARGUMENT. */
 souxmar_status_t souxmar_surface_stream_positions(const souxmar_surface_stream_t* s,
-                                                   float* out, size_t out_capacity);
+                                                  float* out,
+                                                  size_t out_capacity);
 souxmar_status_t souxmar_surface_stream_normals(const souxmar_surface_stream_t* s,
-                                                 float* out, size_t out_capacity);
+                                                float* out,
+                                                size_t out_capacity);
 souxmar_status_t souxmar_surface_stream_indices(const souxmar_surface_stream_t* s,
-                                                 uint32_t* out, size_t out_capacity);
+                                                uint32_t* out,
+                                                size_t out_capacity);
 souxmar_status_t souxmar_surface_stream_face_ids(const souxmar_surface_stream_t* s,
-                                                  uint32_t* out, size_t out_capacity);
+                                                 uint32_t* out,
+                                                 size_t out_capacity);
 souxmar_status_t souxmar_surface_stream_vertex_ids(const souxmar_surface_stream_t* s,
-                                                    uint64_t* out, size_t out_capacity);
+                                                   uint64_t* out,
+                                                   size_t out_capacity);
 
 SOUXMAR_C_END
 #endif /* SOUXMAR_C_SURFACE_STREAM_H */

@@ -34,10 +34,10 @@ class SurfaceStream {
   SurfaceStream(SurfaceStream&&) noexcept;
   SurfaceStream& operator=(SurfaceStream&&) noexcept;
 
-  SurfaceStream(const SurfaceStream&)            = delete;
+  SurfaceStream(const SurfaceStream&) = delete;
   SurfaceStream& operator=(const SurfaceStream&) = delete;
 
-  [[nodiscard]] std::size_t vertex_count()   const noexcept;
+  [[nodiscard]] std::size_t vertex_count() const noexcept;
   [[nodiscard]] std::size_t triangle_count() const noexcept;
 
   [[nodiscard]] std::array<double, 3> bounds_min() const noexcept;
@@ -47,11 +47,11 @@ class SurfaceStream {
   // indices is 3 * triangle_count uint32; face_ids is triangle_count
   // uint32; vertex_ids is vertex_count uint64 (the mesh node index
   // each exported vertex came from).
-  [[nodiscard]] std::span<const float>         positions()   const noexcept;
-  [[nodiscard]] std::span<const float>         normals()     const noexcept;
-  [[nodiscard]] std::span<const std::uint32_t> indices()     const noexcept;
-  [[nodiscard]] std::span<const std::uint32_t> face_ids()    const noexcept;
-  [[nodiscard]] std::span<const std::uint64_t> vertex_ids()  const noexcept;
+  [[nodiscard]] std::span<const float> positions() const noexcept;
+  [[nodiscard]] std::span<const float> normals() const noexcept;
+  [[nodiscard]] std::span<const std::uint32_t> indices() const noexcept;
+  [[nodiscard]] std::span<const std::uint32_t> face_ids() const noexcept;
+  [[nodiscard]] std::span<const std::uint64_t> vertex_ids() const noexcept;
 
  private:
   class Impl;

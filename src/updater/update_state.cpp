@@ -29,17 +29,20 @@ namespace {
 
 std::filesystem::path home_dir() {
 #if defined(_WIN32)
-  if (const char* v = std::getenv("USERPROFILE"); v && *v) return v;
+  if (const char* v = std::getenv("USERPROFILE"); v && *v)
+    return v;
   return {};
 #else
-  if (const char* v = std::getenv("HOME"); v && *v) return v;
+  if (const char* v = std::getenv("HOME"); v && *v)
+    return v;
   return {};
 #endif
 }
 
 std::string read_string_field(const toml::table& tbl, const char* key) {
   const auto* v = tbl.get(key);
-  if (!v) return {};
+  if (!v)
+    return {};
   auto sv = v->value<std::string>();
   return sv ? *sv : std::string{};
 }
@@ -56,8 +59,7 @@ std::filesystem::path default_update_state_path() {
   }
 #elif defined(__APPLE__)
   if (auto h = home_dir(); !h.empty()) {
-    return h / "Library" / "Application Support" / "souxmar" /
-           "update-state.toml";
+    return h / "Library" / "Application Support" / "souxmar" / "update-state.toml";
   }
 #else
   if (const char* v = std::getenv("XDG_STATE_HOME"); v && *v) {
@@ -79,18 +81,26 @@ std::string render_update_state(const UpdateState& s) {
   o << "# souxmar auto-updater per-user state. Schema is locked by\n"
        "# ADR-0013; do not hand-edit unless you also bump `schema`.\n"
        "schema                    = "
-    << kUpdateStateSchemaV1 << "\n"
-       "current_installed_version = \"" << s.current_installed_version << "\"\n"
-       "max_version_ever_seen     = \"" << s.max_version_ever_seen     << "\"\n"
-       "last_check_at             = \"" << s.last_check_at             << "\"\n"
-       "last_apply_at             = \"" << s.last_apply_at             << "\"\n";
+    << kUpdateStateSchemaV1
+    << "\n"
+       "current_installed_version = \""
+    << s.current_installed_version
+    << "\"\n"
+       "max_version_ever_seen     = \""
+    << s.max_version_ever_seen
+    << "\"\n"
+       "last_check_at             = \""
+    << s.last_check_at
+    << "\"\n"
+       "last_apply_at             = \""
+    << s.last_apply_at << "\"\n";
   return o.str();
 }
 
 UpdateStateLoadResult load_update_state(const fs::path& path) {
   std::error_code ec;
   if (!fs::exists(path, ec)) {
-    return UpdateState{};   // fresh-install defaults
+    return UpdateState{};  // fresh-install defaults
   }
   toml::table root;
   try {
@@ -107,27 +117,24 @@ UpdateStateLoadResult load_update_state(const fs::path& path) {
 
   const auto* schema_node = root.get("schema");
   if (!schema_node) {
-    return UpdateStateLoadError{
-        path.string() + ": missing required field 'schema'"};
+    return UpdateStateLoadError{path.string() + ": missing required field 'schema'"};
   }
   const auto schema_val = schema_node->value<std::int64_t>();
   if (!schema_val) {
-    return UpdateStateLoadError{
-        path.string() + ": 'schema' must be an integer"};
+    return UpdateStateLoadError{path.string() + ": 'schema' must be an integer"};
   }
   if (*schema_val != static_cast<std::int64_t>(kUpdateStateSchemaV1)) {
-    return UpdateStateLoadError{
-        path.string() + ": unsupported state-file schema " +
-        std::to_string(*schema_val) + " (this client understands " +
-        std::to_string(kUpdateStateSchemaV1) + ")"};
+    return UpdateStateLoadError{path.string() + ": unsupported state-file schema "
+                                + std::to_string(*schema_val) + " (this client understands "
+                                + std::to_string(kUpdateStateSchemaV1) + ")"};
   }
 
   UpdateState s;
-  s.schema                    = kUpdateStateSchemaV1;
+  s.schema = kUpdateStateSchemaV1;
   s.current_installed_version = read_string_field(root, "current_installed_version");
-  s.max_version_ever_seen     = read_string_field(root, "max_version_ever_seen");
-  s.last_check_at             = read_string_field(root, "last_check_at");
-  s.last_apply_at             = read_string_field(root, "last_apply_at");
+  s.max_version_ever_seen = read_string_field(root, "max_version_ever_seen");
+  s.last_check_at = read_string_field(root, "last_check_at");
+  s.last_apply_at = read_string_field(root, "last_apply_at");
   return s;
 }
 
@@ -136,17 +143,18 @@ bool save_update_state(const fs::path& path, const UpdateState& s) {
   const auto parent = path.parent_path();
   if (!parent.empty()) {
     fs::create_directories(parent, ec);
-    if (ec && !fs::is_directory(parent)) return false;
+    if (ec && !fs::is_directory(parent))
+      return false;
   }
 
   thread_local std::mt19937_64 rng{std::random_device{}()};
   const auto tmp = path.string() + ".tmp." + std::to_string(rng());
   {
     std::ofstream sink(tmp, std::ios::binary | std::ios::trunc);
-    if (!sink.is_open()) return false;
+    if (!sink.is_open())
+      return false;
     const auto rendered = render_update_state(s);
-    sink.write(rendered.data(),
-               static_cast<std::streamsize>(rendered.size()));
+    sink.write(rendered.data(), static_cast<std::streamsize>(rendered.size()));
     if (!sink.good()) {
       sink.close();
       fs::remove(tmp, ec);
@@ -161,7 +169,8 @@ bool save_update_state(const fs::path& path, const UpdateState& s) {
     // delete; still safe — the next save retries the rename path.
     fs::copy_file(tmp, path, fs::copy_options::overwrite_existing, ec);
     fs::remove(tmp, ec);
-    if (ec) return false;
+    if (ec)
+      return false;
   }
   return true;
 }

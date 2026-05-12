@@ -45,12 +45,12 @@ typedef struct souxmar_bridge_update_status_t souxmar_bridge_update_status_t;
  *      version is the floor)
  *   5  install layout corrupted; manual recovery
  */
-#define SOUXMAR_BRIDGE_US_UNKNOWN       0
-#define SOUXMAR_BRIDGE_US_UP_TO_DATE    1
-#define SOUXMAR_BRIDGE_US_AVAILABLE     2
-#define SOUXMAR_BRIDGE_US_STAGED        3
-#define SOUXMAR_BRIDGE_US_REFUSED       4
-#define SOUXMAR_BRIDGE_US_CORRUPTED     5
+#define SOUXMAR_BRIDGE_US_UNKNOWN 0
+#define SOUXMAR_BRIDGE_US_UP_TO_DATE 1
+#define SOUXMAR_BRIDGE_US_AVAILABLE 2
+#define SOUXMAR_BRIDGE_US_STAGED 3
+#define SOUXMAR_BRIDGE_US_REFUSED 4
+#define SOUXMAR_BRIDGE_US_CORRUPTED 5
 
 /* Read the auto-updater's view of the given target_root and
  * return a status summary. The target_root is the install
@@ -78,22 +78,20 @@ typedef struct souxmar_bridge_update_status_t souxmar_bridge_update_status_t;
  * surface ADR-0014's key-rotation procedure depends on; the
  * shell-out keeps the auto-updater's single point of truth
  * single. */
-souxmar_bridge_update_status_t*
-souxmar_bridge_update_status_read(const char* target_root,
-                                  char**      out_err);
+souxmar_bridge_update_status_t* souxmar_bridge_update_status_read(const char* target_root,
+                                                                  char** out_err);
 
 /* Accessors. Strings remain valid until the handle is freed. */
-int32_t      souxmar_bridge_update_state(const souxmar_bridge_update_status_t* s);
-const char*  souxmar_bridge_update_current_version(const souxmar_bridge_update_status_t* s);
-const char*  souxmar_bridge_update_available_version(const souxmar_bridge_update_status_t* s);
-const char*  souxmar_bridge_update_detail(const souxmar_bridge_update_status_t* s);
+int32_t souxmar_bridge_update_state(const souxmar_bridge_update_status_t* s);
+const char* souxmar_bridge_update_current_version(const souxmar_bridge_update_status_t* s);
+const char* souxmar_bridge_update_available_version(const souxmar_bridge_update_status_t* s);
+const char* souxmar_bridge_update_detail(const souxmar_bridge_update_status_t* s);
 
 /* Release a status handle. Safe to call with NULL. */
-void
-souxmar_bridge_update_status_free(souxmar_bridge_update_status_t* s);
+void souxmar_bridge_update_status_free(souxmar_bridge_update_status_t* s);
 
 #ifdef __cplusplus
-}  /* extern "C" */
+} /* extern "C" */
 #endif
 
-#endif  /* SOUXMAR_C_BRIDGE_UPDATER_H */
+#endif /* SOUXMAR_C_BRIDGE_UPDATER_H */

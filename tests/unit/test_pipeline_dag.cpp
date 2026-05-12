@@ -75,8 +75,7 @@ stages:
 )yaml");
   auto r = validate(p);
   ASSERT_TRUE(std::holds_alternative<std::vector<DagError>>(r));
-  EXPECT_NE(std::get<std::vector<DagError>>(r)[0].message.find("unknown stage"),
-            std::string::npos);
+  EXPECT_NE(std::get<std::vector<DagError>>(r)[0].message.find("unknown stage"), std::string::npos);
 }
 
 TEST(Dag, CycleDetected) {
@@ -90,8 +89,7 @@ stages:
 )yaml");
   auto r = validate(p);
   ASSERT_TRUE(std::holds_alternative<std::vector<DagError>>(r));
-  EXPECT_NE(std::get<std::vector<DagError>>(r)[0].message.find("cycle"),
-            std::string::npos);
+  EXPECT_NE(std::get<std::vector<DagError>>(r)[0].message.find("cycle"), std::string::npos);
 }
 
 TEST(Dag, ReferenceFromNestedListAndMap) {

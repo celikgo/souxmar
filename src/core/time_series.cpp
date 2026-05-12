@@ -9,6 +9,8 @@
 
 #include "souxmar/core/time_series.h"
 
+#include "souxmar/core/field.h"
+
 #include <cstdint>
 #include <list>
 #include <memory>
@@ -17,8 +19,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-#include "souxmar/core/field.h"
 
 namespace souxmar::core {
 
@@ -30,6 +30,7 @@ namespace {
 struct Key {
   std::size_t frame_index;
   std::size_t field_index;
+
   bool operator==(const Key& o) const noexcept {
     return frame_index == o.frame_index && field_index == o.field_index;
   }
@@ -45,7 +46,7 @@ struct KeyHash {
 };
 
 struct CacheEntry {
-  Key                    key;
+  Key key;
   std::unique_ptr<Field> field;
 };
 
@@ -53,28 +54,25 @@ struct CacheEntry {
 
 class TimeSeries::Impl {
  public:
-  std::vector<double>      frame_times;
+  std::vector<double> frame_times;
   std::vector<std::string> field_names;
-  FrameLoader              loader;
-  std::size_t              window;
+  FrameLoader loader;
+  std::size_t window;
 
   // LRU machinery. The list owns the entries (front = most recent).
   // The map indexes by composite key for O(1) lookup.
-  std::list<CacheEntry>                                        lru;
+  std::list<CacheEntry> lru;
   std::unordered_map<Key, std::list<CacheEntry>::iterator, KeyHash> index;
 
-  Impl(std::vector<double> ft, std::vector<std::string> fn,
-       FrameLoader l, std::size_t w)
-      : frame_times(std::move(ft)),
-        field_names(std::move(fn)),
-        loader(std::move(l)),
-        window(w) {}
+  Impl(std::vector<double> ft, std::vector<std::string> fn, FrameLoader l, std::size_t w)
+      : frame_times(std::move(ft)), field_names(std::move(fn)), loader(std::move(l)), window(w) {}
 
   // Resolve a field name to its index (linear scan; field_names is small).
   // Returns SIZE_MAX if not found.
   std::size_t resolve_field(std::string_view name) const noexcept {
     for (std::size_t i = 0; i < field_names.size(); ++i) {
-      if (field_names[i] == name) return i;
+      if (field_names[i] == name)
+        return i;
     }
     return static_cast<std::size_t>(-1);
   }
@@ -93,11 +91,12 @@ class TimeSeries::Impl {
     }
   }
 
-  const Field* frame_internal(std::size_t frame_index,
-                               std::string_view field_name) {
-    if (frame_index >= frame_times.size()) return nullptr;
+  const Field* frame_internal(std::size_t frame_index, std::string_view field_name) {
+    if (frame_index >= frame_times.size())
+      return nullptr;
     const std::size_t field_idx = resolve_field(field_name);
-    if (field_idx == static_cast<std::size_t>(-1)) return nullptr;
+    if (field_idx == static_cast<std::size_t>(-1))
+      return nullptr;
 
     const Key key{frame_index, field_idx};
 
@@ -107,9 +106,11 @@ class TimeSeries::Impl {
     }
 
     // Cache miss. Load via the user loader.
-    if (!loader) return nullptr;
+    if (!loader)
+      return nullptr;
     auto fresh = loader(frame_index, field_name);
-    if (!fresh) return nullptr;
+    if (!fresh)
+      return nullptr;
 
     if (window == 0) {
       // Caching disabled. We still need to return *some* pointer that's
@@ -132,17 +133,17 @@ class TimeSeries::Impl {
   }
 };
 
-TimeSeries::TimeSeries(std::vector<double>      frame_times,
+TimeSeries::TimeSeries(std::vector<double> frame_times,
                        std::vector<std::string> field_names,
-                       FrameLoader              loader,
-                       std::size_t              initial_cache_window)
+                       FrameLoader loader,
+                       std::size_t initial_cache_window)
     : impl_(std::make_unique<Impl>(std::move(frame_times),
-                                    std::move(field_names),
-                                    std::move(loader),
-                                    initial_cache_window)) {}
+                                   std::move(field_names),
+                                   std::move(loader),
+                                   initial_cache_window)) {}
 
-TimeSeries::~TimeSeries()                              = default;
-TimeSeries::TimeSeries(TimeSeries&&) noexcept          = default;
+TimeSeries::~TimeSeries() = default;
+TimeSeries::TimeSeries(TimeSeries&&) noexcept = default;
 TimeSeries& TimeSeries::operator=(TimeSeries&&) noexcept = default;
 
 std::size_t TimeSeries::frame_count() const noexcept {
@@ -154,17 +155,18 @@ std::size_t TimeSeries::field_count() const noexcept {
 }
 
 double TimeSeries::time(std::size_t frame_index) const noexcept {
-  if (frame_index >= impl_->frame_times.size()) return 0.0;
+  if (frame_index >= impl_->frame_times.size())
+    return 0.0;
   return impl_->frame_times[frame_index];
 }
 
 std::string_view TimeSeries::field_name(std::size_t index) const noexcept {
-  if (index >= impl_->field_names.size()) return {};
+  if (index >= impl_->field_names.size())
+    return {};
   return impl_->field_names[index];
 }
 
-const Field* TimeSeries::frame(std::size_t frame_index,
-                                std::string_view field_name) {
+const Field* TimeSeries::frame(std::size_t frame_index, std::string_view field_name) {
   return impl_->frame_internal(frame_index, field_name);
 }
 
@@ -181,16 +183,17 @@ std::size_t TimeSeries::cache_occupancy() const noexcept {
   return impl_->lru.size();
 }
 
-std::size_t TimeSeries::cache_preload(std::size_t start_frame,
-                                       std::size_t count) {
+std::size_t TimeSeries::cache_preload(std::size_t start_frame, std::size_t count) {
   const std::size_t n = impl_->frame_times.size();
-  if (start_frame >= n) return 0;
+  if (start_frame >= n)
+    return 0;
   const std::size_t end = std::min(start_frame + count, n);
 
   std::size_t loaded = 0;
   for (std::size_t f = start_frame; f < end; ++f) {
     for (const auto& name : impl_->field_names) {
-      if (impl_->frame_internal(f, name) != nullptr) ++loaded;
+      if (impl_->frame_internal(f, name) != nullptr)
+        ++loaded;
     }
   }
   return loaded;

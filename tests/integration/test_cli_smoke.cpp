@@ -15,6 +15,7 @@
 // option-coverage suite (those live in the unit tests against the
 // dispatcher / cache directly).
 
+#include "test_config.h"
 #include <gtest/gtest.h>
 
 #include <cstdio>
@@ -24,8 +25,6 @@
 #include <random>
 #include <sstream>
 #include <string>
-
-#include "test_config.h"
 
 namespace fs = std::filesystem;
 
@@ -51,8 +50,8 @@ int run_cli(const std::string& full_cmd) {
 
 fs::path tmp_dir(std::string_view tag) {
   std::random_device rd;
-  auto base = fs::temp_directory_path() /
-              ("souxmar-cli-test-" + std::string(tag) + "-" + std::to_string(rd()));
+  auto base = fs::temp_directory_path()
+              / ("souxmar-cli-test-" + std::string(tag) + "-" + std::to_string(rd()));
   fs::create_directories(base);
   return base;
 }
@@ -60,9 +59,10 @@ fs::path tmp_dir(std::string_view tag) {
 class CliSmokeTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    workdir_  = tmp_dir("workdir");
+    workdir_ = tmp_dir("workdir");
     cachedir_ = tmp_dir("cache");
   }
+
   void TearDown() override {
     std::error_code ec;
     fs::remove_all(workdir_, ec);
@@ -85,24 +85,27 @@ TEST_F(CliSmokeTest, PluginListEnumeratesInTreePlugins) {
   const auto out_log = workdir_ / "plugin-list.txt";
   std::ostringstream cmd;
   cmd << shell_quote(SOUXMAR_TEST_CLI_BINARY) << " plugin list"
-      << " --plugin-path " << shell_quote(plugins_root())
-      << " > " << shell_quote(out_log) << " 2>&1";
+      << " --plugin-path " << shell_quote(plugins_root()) << " > " << shell_quote(out_log)
+      << " 2>&1";
 
   ASSERT_EQ(run_cli(cmd.str()), 0) << "CLI exited non-zero";
 
   std::ifstream in(out_log);
   std::string contents((std::istreambuf_iterator<char>(in)), {});
   EXPECT_NE(contents.find("dev.souxmar.examples.hello-mesher"), std::string::npos)
-      << "plugin list missed hello-mesher; output was:\n" << contents;
+      << "plugin list missed hello-mesher; output was:\n"
+      << contents;
   EXPECT_NE(contents.find("dev.souxmar.examples.vtu-writer"), std::string::npos)
-      << "plugin list missed vtu-writer; output was:\n" << contents;
+      << "plugin list missed vtu-writer; output was:\n"
+      << contents;
   EXPECT_NE(contents.find("writer.vtu"), std::string::npos)
-      << "plugin list missed writer.vtu capability; output was:\n" << contents;
+      << "plugin list missed writer.vtu capability; output was:\n"
+      << contents;
 }
 
 TEST_F(CliSmokeTest, RunCantileverExampleProducesVtuOutput) {
-  const auto pipeline_src = fs::path(SOUXMAR_TEST_SOURCE_ROOT) /
-                            "examples/cantilever-beam/pipeline.yaml";
+  const auto pipeline_src =
+      fs::path(SOUXMAR_TEST_SOURCE_ROOT) / "examples/cantilever-beam/pipeline.yaml";
   ASSERT_TRUE(fs::exists(pipeline_src)) << pipeline_src;
 
   // Copy to workdir so the relative `path: cantilever.vtu` resolves there.
@@ -110,11 +113,10 @@ TEST_F(CliSmokeTest, RunCantileverExampleProducesVtuOutput) {
   fs::copy_file(pipeline_src, pipeline_local);
 
   std::ostringstream cmd;
-  cmd << "cd " << shell_quote(workdir_) << " && "
-      << shell_quote(SOUXMAR_TEST_CLI_BINARY) << " run pipeline.yaml"
-      << " --plugin-path " << shell_quote(plugins_root())
-      << " --cache-dir "  << shell_quote(cachedir_)
-      << " > run1.log 2>&1";
+  cmd << "cd " << shell_quote(workdir_) << " && " << shell_quote(SOUXMAR_TEST_CLI_BINARY)
+      << " run pipeline.yaml"
+      << " --plugin-path " << shell_quote(plugins_root()) << " --cache-dir "
+      << shell_quote(cachedir_) << " > run1.log 2>&1";
   const int rc1 = run_cli(cmd.str());
 
   // Surface CLI output if the test fails.
@@ -128,24 +130,26 @@ TEST_F(CliSmokeTest, RunCantileverExampleProducesVtuOutput) {
   std::ifstream vin(vtu);
   std::string vtu_contents((std::istreambuf_iterator<char>(vin)), {});
   EXPECT_NE(vtu_contents.find("<VTKFile type=\"UnstructuredGrid\""), std::string::npos)
-      << "VTU header missing; file:\n" << vtu_contents.substr(0, 256);
+      << "VTU header missing; file:\n"
+      << vtu_contents.substr(0, 256);
   EXPECT_NE(vtu_contents.find("NumberOfPoints=\"4\""), std::string::npos)
-      << "expected 4 points (unit tet); got:\n" << vtu_contents.substr(0, 512);
+      << "expected 4 points (unit tet); got:\n"
+      << vtu_contents.substr(0, 512);
   EXPECT_NE(vtu_contents.find("NumberOfCells=\"1\""), std::string::npos)
-      << "expected 1 cell (unit tet); got:\n" << vtu_contents.substr(0, 512);
+      << "expected 1 cell (unit tet); got:\n"
+      << vtu_contents.substr(0, 512);
 }
 
 TEST_F(CliSmokeTest, ReRunHitsDiskCacheForWriterStage) {
-  const auto pipeline_src = fs::path(SOUXMAR_TEST_SOURCE_ROOT) /
-                            "examples/cantilever-beam/pipeline.yaml";
+  const auto pipeline_src =
+      fs::path(SOUXMAR_TEST_SOURCE_ROOT) / "examples/cantilever-beam/pipeline.yaml";
   const auto pipeline_local = workdir_ / "pipeline.yaml";
   fs::copy_file(pipeline_src, pipeline_local);
 
-  const std::string base =
-      "cd " + shell_quote(workdir_) + " && " +
-      shell_quote(SOUXMAR_TEST_CLI_BINARY) + " run pipeline.yaml" +
-      " --plugin-path " + shell_quote(plugins_root()) +
-      " --cache-dir " + shell_quote(cachedir_);
+  const std::string base = "cd " + shell_quote(workdir_) + " && "
+                           + shell_quote(SOUXMAR_TEST_CLI_BINARY) + " run pipeline.yaml"
+                           + " --plugin-path " + shell_quote(plugins_root()) + " --cache-dir "
+                           + shell_quote(cachedir_);
 
   ASSERT_EQ(run_cli(base + " > run1.log 2>&1"), 0);
   ASSERT_EQ(run_cli(base + " > run2.log 2>&1"), 0);
@@ -155,7 +159,8 @@ TEST_F(CliSmokeTest, ReRunHitsDiskCacheForWriterStage) {
   // The writer stage should be a CACHED hit on the second run — its output
   // is a Path StageOutput which the disk cache knows how to round-trip.
   EXPECT_NE(r2_contents.find("[CACHED  ] write"), std::string::npos)
-      << "writer stage was not cached on rerun; second-run output:\n" << r2_contents;
+      << "writer stage was not cached on rerun; second-run output:\n"
+      << r2_contents;
 }
 
 }  // namespace

@@ -27,25 +27,38 @@ namespace souxmar::ai {
 
 std::string_view to_string(ChatMessage::Role r) noexcept {
   switch (r) {
-    case ChatMessage::Role::System:    return "system";
-    case ChatMessage::Role::User:      return "user";
-    case ChatMessage::Role::Assistant: return "assistant";
-    case ChatMessage::Role::Tool:      return "tool";
+    case ChatMessage::Role::System:
+      return "system";
+    case ChatMessage::Role::User:
+      return "user";
+    case ChatMessage::Role::Assistant:
+      return "assistant";
+    case ChatMessage::Role::Tool:
+      return "tool";
   }
   return "unknown";
 }
 
 std::string_view to_string(ProviderErrorKind k) noexcept {
   switch (k) {
-    case ProviderErrorKind::ProviderHttpError:      return "provider-http-error";
-    case ProviderErrorKind::RateLimited:            return "rate-limited";
-    case ProviderErrorKind::LocalDaemonUnreachable: return "local-daemon-unreachable";
-    case ProviderErrorKind::ModelNotFound:          return "model-not-found";
-    case ProviderErrorKind::HttpClientFailed:       return "http-client-failed";
-    case ProviderErrorKind::MalformedResponse:      return "malformed-response";
-    case ProviderErrorKind::ProtocolMismatch:       return "protocol-mismatch";
-    case ProviderErrorKind::BadRequest:             return "bad-request";
-    case ProviderErrorKind::ContextLengthExceeded:  return "context-length-exceeded";
+    case ProviderErrorKind::ProviderHttpError:
+      return "provider-http-error";
+    case ProviderErrorKind::RateLimited:
+      return "rate-limited";
+    case ProviderErrorKind::LocalDaemonUnreachable:
+      return "local-daemon-unreachable";
+    case ProviderErrorKind::ModelNotFound:
+      return "model-not-found";
+    case ProviderErrorKind::HttpClientFailed:
+      return "http-client-failed";
+    case ProviderErrorKind::MalformedResponse:
+      return "malformed-response";
+    case ProviderErrorKind::ProtocolMismatch:
+      return "protocol-mismatch";
+    case ProviderErrorKind::BadRequest:
+      return "bad-request";
+    case ProviderErrorKind::ContextLengthExceeded:
+      return "context-length-exceeded";
   }
   return "unknown";
 }
@@ -64,18 +77,32 @@ void json_escape_append(std::string& out, std::string_view s) {
   out += '"';
   for (char c : s) {
     switch (c) {
-      case '"':  out += "\\\"";  break;
-      case '\\': out += "\\\\";  break;
-      case '\b': out += "\\b";   break;
-      case '\f': out += "\\f";   break;
-      case '\n': out += "\\n";   break;
-      case '\r': out += "\\r";   break;
-      case '\t': out += "\\t";   break;
+      case '"':
+        out += "\\\"";
+        break;
+      case '\\':
+        out += "\\\\";
+        break;
+      case '\b':
+        out += "\\b";
+        break;
+      case '\f':
+        out += "\\f";
+        break;
+      case '\n':
+        out += "\\n";
+        break;
+      case '\r':
+        out += "\\r";
+        break;
+      case '\t':
+        out += "\\t";
+        break;
       default:
         if (static_cast<unsigned char>(c) < 0x20) {
           char buf[8];
-          std::snprintf(buf, sizeof(buf), "\\u%04x",
-                        static_cast<unsigned>(static_cast<unsigned char>(c)));
+          std::snprintf(
+              buf, sizeof(buf), "\\u%04x", static_cast<unsigned>(static_cast<unsigned char>(c)));
           out += buf;
         } else {
           out += c;
@@ -91,11 +118,10 @@ void json_escape_append(std::string& out, std::string_view s) {
 
 StubProvider::StubProvider() = default;
 
-void StubProvider::program_reply(std::string_view  model,
-                                 std::string_view  trigger_substring,
-                                 ChatResponse      reply) {
-  table_.push_back({std::string(model), std::string(trigger_substring),
-                    std::move(reply)});
+void StubProvider::program_reply(std::string_view model,
+                                 std::string_view trigger_substring,
+                                 ChatResponse reply) {
+  table_.push_back({std::string(model), std::string(trigger_substring), std::move(reply)});
 }
 
 std::vector<std::string> StubProvider::available_models() const {
@@ -110,8 +136,7 @@ std::vector<std::string> StubProvider::available_models() const {
 
 ChatResult StubProvider::chat_completion(const ChatRequest& req) {
   if (req.messages.empty()) {
-    return ProviderError{ProviderErrorKind::BadRequest,
-                         "stub: empty messages"};
+    return ProviderError{ProviderErrorKind::BadRequest, "stub: empty messages"};
   }
   std::string_view last;
   for (auto it = req.messages.rbegin(); it != req.messages.rend(); ++it) {
@@ -121,33 +146,31 @@ ChatResult StubProvider::chat_completion(const ChatRequest& req) {
     }
   }
   for (const auto& p : table_) {
-    if (p.model != req.model) continue;
-    if (p.trigger.empty() ||
-        last.find(p.trigger) != std::string_view::npos) {
+    if (p.model != req.model)
+      continue;
+    if (p.trigger.empty() || last.find(p.trigger) != std::string_view::npos) {
       return p.reply;
     }
   }
   return ProviderError{ProviderErrorKind::ProtocolMismatch,
-                       "stub: no programmed reply matched (model='" +
-                       req.model + "')"};
+                       "stub: no programmed reply matched (model='" + req.model + "')"};
 }
 
 // ---- OllamaProvider ----------------------------------------------------
 
-OllamaProvider::OllamaProvider(OllamaProviderOptions opts)
-    : opts_(std::move(opts)) {
-  if (opts_.curl_binary.empty()) opts_.curl_binary = "curl";
-  if (const char* env = std::getenv("SOUXMAR_OLLAMA_TIMEOUT_SECS");
-      env && *env) {
+OllamaProvider::OllamaProvider(OllamaProviderOptions opts) : opts_(std::move(opts)) {
+  if (opts_.curl_binary.empty())
+    opts_.curl_binary = "curl";
+  if (const char* env = std::getenv("SOUXMAR_OLLAMA_TIMEOUT_SECS"); env && *env) {
     try {
       opts_.timeout = std::chrono::seconds(std::stoi(env));
-    } catch (...) { /* keep default */ }
+    } catch (...) { /* keep default */
+    }
   }
 }
 
-std::string OllamaProvider::render_request_body(
-    const ChatRequest&         req,
-    const std::vector<Tool>&   tool_definitions) {
+std::string OllamaProvider::render_request_body(const ChatRequest& req,
+                                                const std::vector<Tool>& tool_definitions) {
   std::string out;
   out += "{";
   out += "\"model\":";
@@ -157,7 +180,8 @@ std::string OllamaProvider::render_request_body(
   // messages
   out += ",\"messages\":[";
   for (std::size_t i = 0; i < req.messages.size(); ++i) {
-    if (i > 0) out += ',';
+    if (i > 0)
+      out += ',';
     const auto& m = req.messages[i];
     out += "{\"role\":";
     json_escape_append(out, to_string(m.role));
@@ -175,7 +199,8 @@ std::string OllamaProvider::render_request_body(
   if (!tool_definitions.empty()) {
     out += ",\"tools\":[";
     for (std::size_t i = 0; i < tool_definitions.size(); ++i) {
-      if (i > 0) out += ',';
+      if (i > 0)
+        out += ',';
       const auto& t = tool_definitions[i];
       out += "{\"type\":\"function\",\"function\":{";
       out += "\"name\":";
@@ -202,7 +227,8 @@ std::string OllamaProvider::render_request_body(
       first = false;
     }
     if (req.max_tokens) {
-      if (!first) out += ',';
+      if (!first)
+        out += ',';
       out += "\"num_predict\":";
       out += std::to_string(*req.max_tokens);
     }
@@ -251,7 +277,8 @@ ChatResult OllamaProvider::parse_response_body(std::string_view body) {
           tc.id = "call_" + std::to_string(i);
         }
         if (auto fn = calls[i]["function"]) {
-          if (fn["name"]) tc.name = fn["name"].as<std::string>();
+          if (fn["name"])
+            tc.name = fn["name"].as<std::string>();
           if (fn["arguments"]) {
             // arguments is either a string (already JSON) or an
             // embedded object; we want a string in either shape.
@@ -269,13 +296,17 @@ ChatResult OllamaProvider::parse_response_body(std::string_view body) {
       }
     }
   }
-  if (auto p = root["prompt_eval_count"];      p && p.IsScalar()) {
-    try { r.input_tokens = p.as<std::uint64_t>(); } catch (...) {}
+  if (auto p = root["prompt_eval_count"]; p && p.IsScalar()) {
+    try {
+      r.input_tokens = p.as<std::uint64_t>();
+    } catch (...) {}
   }
-  if (auto p = root["eval_count"];             p && p.IsScalar()) {
-    try { r.output_tokens = p.as<std::uint64_t>(); } catch (...) {}
+  if (auto p = root["eval_count"]; p && p.IsScalar()) {
+    try {
+      r.output_tokens = p.as<std::uint64_t>();
+    } catch (...) {}
   }
-  if (auto p = root["total_duration"];         p && p.IsScalar()) {
+  if (auto p = root["total_duration"]; p && p.IsScalar()) {
     try {
       // Ollama reports nanoseconds.
       const auto ns = p.as<std::uint64_t>();
@@ -293,16 +324,20 @@ std::vector<std::string> OllamaProvider::available_models() const {
   // and parse the same yaml-cpp way; failure returns an empty list
   // (the caller treats this as "daemon unreachable" implicitly).
   plugin::SubprocessOptions o;
-  o.argv = {opts_.curl_binary, "--silent", "--max-time",
+  o.argv = {opts_.curl_binary,
+            "--silent",
+            "--max-time",
             std::to_string(opts_.timeout.count()),
             "--fail",
             opts_.endpoint + "/api/tags"};
   o.timeout = std::chrono::milliseconds(opts_.timeout.count() * 1000);
   auto r = plugin::run_subprocess(o);
-  if (!r.succeeded()) return {};
+  if (!r.succeeded())
+    return {};
   try {
     auto root = YAML::Load(r.stdout_bytes);
-    if (!root["models"] || !root["models"].IsSequence()) return {};
+    if (!root["models"] || !root["models"].IsSequence())
+      return {};
     std::vector<std::string> out;
     for (std::size_t i = 0; i < root["models"].size(); ++i) {
       auto node = root["models"][i];
@@ -318,12 +353,10 @@ std::vector<std::string> OllamaProvider::available_models() const {
 
 ChatResult OllamaProvider::chat_completion(const ChatRequest& req) {
   if (req.model.empty()) {
-    return ProviderError{ProviderErrorKind::BadRequest,
-                         "ollama: empty model name"};
+    return ProviderError{ProviderErrorKind::BadRequest, "ollama: empty model name"};
   }
   if (req.messages.empty()) {
-    return ProviderError{ProviderErrorKind::BadRequest,
-                         "ollama: empty messages"};
+    return ProviderError{ProviderErrorKind::BadRequest, "ollama: empty messages"};
   }
   // We don't materialise the tool definitions here; the eval
   // runner is the typical caller and it has the registry, so it
@@ -334,13 +367,16 @@ ChatResult OllamaProvider::chat_completion(const ChatRequest& req) {
   plugin::SubprocessOptions o;
   o.argv = {opts_.curl_binary,
             "--silent",
-            "--max-time", std::to_string(opts_.timeout.count()),
+            "--max-time",
+            std::to_string(opts_.timeout.count()),
             "--fail-with-body",
-            "-H", "Content-Type: application/json",
-            "--data-binary", "@-",
+            "-H",
+            "Content-Type: application/json",
+            "--data-binary",
+            "@-",
             opts_.endpoint + "/api/chat"};
   o.stdin_bytes = body;
-  o.timeout     = std::chrono::milliseconds(opts_.timeout.count() * 1000);
+  o.timeout = std::chrono::milliseconds(opts_.timeout.count() * 1000);
   o.max_capture_bytes = 4 * 1024 * 1024;  // models can emit long replies
 
   const auto started = std::chrono::steady_clock::now();
@@ -356,16 +392,16 @@ ChatResult OllamaProvider::chat_completion(const ChatRequest& req) {
                          "ollama: curl spawn failed: " + r.error_message};
   }
   if (r.timed_out) {
-    return ProviderError{ProviderErrorKind::HttpClientFailed,
-                         "ollama: request timed out after " +
-                             std::to_string(opts_.timeout.count()) + "s"};
+    return ProviderError{
+        ProviderErrorKind::HttpClientFailed,
+        "ollama: request timed out after " + std::to_string(opts_.timeout.count()) + "s"};
   }
   if (r.exit_code == 7 || r.exit_code == 28) {
     // curl: 7 = couldn't connect; 28 = operation timeout. Both map
     // to "the local daemon isn't accepting connections."
     return ProviderError{ProviderErrorKind::LocalDaemonUnreachable,
-                         "ollama: daemon unreachable at " + opts_.endpoint +
-                             " (curl exit " + std::to_string(r.exit_code) + ")"};
+                         "ollama: daemon unreachable at " + opts_.endpoint + " (curl exit "
+                             + std::to_string(r.exit_code) + ")"};
   }
   if (r.exit_code != 0) {
     // --fail-with-body emits the response body before exiting non-zero
@@ -375,9 +411,9 @@ ChatResult OllamaProvider::chat_completion(const ChatRequest& req) {
     if (auto* err = std::get_if<ProviderError>(&parsed)) {
       return *err;
     }
-    return ProviderError{ProviderErrorKind::ProviderHttpError,
-                         "ollama: curl exit " + std::to_string(r.exit_code) +
-                             "; body=" + r.stdout_bytes};
+    return ProviderError{
+        ProviderErrorKind::ProviderHttpError,
+        "ollama: curl exit " + std::to_string(r.exit_code) + "; body=" + r.stdout_bytes};
   }
 
   auto parsed = parse_response_body(r.stdout_bytes);

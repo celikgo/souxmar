@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include "souxmar/core/element_type.h"
+#include "souxmar/core/mesh.h"
 #include "souxmar/core/surface_stream.h"
+#include "souxmar/core/tag.h"
 
 #include <gtest/gtest.h>
 
 #include <array>
 #include <cmath>
 #include <unordered_set>
-
-#include "souxmar/core/element_type.h"
-#include "souxmar/core/mesh.h"
-#include "souxmar/core/tag.h"
 
 using namespace souxmar::core;
 
@@ -54,7 +53,8 @@ Mesh MakeSingleHex() {
   m.add_node({1, 1, 1});  // 6
   m.add_node({0, 1, 1});  // 7
   std::array<NodeIndex, 8> n;
-  for (std::uint64_t i = 0; i < 8; ++i) n[i] = NodeIndex{i};
+  for (std::uint64_t i = 0; i < 8; ++i)
+    n[i] = NodeIndex{i};
   m.add_cell(ElementType::Hex8, n);
   return m;
 }
@@ -88,7 +88,8 @@ TEST(SurfaceStream, SingleTet_FourFacesFourVertices) {
   const auto vids = s.vertex_ids();
   std::unordered_set<std::uint64_t> seen(vids.begin(), vids.end());
   EXPECT_EQ(seen.size(), 4u);
-  for (std::uint64_t i = 0; i < 4; ++i) EXPECT_TRUE(seen.count(i));
+  for (std::uint64_t i = 0; i < 4; ++i)
+    EXPECT_TRUE(seen.count(i));
 
   // Indices buffer is 3 entries per triangle.
   EXPECT_EQ(s.indices().size(), 12u);
@@ -158,9 +159,9 @@ TEST(SurfaceStream, SoABuffersHaveExpectedShape) {
   const Mesh m = MakeSingleTet();
   SurfaceStream s(m);
   EXPECT_EQ(s.positions().size(), s.vertex_count() * 3);
-  EXPECT_EQ(s.normals().size(),   s.vertex_count() * 3);
-  EXPECT_EQ(s.indices().size(),   s.triangle_count() * 3);
-  EXPECT_EQ(s.face_ids().size(),  s.triangle_count());
+  EXPECT_EQ(s.normals().size(), s.vertex_count() * 3);
+  EXPECT_EQ(s.indices().size(), s.triangle_count() * 3);
+  EXPECT_EQ(s.face_ids().size(), s.triangle_count());
   EXPECT_EQ(s.vertex_ids().size(), s.vertex_count());
 }
 

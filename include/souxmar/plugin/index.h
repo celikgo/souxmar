@@ -59,52 +59,50 @@
 namespace souxmar::plugin {
 
 enum class ConformanceStatus : std::uint8_t {
-  Passed   = 0,
-  NotRun   = 1,
-  Failed   = 2,
+  Passed = 0,
+  NotRun = 1,
+  Failed = 2,
 };
 
 enum class LifecycleStatus : std::uint8_t {
-  Active        = 0,
-  Maintained    = 1,   // accepts bug fixes; not adding features
-  Unmaintained  = 2,
-  Archived      = 3,
+  Active = 0,
+  Maintained = 1,  // accepts bug fixes; not adding features
+  Unmaintained = 2,
+  Archived = 3,
 };
 
 struct IndexEntry {
-  std::string                id;                // e.g. "dev.souxmar.examples.gmsh-mesher"
-  std::string                name;              // human-readable, e.g. "Gmsh tetrahedral mesher"
-  std::string                description;       // one-paragraph description
-  std::vector<std::string>   capabilities;      // capability ids registered by the plugin
-  std::string                license;           // SPDX expression, e.g. "Apache-2.0"
-  std::string                source;            // URL of source repo
-  std::string                homepage;          // optional; defaults to source if empty
-  std::string                author;            // e.g. "souxmar project" or "Example Inc. (https://example.com)"
-  std::string                souxmar_versions;  // SemVer range, e.g. ">=1.0,<2.0"
-  ConformanceStatus          conformance     = ConformanceStatus::NotRun;
-  std::string                conformance_date; // ISO-8601, e.g. "2026-05-11"; empty if not_run
-  LifecycleStatus            status          = LifecycleStatus::Active;
-  bool                       paid            = false;
+  std::string id;                         // e.g. "dev.souxmar.examples.gmsh-mesher"
+  std::string name;                       // human-readable, e.g. "Gmsh tetrahedral mesher"
+  std::string description;                // one-paragraph description
+  std::vector<std::string> capabilities;  // capability ids registered by the plugin
+  std::string license;                    // SPDX expression, e.g. "Apache-2.0"
+  std::string source;                     // URL of source repo
+  std::string homepage;                   // optional; defaults to source if empty
+  std::string author;            // e.g. "souxmar project" or "Example Inc. (https://example.com)"
+  std::string souxmar_versions;  // SemVer range, e.g. ">=1.0,<2.0"
+  ConformanceStatus conformance = ConformanceStatus::NotRun;
+  std::string conformance_date;  // ISO-8601, e.g. "2026-05-11"; empty if not_run
+  LifecycleStatus status = LifecycleStatus::Active;
+  bool paid = false;
 };
 
 // Parse error returned by load_index_*. Caller can decide whether to
 // log + continue (per-entry parse failures shouldn't crash the CLI)
 // or abort. The message is a one-liner safe to print.
 struct IndexParseError {
-  std::string  message;
+  std::string message;
 };
 
 using IndexLoadResult = std::variant<std::vector<IndexEntry>, IndexParseError>;
 
 // Parse a plugin index from a TOML file on disk. The file is expected
 // to be a `[[plugin]]` table-array; each table maps to an IndexEntry.
-[[nodiscard]] IndexLoadResult
-load_index_file(const std::filesystem::path& path);
+[[nodiscard]] IndexLoadResult load_index_file(const std::filesystem::path& path);
 
 // Parse the same shape from an in-memory string. Useful for tests and
 // for piping a fetched-from-URL index through the same parser.
-[[nodiscard]] IndexLoadResult
-load_index_string(std::string_view toml);
+[[nodiscard]] IndexLoadResult load_index_string(std::string_view toml);
 
 // Filter the entries against a search query. Empty query returns the
 // full list. Non-empty: case-insensitive substring match against
@@ -117,15 +115,14 @@ load_index_string(std::string_view toml);
 // The returned vector preserves the input order so an author who
 // curates their listing's spot in the canonical index controls the
 // position users see.
-[[nodiscard]] std::vector<IndexEntry>
-search_index(const std::vector<IndexEntry>& entries,
-             std::string_view               query,
-             std::string_view               capability_prefix = {});
+[[nodiscard]] std::vector<IndexEntry> search_index(const std::vector<IndexEntry>& entries,
+                                                   std::string_view query,
+                                                   std::string_view capability_prefix = {});
 
 // String renderings — used by both the CLI's text output and the
 // audit-log entry the paid marketplace will need (Sprint 16+).
 [[nodiscard]] std::string_view to_string(ConformanceStatus) noexcept;
-[[nodiscard]] std::string_view to_string(LifecycleStatus)   noexcept;
+[[nodiscard]] std::string_view to_string(LifecycleStatus) noexcept;
 
 // -------- Validation (Sprint 10 push 3) ---------------------------------
 //
@@ -137,15 +134,15 @@ search_index(const std::vector<IndexEntry>& entries,
 // `souxmar plugin validate-index` runs the same checks locally.
 
 enum class IndexIssueSeverity : std::uint8_t {
-  Error    = 0,   // PR can't merge; structural problem (duplicate id, bad URL).
-  Warning  = 1,   // PR can merge; reviewer judgement (empty license, no version range).
+  Error = 0,    // PR can't merge; structural problem (duplicate id, bad URL).
+  Warning = 1,  // PR can merge; reviewer judgement (empty license, no version range).
 };
 
 struct IndexValidationIssue {
-  IndexIssueSeverity  severity;
-  std::size_t         entry_index;   // 0-based position in the input vector
-  std::string         field;         // the affected field name; "" if cross-entry
-  std::string         message;       // human-readable diagnostic
+  IndexIssueSeverity severity;
+  std::size_t entry_index;  // 0-based position in the input vector
+  std::string field;        // the affected field name; "" if cross-entry
+  std::string message;      // human-readable diagnostic
 };
 
 [[nodiscard]] std::string_view to_string(IndexIssueSeverity) noexcept;
@@ -153,7 +150,7 @@ struct IndexValidationIssue {
 // Returns the list of issues. Empty means the index is publishable as-is.
 // At least one Error means a CI gate should reject the PR. Warnings are
 // printed but don't gate.
-[[nodiscard]] std::vector<IndexValidationIssue>
-validate_index(const std::vector<IndexEntry>& entries);
+[[nodiscard]] std::vector<IndexValidationIssue> validate_index(
+    const std::vector<IndexEntry>& entries);
 
 }  // namespace souxmar::plugin

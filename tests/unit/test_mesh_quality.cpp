@@ -4,16 +4,16 @@
 // in-tree plugins and agent tools depend on. Regressions here trip
 // before the integration test catches them.
 
+#include "souxmar/core/mesh.h"
+#include "souxmar/core/mesh_quality.h"
+#include "souxmar/core/tag.h"
+
 #include <gtest/gtest.h>
 
 #include <array>
 #include <cmath>
 #include <limits>
 #include <vector>
-
-#include "souxmar/core/mesh.h"
-#include "souxmar/core/mesh_quality.h"
-#include "souxmar/core/tag.h"
 
 using souxmar::core::ElementType;
 using souxmar::core::Mesh;
@@ -51,8 +51,8 @@ TEST(MeshQuality, RegularTetHasExpectedMetrics) {
   // EdgeRatio is exactly 1 for a regular tet.
   EXPECT_NEAR(evaluate(ElementType::Tet4, Metric::EdgeRatio, nodes), 1.0, 1e-10);
   // Min dihedral of a regular tet is arccos(1/3) ≈ 70.529°.
-  EXPECT_NEAR(evaluate(ElementType::Tet4, Metric::MinDihedralDeg, nodes),
-              kRegularTetDihedralDeg, 1e-6);
+  EXPECT_NEAR(
+      evaluate(ElementType::Tet4, Metric::MinDihedralDeg, nodes), kRegularTetDihedralDeg, 1e-6);
 }
 
 TEST(MeshQuality, InvertedTetReportsNegativeVolume) {
@@ -95,11 +95,9 @@ TEST(MeshQuality, Tri3AreaAndEdgeRatio) {
   };
   // Right triangle: area = 0.5; edge_ratio = sqrt(2).
   EXPECT_NEAR(evaluate(ElementType::Tri3, Metric::SignedVolume, nodes), 0.5, 1e-10);
-  EXPECT_NEAR(evaluate(ElementType::Tri3, Metric::EdgeRatio, nodes),
-              std::sqrt(2.0), 1e-10);
+  EXPECT_NEAR(evaluate(ElementType::Tri3, Metric::EdgeRatio, nodes), std::sqrt(2.0), 1e-10);
   // Tri3 has no dihedral.
-  EXPECT_TRUE(std::isnan(
-      evaluate(ElementType::Tri3, Metric::MinDihedralDeg, nodes)));
+  EXPECT_TRUE(std::isnan(evaluate(ElementType::Tri3, Metric::MinDihedralDeg, nodes)));
 }
 
 TEST(MeshQuality, UnsupportedTypeReturnsNaN) {
@@ -113,8 +111,8 @@ TEST(MeshQuality, EvaluateAllMatchesIndividualEvaluate) {
   const auto nodes = regular_tet();
   std::array<double, kNumMetrics> all{};
   evaluate_all(ElementType::Tet4, nodes, all);
-  EXPECT_EQ(all[0], evaluate(ElementType::Tet4, Metric::SignedVolume,   nodes));
-  EXPECT_EQ(all[1], evaluate(ElementType::Tet4, Metric::EdgeRatio,      nodes));
+  EXPECT_EQ(all[0], evaluate(ElementType::Tet4, Metric::SignedVolume, nodes));
+  EXPECT_EQ(all[1], evaluate(ElementType::Tet4, Metric::EdgeRatio, nodes));
   EXPECT_EQ(all[2], evaluate(ElementType::Tet4, Metric::MinDihedralDeg, nodes));
 }
 
@@ -134,37 +132,42 @@ TEST(MeshQualitySummarise, EmptyDataYieldsZeroFiniteCount) {
   const auto r = summarise(data, 0);
   for (const auto& s : r.per_metric) {
     EXPECT_EQ(s.finite_count, 0u);
-    EXPECT_EQ(s.total_count,  0u);
+    EXPECT_EQ(s.total_count, 0u);
   }
-  EXPECT_EQ(r.cells_inverted,        0u);
+  EXPECT_EQ(r.cells_inverted, 0u);
   EXPECT_EQ(r.cells_sliver_dihedral, 0u);
-  EXPECT_EQ(r.cells_extreme_aspect,  0u);
-  EXPECT_EQ(r.cells_unsupported,     0u);
+  EXPECT_EQ(r.cells_extreme_aspect, 0u);
+  EXPECT_EQ(r.cells_unsupported, 0u);
 }
 
 TEST(MeshQualitySummarise, FlagsCellsByThreshold) {
   // 3 cells: { good, inverted-and-sliver, unsupported-NaN }
   std::vector<double> data{
       // good
-      0.1666,  1.0,   70.5,
+      0.1666,
+      1.0,
+      70.5,
       // inverted + sliver + extreme aspect
-     -0.0001, 25.0,    3.0,
+      -0.0001,
+      25.0,
+      3.0,
       // unsupported (NaN for one metric)
-      std::numeric_limits<double>::quiet_NaN(), 2.0, 60.0,
+      std::numeric_limits<double>::quiet_NaN(),
+      2.0,
+      60.0,
   };
   const auto r = summarise(data, 3);
-  EXPECT_EQ(r.cells_inverted,        1u);
+  EXPECT_EQ(r.cells_inverted, 1u);
   EXPECT_EQ(r.cells_sliver_dihedral, 1u);
-  EXPECT_EQ(r.cells_extreme_aspect,  1u);
-  EXPECT_EQ(r.cells_unsupported,     1u);
+  EXPECT_EQ(r.cells_extreme_aspect, 1u);
+  EXPECT_EQ(r.cells_unsupported, 1u);
 
   // Volume metric: 2 finite values (-0.0001, 0.1666), 1 NaN-skipped.
-  const auto& vol = r.per_metric[
-      static_cast<std::size_t>(Metric::SignedVolume)];
-  EXPECT_EQ(vol.total_count,  3u);
+  const auto& vol = r.per_metric[static_cast<std::size_t>(Metric::SignedVolume)];
+  EXPECT_EQ(vol.total_count, 3u);
   EXPECT_EQ(vol.finite_count, 2u);
   EXPECT_NEAR(vol.min, -0.0001, 1e-12);
-  EXPECT_NEAR(vol.max,  0.1666, 1e-12);
+  EXPECT_NEAR(vol.max, 0.1666, 1e-12);
 }
 
 // --- compute_field over a whole Mesh ---
@@ -190,16 +193,16 @@ TEST(MeshQualityComputeField, ShapeMatchesMesh) {
   const auto field = compute_field(m, Metric::SignedVolume);
   EXPECT_EQ(field.count(), m.num_cells());
   EXPECT_EQ(field.location(), souxmar::core::FieldLocation::Cell);
-  EXPECT_EQ(field.kind(),     souxmar::core::FieldKind::Scalar);
+  EXPECT_EQ(field.kind(), souxmar::core::FieldKind::Scalar);
   EXPECT_EQ(field.num_time_steps(), 1u);
 }
 
 TEST(MeshQualityComputeField, NamesAfterMetric) {
   const Mesh m = MakeTwoTetMesh();
   const auto vol = compute_field(m, Metric::SignedVolume);
-  const auto er  = compute_field(m, Metric::EdgeRatio);
+  const auto er = compute_field(m, Metric::EdgeRatio);
   EXPECT_EQ(vol.name(), metric_name(Metric::SignedVolume));
-  EXPECT_EQ(er.name(),  metric_name(Metric::EdgeRatio));
+  EXPECT_EQ(er.name(), metric_name(Metric::EdgeRatio));
 }
 
 TEST(MeshQualityComputeField, SignedVolumeIsPositiveForRightHandedTets) {

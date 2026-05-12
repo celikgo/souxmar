@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "souxmar/core/tag.h"
+
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -17,20 +19,18 @@
 #include <string>
 #include <string_view>
 
-#include "souxmar/core/tag.h"
-
 namespace souxmar::core {
 
 enum class EntityKind : std::uint8_t {
   Vertex = 0,
-  Edge   = 1,
-  Face   = 2,
-  Solid  = 3,
+  Edge = 1,
+  Face = 2,
+  Solid = 3,
 };
 
 struct EntityRef {
-  EntityKind     kind;
-  std::uint32_t  index;
+  EntityKind kind;
+  std::uint32_t index;
 
   [[nodiscard]] constexpr bool operator==(const EntityRef&) const noexcept = default;
 };
@@ -43,7 +43,7 @@ class Geometry {
   Geometry(Geometry&&) noexcept;
   Geometry& operator=(Geometry&&) noexcept;
 
-  Geometry(const Geometry&)            = delete;
+  Geometry(const Geometry&) = delete;
   Geometry& operator=(const Geometry&) = delete;
 
   // -------- Read access --------
@@ -52,9 +52,9 @@ class Geometry {
 
   // Convenience accessors per kind.
   [[nodiscard]] std::size_t num_vertices() const noexcept;
-  [[nodiscard]] std::size_t num_edges()    const noexcept;
-  [[nodiscard]] std::size_t num_faces()    const noexcept;
-  [[nodiscard]] std::size_t num_solids()   const noexcept;
+  [[nodiscard]] std::size_t num_edges() const noexcept;
+  [[nodiscard]] std::size_t num_faces() const noexcept;
+  [[nodiscard]] std::size_t num_solids() const noexcept;
 
   // Vertex coordinates are public for every Geometry (raw points have no
   // adapter-specific representation).
@@ -73,9 +73,9 @@ class Geometry {
   // -------- Build API (used by adapters during import) --------
 
   VertexIndex add_vertex(std::array<double, 3> position);
-  EdgeIndex   add_edge();
-  FaceIndex   add_face();
-  SolidIndex  add_solid();
+  EdgeIndex add_edge();
+  FaceIndex add_face();
+  SolidIndex add_solid();
 
   void set_tag(EntityRef ref, EntityTag tag);
   void set_name(EntityRef ref, std::string name);
@@ -87,7 +87,7 @@ class Geometry {
   // through a void* "adapter slot" per entity kind, set/got opaquely.
   // Callers other than adapter implementations must not use this interface.
 
-  void  set_adapter_data(void* data, void (*deleter)(void*)) noexcept;
+  void set_adapter_data(void* data, void (*deleter)(void*)) noexcept;
   [[nodiscard]] void* adapter_data() const noexcept;
 
  private:

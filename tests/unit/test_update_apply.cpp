@@ -28,9 +28,8 @@ namespace {
 
 fs::path tmp_dir(std::string_view tag) {
   std::random_device rd;
-  auto p = fs::temp_directory_path() /
-           ("souxmar-apply-" + std::string(tag) + "-" +
-            std::to_string(rd()));
+  auto p = fs::temp_directory_path()
+           / ("souxmar-apply-" + std::string(tag) + "-" + std::to_string(rd()));
   fs::create_directories(p);
   return p;
 }
@@ -46,22 +45,22 @@ Manifest manifest_for(const std::string& version,
                       std::span<const std::uint8_t> payload,
                       const std::string& expires_at = "2026-12-31T00:00:00Z") {
   Manifest m;
-  m.schema       = kManifestSchemaV1;
+  m.schema = kManifestSchemaV1;
   m.channel.name = Channel::Stable;
   m.channel.expires_at = expires_at;
   m.release.version = version;
   m.release.min_previous_version = "0.0.0";
-  m.release.rollback_target      = "0.0.0";
-  m.release.mandatory            = false;
-  m.signing.algorithm     = "ed25519";
+  m.release.rollback_target = "0.0.0";
+  m.release.mandatory = false;
+  m.signing.algorithm = "ed25519";
   m.signing.public_key_id = "release-test";
 
   Artifact a;
-  a.os     = Os::Linux;
-  a.arch   = Arch::X86_64;
-  a.url    = "https://dl.souxmar.dev/" + version + "/linux-x86_64.tar.zst";
+  a.os = Os::Linux;
+  a.arch = Arch::X86_64;
+  a.url = "https://dl.souxmar.dev/" + version + "/linux-x86_64.tar.zst";
   a.sha256 = sha256_hex(payload);
-  a.size   = payload.size();
+  a.size = payload.size();
   m.artifacts.push_back(a);
   return m;
 }
@@ -76,11 +75,11 @@ TEST(ApplyUpdate, HappyPathStagesSwitchesAppendsAndBumpsState) {
   const auto root = tmp_dir("happy");
   InstallLayout layout(root);
   const auto payload = bytes_of("payload 0.9.0");
-  const auto m       = manifest_for("0.9.0", payload);
+  const auto m = manifest_for("0.9.0", payload);
 
   UpdateState st;
   st.current_installed_version = "0.8.5";
-  st.max_version_ever_seen     = "0.8.5";
+  st.max_version_ever_seen = "0.8.5";
   auto clk = clock_t("2026-05-12T00:00:00Z");
 
   // Pretend the previous install is already on disk (we don't
@@ -90,72 +89,77 @@ TEST(ApplyUpdate, HappyPathStagesSwitchesAppendsAndBumpsState) {
   ASSERT_TRUE(layout.atomic_switch_to("", "0.8.5"));
 
   ApplyContext ctx;
-  ctx.manifest        = &m;
-  ctx.artifact_bytes  = payload;
-  ctx.layout          = &layout;
-  ctx.state           = &st;
-  ctx.clock           = &clk;
-  ctx.platform        = HostPlatform{Os::Linux, Arch::X86_64};
+  ctx.manifest = &m;
+  ctx.artifact_bytes = payload;
+  ctx.layout = &layout;
+  ctx.state = &st;
+  ctx.clock = &clk;
+  ctx.platform = HostPlatform{Os::Linux, Arch::X86_64};
   ctx.current_version = "0.8.5";
 
   const auto r = apply_update(ctx);
   EXPECT_EQ(r.outcome, ApplyOutcome::Applied) << r.detail;
   EXPECT_EQ(r.applied_version, "0.9.0");
 
-  EXPECT_EQ(layout.read_current_version(),  "0.9.0");
+  EXPECT_EQ(layout.read_current_version(), "0.9.0");
   EXPECT_EQ(layout.read_previous_version(), "0.8.5");
   EXPECT_TRUE(layout.has_version_payload("0.9.0"));
 
   EXPECT_EQ(st.current_installed_version, "0.9.0");
-  EXPECT_EQ(st.max_version_ever_seen,     "0.9.0");
-  EXPECT_EQ(st.last_apply_at,             "2026-05-12T00:00:00Z");
+  EXPECT_EQ(st.max_version_ever_seen, "0.9.0");
+  EXPECT_EQ(st.last_apply_at, "2026-05-12T00:00:00Z");
 
   auto log = load_rollback_log(layout.rollback_log_path());
   ASSERT_TRUE(std::holds_alternative<std::vector<RollbackEvent>>(log));
   const auto& events = std::get<std::vector<RollbackEvent>>(log);
   ASSERT_EQ(events.size(), 1u);
-  EXPECT_EQ(events[0].type,            RollbackEventType::Apply);
-  EXPECT_EQ(events[0].from_version,    "0.8.5");
-  EXPECT_EQ(events[0].to_version,      "0.9.0");
+  EXPECT_EQ(events[0].type, RollbackEventType::Apply);
+  EXPECT_EQ(events[0].from_version, "0.8.5");
+  EXPECT_EQ(events[0].to_version, "0.9.0");
   EXPECT_EQ(events[0].artifact_sha256, m.artifacts[0].sha256);
-  EXPECT_EQ(events[0].public_key_id,   "release-test");
+  EXPECT_EQ(events[0].public_key_id, "release-test");
   fs::remove_all(root);
 }
 
 TEST(ApplyUpdate, RefusesArtifactHashMismatch) {
-  const auto root    = tmp_dir("hash-mismatch");
+  const auto root = tmp_dir("hash-mismatch");
   InstallLayout layout(root);
   const auto payload = bytes_of("right");
-  auto m             = manifest_for("0.9.0", payload);
-  m.artifacts[0].sha256 =
-      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+  auto m = manifest_for("0.9.0", payload);
+  m.artifacts[0].sha256 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 
   UpdateState st;
   auto clk = clock_t("2026-05-12T00:00:00Z");
   ApplyContext ctx;
-  ctx.manifest = &m; ctx.artifact_bytes = payload; ctx.layout = &layout;
-  ctx.state = &st;   ctx.clock = &clk;
+  ctx.manifest = &m;
+  ctx.artifact_bytes = payload;
+  ctx.layout = &layout;
+  ctx.state = &st;
+  ctx.clock = &clk;
   ctx.platform = HostPlatform{Os::Linux, Arch::X86_64};
   ctx.current_version = "0.8.5";
 
   EXPECT_EQ(apply_update(ctx).outcome, ApplyOutcome::ArtifactHashMismatch);
   EXPECT_TRUE(layout.read_current_version().empty()) << "must not switch";
-  EXPECT_TRUE(st.current_installed_version.empty())  << "must not mutate state";
+  EXPECT_TRUE(st.current_installed_version.empty()) << "must not mutate state";
   fs::remove_all(root);
 }
 
 TEST(ApplyUpdate, RefusesArtifactSizeMismatch) {
-  const auto root    = tmp_dir("size-mismatch");
+  const auto root = tmp_dir("size-mismatch");
   InstallLayout layout(root);
   const auto payload = bytes_of("right size");
-  auto m             = manifest_for("0.9.0", payload);
+  auto m = manifest_for("0.9.0", payload);
   m.artifacts[0].size = payload.size() + 1;
 
   UpdateState st;
   auto clk = clock_t("2026-05-12T00:00:00Z");
   ApplyContext ctx;
-  ctx.manifest = &m; ctx.artifact_bytes = payload; ctx.layout = &layout;
-  ctx.state = &st;   ctx.clock = &clk;
+  ctx.manifest = &m;
+  ctx.artifact_bytes = payload;
+  ctx.layout = &layout;
+  ctx.state = &st;
+  ctx.clock = &clk;
   ctx.platform = HostPlatform{Os::Linux, Arch::X86_64};
   ctx.current_version = "0.8.5";
 
@@ -164,17 +168,20 @@ TEST(ApplyUpdate, RefusesArtifactSizeMismatch) {
 }
 
 TEST(ApplyUpdate, RefusesViaGateWhenAlreadyAhead) {
-  const auto root    = tmp_dir("ahead");
+  const auto root = tmp_dir("ahead");
   InstallLayout layout(root);
   const auto payload = bytes_of("payload");
-  const auto m       = manifest_for("0.9.0", payload);
+  const auto m = manifest_for("0.9.0", payload);
 
   UpdateState st;
   st.current_installed_version = "1.0.0";
   auto clk = clock_t("2026-05-12T00:00:00Z");
   ApplyContext ctx;
-  ctx.manifest = &m; ctx.artifact_bytes = payload; ctx.layout = &layout;
-  ctx.state = &st;   ctx.clock = &clk;
+  ctx.manifest = &m;
+  ctx.artifact_bytes = payload;
+  ctx.layout = &layout;
+  ctx.state = &st;
+  ctx.clock = &clk;
   ctx.platform = HostPlatform{Os::Linux, Arch::X86_64};
   ctx.current_version = "1.0.0";
 
@@ -194,21 +201,24 @@ TEST(ApplyUpdate, GcReapsOldVersionsAfterSuccessfulApply) {
   ASSERT_TRUE(layout.atomic_switch_to("", "0.8.5"));
 
   const auto payload = bytes_of("payload 0.9.0");
-  const auto m       = manifest_for("0.9.0", payload);
+  const auto m = manifest_for("0.9.0", payload);
 
   UpdateState st;
   st.current_installed_version = "0.8.5";
   auto clk = clock_t("2026-05-12T00:00:00Z");
   ApplyContext ctx;
-  ctx.manifest = &m; ctx.artifact_bytes = payload; ctx.layout = &layout;
-  ctx.state = &st;   ctx.clock = &clk;
+  ctx.manifest = &m;
+  ctx.artifact_bytes = payload;
+  ctx.layout = &layout;
+  ctx.state = &st;
+  ctx.clock = &clk;
   ctx.platform = HostPlatform{Os::Linux, Arch::X86_64};
   ctx.current_version = "0.8.5";
 
   ASSERT_EQ(apply_update(ctx).outcome, ApplyOutcome::Applied);
   EXPECT_FALSE(layout.has_version_payload("0.7.0")) << "should be gc'd";
-  EXPECT_TRUE(layout.has_version_payload("0.8.5"))  << "previous preserved";
-  EXPECT_TRUE(layout.has_version_payload("0.9.0"))  << "current preserved";
+  EXPECT_TRUE(layout.has_version_payload("0.8.5")) << "previous preserved";
+  EXPECT_TRUE(layout.has_version_payload("0.9.0")) << "current preserved";
   fs::remove_all(root);
 }
 
@@ -231,8 +241,11 @@ TEST(Rollback, FlipsCurrentToPrevious) {
   {
     const auto m = manifest_for("0.8.5", payload_v1);
     ApplyContext ctx;
-    ctx.manifest = &m; ctx.artifact_bytes = payload_v1; ctx.layout = &layout;
-    ctx.state = &st;   ctx.clock = &clk;
+    ctx.manifest = &m;
+    ctx.artifact_bytes = payload_v1;
+    ctx.layout = &layout;
+    ctx.state = &st;
+    ctx.clock = &clk;
     ctx.platform = HostPlatform{Os::Linux, Arch::X86_64};
     ASSERT_EQ(apply_update(ctx).outcome, ApplyOutcome::Applied);
   }
@@ -240,8 +253,11 @@ TEST(Rollback, FlipsCurrentToPrevious) {
   {
     const auto m = manifest_for("0.9.0", payload_v2);
     ApplyContext ctx;
-    ctx.manifest = &m; ctx.artifact_bytes = payload_v2; ctx.layout = &layout;
-    ctx.state = &st;   ctx.clock = &clk;
+    ctx.manifest = &m;
+    ctx.artifact_bytes = payload_v2;
+    ctx.layout = &layout;
+    ctx.state = &st;
+    ctx.clock = &clk;
     ctx.platform = HostPlatform{Os::Linux, Arch::X86_64};
     ctx.current_version = "0.8.5";
     ASSERT_EQ(apply_update(ctx).outcome, ApplyOutcome::Applied);
@@ -251,22 +267,22 @@ TEST(Rollback, FlipsCurrentToPrevious) {
   // Rollback.
   RollbackContext rctx{&layout, &st, &clk};
   const auto r = rollback(rctx);
-  EXPECT_EQ(r.outcome,      RollbackOutcome::RolledBack);
+  EXPECT_EQ(r.outcome, RollbackOutcome::RolledBack);
   EXPECT_EQ(r.from_version, "0.9.0");
-  EXPECT_EQ(r.to_version,   "0.8.5");
+  EXPECT_EQ(r.to_version, "0.8.5");
 
-  EXPECT_EQ(layout.read_current_version(),  "0.8.5");
-  EXPECT_EQ(st.current_installed_version,   "0.8.5");
+  EXPECT_EQ(layout.read_current_version(), "0.8.5");
+  EXPECT_EQ(st.current_installed_version, "0.8.5");
   // Replay defence floor must NOT drop.
-  EXPECT_EQ(st.max_version_ever_seen,       "0.9.0");
+  EXPECT_EQ(st.max_version_ever_seen, "0.9.0");
 
   auto log = load_rollback_log(layout.rollback_log_path());
   ASSERT_TRUE(std::holds_alternative<std::vector<RollbackEvent>>(log));
   const auto& events = std::get<std::vector<RollbackEvent>>(log);
   ASSERT_EQ(events.size(), 3u);  // apply, apply, rollback
-  EXPECT_EQ(events.back().type,         RollbackEventType::Rollback);
+  EXPECT_EQ(events.back().type, RollbackEventType::Rollback);
   EXPECT_EQ(events.back().from_version, "0.9.0");
-  EXPECT_EQ(events.back().to_version,   "0.8.5");
+  EXPECT_EQ(events.back().to_version, "0.8.5");
   fs::remove_all(root);
 }
 

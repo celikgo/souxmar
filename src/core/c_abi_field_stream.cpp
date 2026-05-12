@@ -5,14 +5,14 @@
 // Sprint 27 PR 1 — real implementation. Delegates to
 // souxmar::core::FieldStream which lives next to this file.
 
+#include "souxmar/core/field.h"
+#include "souxmar/core/field_stream.h"
+
 #include "souxmar-c/field_stream.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-
-#include "souxmar/core/field.h"
-#include "souxmar/core/field_stream.h"
 
 namespace {
 
@@ -37,7 +37,8 @@ const souxmar::core::Field* field_as_cpp(const souxmar_field_t* p) noexcept {
 extern "C" {
 
 souxmar_field_stream_t* souxmar_field_stream_open(const souxmar_field_t* field) {
-  if (field == nullptr) return nullptr;
+  if (field == nullptr)
+    return nullptr;
   try {
     return as_c(new souxmar::core::FieldStream(*field_as_cpp(field)));
   } catch (...) {
@@ -58,11 +59,10 @@ uint8_t souxmar_field_stream_components(const souxmar_field_stream_t* s) {
 }
 
 souxmar_status_t souxmar_field_stream_range(const souxmar_field_stream_t* s,
-                                             double* out_min,
-                                             double* out_max) {
+                                            double* out_min,
+                                            double* out_max) {
   if (s == nullptr || out_min == nullptr || out_max == nullptr) {
-    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT,
-                                 "field_stream_range: null argument");
+    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT, "field_stream_range: null argument");
   }
   const auto rmin = as_cpp(s)->range_min();
   const auto rmax = as_cpp(s)->range_max();
@@ -76,21 +76,22 @@ souxmar_status_t souxmar_field_stream_range(const souxmar_field_stream_t* s,
 }
 
 const char* souxmar_field_stream_units(const souxmar_field_stream_t* s) {
-  if (s == nullptr) return "";
+  if (s == nullptr)
+    return "";
   const auto sv = as_cpp(s)->units();
   return sv.empty() ? "" : sv.data();  // FieldStream::units owns the storage; not freed
 }
 
 souxmar_status_t souxmar_field_stream_values(const souxmar_field_stream_t* s,
-                                              float* out, size_t out_capacity) {
+                                             float* out,
+                                             size_t out_capacity) {
   if (s == nullptr) {
-    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT,
-                                 "field_stream_values: null handle");
+    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT, "field_stream_values: null handle");
   }
   const auto vals = as_cpp(s)->values();
   if (out == nullptr || out_capacity < vals.size()) {
     return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT,
-                                 "field_stream_values: out buffer too small");
+                                "field_stream_values: out buffer too small");
   }
   std::memcpy(out, vals.data(), vals.size() * sizeof(float));
   return souxmar_status_ok();

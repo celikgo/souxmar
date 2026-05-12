@@ -35,26 +35,26 @@
 SOUXMAR_C_BEGIN
 
 typedef struct souxmar_reader_options {
-  int32_t merge_coincident_nodes;   /* 0 / 1 — collapse duplicate vertices    */
-  double  coincidence_tolerance;    /* world-space; <= 0 means plugin default */
-  int32_t preserve_tags;            /* 0 / 1 — keep solid / surface labels    */
-  int64_t random_seed;              /* deterministic dedup; <0 → nondeterministic */
+  int32_t merge_coincident_nodes; /* 0 / 1 — collapse duplicate vertices    */
+  double coincidence_tolerance;   /* world-space; <= 0 means plugin default */
+  int32_t preserve_tags;          /* 0 / 1 — keep solid / surface labels    */
+  int64_t random_seed;            /* deterministic dedup; <0 → nondeterministic */
 } souxmar_reader_options_t;
 
 typedef souxmar_status_t (*souxmar_reader_read_fn)(
-    const char*                       path,             /* NUL-terminated UTF-8 */
-    const souxmar_value_t*            inputs,           /* stage input map      */
-    const souxmar_reader_options_t*   options,
-    souxmar_mesh_t**                  out_mesh,         /* set xor out_geometry */
-    souxmar_geometry_t**              out_geometry,     /* set xor out_mesh     */
-    void*                             user_data);
+    const char* path,              /* NUL-terminated UTF-8 */
+    const souxmar_value_t* inputs, /* stage input map      */
+    const souxmar_reader_options_t* options,
+    souxmar_mesh_t** out_mesh,         /* set xor out_geometry */
+    souxmar_geometry_t** out_geometry, /* set xor out_mesh     */
+    void* user_data);
 
 typedef void (*souxmar_reader_destroy_fn)(void* user_data);
 
 typedef struct souxmar_reader_vtable {
-  int32_t                       abi_version;  /* MUST equal SOUXMAR_ABI_VERSION_MAJOR */
-  souxmar_reader_read_fn        read_fn;
-  souxmar_reader_destroy_fn     destroy_fn;   /* may be NULL                          */
+  int32_t abi_version; /* MUST equal SOUXMAR_ABI_VERSION_MAJOR */
+  souxmar_reader_read_fn read_fn;
+  souxmar_reader_destroy_fn destroy_fn; /* may be NULL                          */
 } souxmar_reader_vtable_t;
 
 SOUXMAR_C_END

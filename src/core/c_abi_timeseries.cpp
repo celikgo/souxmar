@@ -12,14 +12,14 @@
 // and reinterpret_casts to the C handle, every operation below works
 // correctly today.
 
+#include "souxmar/core/field.h"
+#include "souxmar/core/time_series.h"
+
 #include "souxmar-c/timeseries.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
-
-#include "souxmar/core/field.h"
-#include "souxmar/core/time_series.h"
 
 namespace {
 
@@ -56,16 +56,14 @@ size_t souxmar_timeseries_frame_count(const souxmar_timeseries_t* series) {
 }
 
 souxmar_status_t souxmar_timeseries_time(const souxmar_timeseries_t* series,
-                                          size_t frame_index,
-                                          double* out_time) {
+                                         size_t frame_index,
+                                         double* out_time) {
   if (series == nullptr || out_time == nullptr) {
-    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT,
-                                 "timeseries_time: null argument");
+    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT, "timeseries_time: null argument");
   }
   const auto* ts = as_cpp(series);
   if (frame_index >= ts->frame_count()) {
-    return souxmar_status_error(SOUXMAR_E_NOT_FOUND,
-                                 "timeseries_time: frame index out of range");
+    return souxmar_status_error(SOUXMAR_E_NOT_FOUND, "timeseries_time: frame index out of range");
   }
   *out_time = ts->time(frame_index);
   return souxmar_status_ok();
@@ -75,9 +73,9 @@ size_t souxmar_timeseries_field_count(const souxmar_timeseries_t* series) {
   return series ? as_cpp(series)->field_count() : 0;
 }
 
-const char* souxmar_timeseries_field_name(const souxmar_timeseries_t* series,
-                                           size_t field_index) {
-  if (series == nullptr) return nullptr;
+const char* souxmar_timeseries_field_name(const souxmar_timeseries_t* series, size_t field_index) {
+  if (series == nullptr)
+    return nullptr;
   const auto sv = as_cpp(series)->field_name(field_index);
   // TimeSeries::field_name returns a string_view backed by the owned
   // std::string in field_names_; .data() is null-terminated as long
@@ -87,29 +85,28 @@ const char* souxmar_timeseries_field_name(const souxmar_timeseries_t* series,
 }
 
 const souxmar_field_t* souxmar_timeseries_frame(souxmar_timeseries_t* series,
-                                                  size_t frame_index,
-                                                  const char* field_name) {
-  if (series == nullptr || field_name == nullptr) return nullptr;
+                                                size_t frame_index,
+                                                const char* field_name) {
+  if (series == nullptr || field_name == nullptr)
+    return nullptr;
   const auto* f = as_cpp(series)->frame(frame_index, std::string_view{field_name});
   return field_as_c(f);
 }
 
-souxmar_status_t souxmar_timeseries_cache_window(souxmar_timeseries_t* series,
-                                                  size_t window_size) {
+souxmar_status_t souxmar_timeseries_cache_window(souxmar_timeseries_t* series, size_t window_size) {
   if (series == nullptr) {
-    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT,
-                                 "timeseries_cache_window: null handle");
+    return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT, "timeseries_cache_window: null handle");
   }
   as_cpp(series)->set_cache_window(window_size);
   return souxmar_status_ok();
 }
 
 souxmar_status_t souxmar_timeseries_cache_preload(souxmar_timeseries_t* series,
-                                                   size_t start_frame,
-                                                   size_t count) {
+                                                  size_t start_frame,
+                                                  size_t count) {
   if (series == nullptr) {
     return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT,
-                                 "timeseries_cache_preload: null handle");
+                                "timeseries_cache_preload: null handle");
   }
   as_cpp(series)->cache_preload(start_frame, count);
   return souxmar_status_ok();

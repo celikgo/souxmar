@@ -17,6 +17,8 @@
 // test_pipeline_runner / the integration suite.
 
 #include "souxmar/pipeline/parallel_runner.h"
+#include "souxmar/pipeline/parser.h"
+#include "souxmar/plugin/manifest.h"
 
 #include <gtest/gtest.h>
 
@@ -28,9 +30,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-#include "souxmar/pipeline/parser.h"
-#include "souxmar/plugin/manifest.h"
 
 using namespace souxmar::pipeline;
 using souxmar::plugin::ThreadingModel;
@@ -45,32 +44,34 @@ class MockDispatcher : public IDispatcher {
  public:
   struct Call {
     std::string capability_id;
-    int         concurrent_at_entry;   // value of in_flight at the moment we entered
-    int         concurrent_at_exit;    // value of in_flight just before we returned
+    int concurrent_at_entry;  // value of in_flight at the moment we entered
+    int concurrent_at_exit;   // value of in_flight just before we returned
     std::chrono::milliseconds duration;
   };
 
   // Per-capability behaviour knobs.
-  std::map<std::string, std::chrono::milliseconds> sleep_for;     // sleep inside dispatch
-  std::map<std::string, ThreadingModel>            threading_for; // returned via plugin_threading
-  std::map<std::string, std::string>               plugin_id_for; // returned via plugin_id
-  std::map<std::string, bool>                      fail_for;      // make this capability fail
+  std::map<std::string, std::chrono::milliseconds> sleep_for;  // sleep inside dispatch
+  std::map<std::string, ThreadingModel> threading_for;         // returned via plugin_threading
+  std::map<std::string, std::string> plugin_id_for;            // returned via plugin_id
+  std::map<std::string, bool> fail_for;                        // make this capability fail
 
   std::vector<Call> calls;
-  std::mutex        calls_mu;
+  std::mutex calls_mu;
 
-  std::atomic<int>  in_flight{0};
-  std::atomic<int>  peak_concurrency{0};
+  std::atomic<int> in_flight{0};
+  std::atomic<int> peak_concurrency{0};
 
   std::string plugin_id(std::string_view cap) override {
     auto it = plugin_id_for.find(std::string(cap));
-    if (it != plugin_id_for.end()) return it->second;
+    if (it != plugin_id_for.end())
+      return it->second;
     return std::string(cap);
   }
 
   ThreadingModel plugin_threading(std::string_view cap) override {
     auto it = threading_for.find(std::string(cap));
-    if (it != threading_for.end()) return it->second;
+    if (it != threading_for.end())
+      return it->second;
     return ThreadingModel::Reentrant;  // tests default to reentrant unless they say otherwise
   }
 
@@ -125,7 +126,7 @@ stages:
   d.sleep_for = {{"cap.a", 80ms}, {"cap.b", 80ms}, {"cap.c", 80ms}};
   Cache cache;
   RunOptions opts;
-  opts.use_cache   = false;
+  opts.use_cache = false;
   opts.max_workers = 4;
 
   auto r = run_pipeline_parallel(p, d, cache, opts);
@@ -150,14 +151,13 @@ stages:
   d.sleep_for = {{"cap.a", 30ms}, {"cap.b", 30ms}, {"cap.c", 30ms}};
   Cache cache;
   RunOptions opts;
-  opts.use_cache   = false;
+  opts.use_cache = false;
   opts.max_workers = 4;
 
   auto r = run_pipeline_parallel(p, d, cache, opts);
   ASSERT_EQ(r.status, RunResult::Status::Success);
-  EXPECT_EQ(d.peak_concurrency.load(), 1)
-      << "linear-dependency chain should never overlap; "
-      << "peak observed = " << d.peak_concurrency.load();
+  EXPECT_EQ(d.peak_concurrency.load(), 1) << "linear-dependency chain should never overlap; "
+                                          << "peak observed = " << d.peak_concurrency.load();
 
   // stage_results comes back in declaration order regardless of completion order.
   ASSERT_EQ(r.stage_results.size(), 3u);
@@ -178,13 +178,13 @@ stages:
 )yaml");
 
   MockDispatcher d;
-  d.sleep_for     = {{"cap.a", 80ms}, {"cap.b", 80ms}};
+  d.sleep_for = {{"cap.a", 80ms}, {"cap.b", 80ms}};
   d.plugin_id_for = {{"cap.a", "shared-plugin"}, {"cap.b", "shared-plugin"}};
   d.threading_for = {{"cap.a", ThreadingModel::SingleThreaded},
                      {"cap.b", ThreadingModel::SingleThreaded}};
   Cache cache;
   RunOptions opts;
-  opts.use_cache   = false;
+  opts.use_cache = false;
   opts.max_workers = 4;
 
   auto r = run_pipeline_parallel(p, d, cache, opts);
@@ -205,13 +205,13 @@ stages:
 )yaml");
 
   MockDispatcher d;
-  d.sleep_for     = {{"cap.a", 80ms}, {"cap.b", 80ms}};
+  d.sleep_for = {{"cap.a", 80ms}, {"cap.b", 80ms}};
   d.plugin_id_for = {{"cap.a", "plugin-A"}, {"cap.b", "plugin-B"}};
   d.threading_for = {{"cap.a", ThreadingModel::SingleThreaded},
                      {"cap.b", ThreadingModel::SingleThreaded}};
   Cache cache;
   RunOptions opts;
-  opts.use_cache   = false;
+  opts.use_cache = false;
   opts.max_workers = 4;
 
   auto r = run_pipeline_parallel(p, d, cache, opts);
@@ -235,12 +235,12 @@ stages:
 
   MockDispatcher d;
   d.sleep_for = {{"cap.a", 10ms}, {"cap.b", 10ms}, {"cap.c", 10ms}};
-  d.fail_for  = {{"cap.a", true}};
+  d.fail_for = {{"cap.a", true}};
   Cache cache;
   RunOptions opts;
-  opts.use_cache              = false;
-  opts.stop_on_first_failure  = true;
-  opts.max_workers            = 2;
+  opts.use_cache = false;
+  opts.stop_on_first_failure = true;
+  opts.max_workers = 2;
 
   auto r = run_pipeline_parallel(p, d, cache, opts);
   EXPECT_EQ(r.status, RunResult::Status::StageFailed);
@@ -248,10 +248,10 @@ stages:
 
   // Stage results are emitted in declaration order.
   EXPECT_EQ(r.stage_results[0].stage_id, "a");
-  EXPECT_EQ(r.stage_results[0].status,   StageRunResult::Status::Failed);
+  EXPECT_EQ(r.stage_results[0].status, StageRunResult::Status::Failed);
 
   EXPECT_EQ(r.stage_results[1].stage_id, "b");
-  EXPECT_EQ(r.stage_results[1].status,   StageRunResult::Status::Skipped)
+  EXPECT_EQ(r.stage_results[1].status, StageRunResult::Status::Skipped)
       << "b depends on the failed stage a — must be Skipped";
 }
 
@@ -270,7 +270,7 @@ stages:
   d.sleep_for = {{"cap.a", 5ms}, {"cap.b", 5ms}};
   Cache cache;
   RunOptions opts;
-  opts.use_cache   = false;
+  opts.use_cache = false;
   opts.max_workers = 1;
 
   auto r = run_pipeline_parallel(p, d, cache, opts);
@@ -317,7 +317,7 @@ stages:
   MockDispatcher d;
   Cache cache;
   RunOptions opts;
-  opts.use_cache   = false;
+  opts.use_cache = false;
   opts.max_workers = 4;
 
   auto r = run_pipeline_parallel(p, d, cache, opts);

@@ -53,8 +53,8 @@ class HeapAccountant {
   // sample as 0 and not surface a misleading "0 bytes" reading as a
   // real measurement in the audit log.
   struct Sample {
-    std::size_t  in_use_bytes = 0;
-    bool         supported    = false;
+    std::size_t in_use_bytes = 0;
+    bool supported = false;
   };
 
   // Returns true on a platform where snapshot() returns meaningful

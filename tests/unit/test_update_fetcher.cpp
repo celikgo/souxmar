@@ -41,20 +41,19 @@ TEST(Fetcher, AcceptsInsecureWhenExplicitlyAllowed) {
   // fire.
   FetcherOptions opts;
   opts.require_https = false;
-  opts.timeout       = std::chrono::seconds(1);  // fast-fail
+  opts.timeout = std::chrono::seconds(1);  // fast-fail
   auto r = fetch_to_memory("http://127.0.0.1:1/no-server", opts);
   ASSERT_TRUE(std::holds_alternative<FetchError>(r));
   const auto& err = std::get<FetchError>(r);
-  EXPECT_NE(err.kind, FetchErrorKind::BadUrl)
-      << "URL guard must not fire when require_https=false";
+  EXPECT_NE(err.kind, FetchErrorKind::BadUrl) << "URL guard must not fire when require_https=false";
 }
 
 TEST(Fetcher, ErrorKindStringRoundtrip) {
-  EXPECT_EQ(to_string(FetchErrorKind::HttpClientFailed),   "http-client-failed");
+  EXPECT_EQ(to_string(FetchErrorKind::HttpClientFailed), "http-client-failed");
   EXPECT_EQ(to_string(FetchErrorKind::NetworkUnreachable), "network-unreachable");
-  EXPECT_EQ(to_string(FetchErrorKind::NotFound),           "not-found");
-  EXPECT_EQ(to_string(FetchErrorKind::ServerError),        "server-error");
-  EXPECT_EQ(to_string(FetchErrorKind::PayloadTooLarge),    "payload-too-large");
-  EXPECT_EQ(to_string(FetchErrorKind::BadUrl),             "bad-url");
-  EXPECT_EQ(to_string(FetchErrorKind::LocalIoFailed),      "local-io-failed");
+  EXPECT_EQ(to_string(FetchErrorKind::NotFound), "not-found");
+  EXPECT_EQ(to_string(FetchErrorKind::ServerError), "server-error");
+  EXPECT_EQ(to_string(FetchErrorKind::PayloadTooLarge), "payload-too-large");
+  EXPECT_EQ(to_string(FetchErrorKind::BadUrl), "bad-url");
+  EXPECT_EQ(to_string(FetchErrorKind::LocalIoFailed), "local-io-failed");
 }

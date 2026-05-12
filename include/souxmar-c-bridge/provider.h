@@ -57,27 +57,27 @@ typedef struct souxmar_bridge_chat_response_t souxmar_bridge_chat_response_t;
  *   4  Ollama
  *   5  Managed (proxy.souxmar.dev — Pro tier, Sprint 15+)
  */
-#define SOUXMAR_BRIDGE_PROVIDER_UNKNOWN     0
-#define SOUXMAR_BRIDGE_PROVIDER_STUB        1
-#define SOUXMAR_BRIDGE_PROVIDER_ANTHROPIC   2
-#define SOUXMAR_BRIDGE_PROVIDER_OPENAI      3
-#define SOUXMAR_BRIDGE_PROVIDER_OLLAMA      4
-#define SOUXMAR_BRIDGE_PROVIDER_MANAGED     5
+#define SOUXMAR_BRIDGE_PROVIDER_UNKNOWN 0
+#define SOUXMAR_BRIDGE_PROVIDER_STUB 1
+#define SOUXMAR_BRIDGE_PROVIDER_ANTHROPIC 2
+#define SOUXMAR_BRIDGE_PROVIDER_OPENAI 3
+#define SOUXMAR_BRIDGE_PROVIDER_OLLAMA 4
+#define SOUXMAR_BRIDGE_PROVIDER_MANAGED 5
 
 /* Provider-error kinds. Mirrors `souxmar::ai::ProviderErrorKind`
  * (provider.h on the C++ side). Returned only when the call
  * itself failed; a 200-OK upstream that produced a refusal is
  * still a success at this layer (the refusal text lives in the
  * response's reply_text). */
-#define SOUXMAR_BRIDGE_PE_OK                0
-#define SOUXMAR_BRIDGE_PE_HTTP_ERROR        1
-#define SOUXMAR_BRIDGE_PE_TIMEOUT           2
-#define SOUXMAR_BRIDGE_PE_INVALID_RESPONSE  3
-#define SOUXMAR_BRIDGE_PE_UNAUTHORIZED      4
-#define SOUXMAR_BRIDGE_PE_RATE_LIMITED      5
-#define SOUXMAR_BRIDGE_PE_QUOTA_EXHAUSTED   6
-#define SOUXMAR_BRIDGE_PE_NOT_CONFIGURED    7
-#define SOUXMAR_BRIDGE_PE_INTERNAL          8
+#define SOUXMAR_BRIDGE_PE_OK 0
+#define SOUXMAR_BRIDGE_PE_HTTP_ERROR 1
+#define SOUXMAR_BRIDGE_PE_TIMEOUT 2
+#define SOUXMAR_BRIDGE_PE_INVALID_RESPONSE 3
+#define SOUXMAR_BRIDGE_PE_UNAUTHORIZED 4
+#define SOUXMAR_BRIDGE_PE_RATE_LIMITED 5
+#define SOUXMAR_BRIDGE_PE_QUOTA_EXHAUSTED 6
+#define SOUXMAR_BRIDGE_PE_NOT_CONFIGURED 7
+#define SOUXMAR_BRIDGE_PE_INTERNAL 8
 
 /* Dispatch one chat-completion call. `request_json` is a UTF-8
  * JSON string matching the ChatRequest schema (model, messages,
@@ -99,26 +99,24 @@ typedef struct souxmar_bridge_chat_response_t souxmar_bridge_chat_response_t;
  * interleaving land in Sprint 11+") is queued for Sprint 17+
  * once the proxy is stood up. The desktop chat panel waits on
  * the full response today. */
-souxmar_bridge_chat_response_t*
-souxmar_bridge_chat_send(const char* request_json,
-                         const char* project_id,
-                         char**      out_err);
+souxmar_bridge_chat_response_t* souxmar_bridge_chat_send(const char* request_json,
+                                                         const char* project_id,
+                                                         char** out_err);
 
 /* Accessors on the response handle. All strings remain valid
  * until the handle is freed. */
-int32_t      souxmar_bridge_chat_error_kind(const souxmar_bridge_chat_response_t* r);
-const char*  souxmar_bridge_chat_error_text(const souxmar_bridge_chat_response_t* r);
-const char*  souxmar_bridge_chat_reply_text(const souxmar_bridge_chat_response_t* r);
-int32_t      souxmar_bridge_chat_provider  (const souxmar_bridge_chat_response_t* r);
-int64_t      souxmar_bridge_chat_tokens_in (const souxmar_bridge_chat_response_t* r);
-int64_t      souxmar_bridge_chat_tokens_out(const souxmar_bridge_chat_response_t* r);
+int32_t souxmar_bridge_chat_error_kind(const souxmar_bridge_chat_response_t* r);
+const char* souxmar_bridge_chat_error_text(const souxmar_bridge_chat_response_t* r);
+const char* souxmar_bridge_chat_reply_text(const souxmar_bridge_chat_response_t* r);
+int32_t souxmar_bridge_chat_provider(const souxmar_bridge_chat_response_t* r);
+int64_t souxmar_bridge_chat_tokens_in(const souxmar_bridge_chat_response_t* r);
+int64_t souxmar_bridge_chat_tokens_out(const souxmar_bridge_chat_response_t* r);
 
 /* Release a response handle. Safe to call with NULL. */
-void
-souxmar_bridge_chat_response_free(souxmar_bridge_chat_response_t* r);
+void souxmar_bridge_chat_response_free(souxmar_bridge_chat_response_t* r);
 
 #ifdef __cplusplus
-}  /* extern "C" */
+} /* extern "C" */
 #endif
 
-#endif  /* SOUXMAR_C_BRIDGE_PROVIDER_H */
+#endif /* SOUXMAR_C_BRIDGE_PROVIDER_H */

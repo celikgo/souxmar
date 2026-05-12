@@ -30,22 +30,25 @@ namespace souxmar::pipeline {
 namespace {
 
 constexpr std::uint32_t kK[64] = {
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
-    0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
-    0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
-    0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
-    0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
-    0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-    0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a,
-    0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
-    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 };
 
 constexpr std::uint32_t kInitH[8] = {
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+    0x6a09e667,
+    0xbb67ae85,
+    0x3c6ef372,
+    0xa54ff53a,
+    0x510e527f,
+    0x9b05688c,
+    0x1f83d9ab,
+    0x5be0cd19,
 };
 
 inline std::uint32_t rotr32(std::uint32_t x, int n) noexcept {
@@ -54,7 +57,9 @@ inline std::uint32_t rotr32(std::uint32_t x, int n) noexcept {
 
 class Sha256 {
  public:
-  Sha256() noexcept { std::memcpy(h_, kInitH, sizeof(h_)); }
+  Sha256() noexcept {
+    std::memcpy(h_, kInitH, sizeof(h_));
+  }
 
   void update(const void* data, std::size_t len) noexcept {
     const auto* p = static_cast<const std::uint8_t*>(data);
@@ -63,8 +68,8 @@ class Sha256 {
       const std::size_t take = std::min<std::size_t>(64 - buf_len_, len);
       std::memcpy(buf_ + buf_len_, p, take);
       buf_len_ += take;
-      p        += take;
-      len      -= take;
+      p += take;
+      len -= take;
       if (buf_len_ == 64) {
         compress(buf_);
         buf_len_ = 0;
@@ -90,7 +95,7 @@ class Sha256 {
     for (int i = 0; i < 8; ++i) {
       out[static_cast<std::size_t>(i * 4 + 0)] = static_cast<std::uint8_t>(h_[i] >> 24);
       out[static_cast<std::size_t>(i * 4 + 1)] = static_cast<std::uint8_t>(h_[i] >> 16);
-      out[static_cast<std::size_t>(i * 4 + 2)] = static_cast<std::uint8_t>(h_[i] >>  8);
+      out[static_cast<std::size_t>(i * 4 + 2)] = static_cast<std::uint8_t>(h_[i] >> 8);
       out[static_cast<std::size_t>(i * 4 + 3)] = static_cast<std::uint8_t>(h_[i]);
     }
     return out;
@@ -100,14 +105,14 @@ class Sha256 {
   void compress(const std::uint8_t block[64]) noexcept {
     std::uint32_t w[64];
     for (int i = 0; i < 16; ++i) {
-      w[i] = (static_cast<std::uint32_t>(block[i * 4 + 0]) << 24) |
-             (static_cast<std::uint32_t>(block[i * 4 + 1]) << 16) |
-             (static_cast<std::uint32_t>(block[i * 4 + 2]) <<  8) |
-              static_cast<std::uint32_t>(block[i * 4 + 3]);
+      w[i] = (static_cast<std::uint32_t>(block[i * 4 + 0]) << 24)
+             | (static_cast<std::uint32_t>(block[i * 4 + 1]) << 16)
+             | (static_cast<std::uint32_t>(block[i * 4 + 2]) << 8)
+             | static_cast<std::uint32_t>(block[i * 4 + 3]);
     }
     for (int i = 16; i < 64; ++i) {
-      const std::uint32_t s0 = rotr32(w[i - 15],  7) ^ rotr32(w[i - 15], 18) ^ (w[i - 15] >>  3);
-      const std::uint32_t s1 = rotr32(w[i -  2], 17) ^ rotr32(w[i -  2], 19) ^ (w[i -  2] >> 10);
+      const std::uint32_t s0 = rotr32(w[i - 15], 7) ^ rotr32(w[i - 15], 18) ^ (w[i - 15] >> 3);
+      const std::uint32_t s1 = rotr32(w[i - 2], 17) ^ rotr32(w[i - 2], 19) ^ (w[i - 2] >> 10);
       w[i] = w[i - 16] + s0 + w[i - 7] + s1;
     }
 
@@ -115,26 +120,36 @@ class Sha256 {
     std::uint32_t e = h_[4], f = h_[5], g = h_[6], hh = h_[7];
 
     for (int i = 0; i < 64; ++i) {
-      const std::uint32_t S1    = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
-      const std::uint32_t ch    = (e & f) ^ (~e & g);
+      const std::uint32_t S1 = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
+      const std::uint32_t ch = (e & f) ^ (~e & g);
       const std::uint32_t temp1 = hh + S1 + ch + kK[i] + w[i];
-      const std::uint32_t S0    = rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22);
-      const std::uint32_t maj   = (a & b) ^ (a & c) ^ (b & c);
+      const std::uint32_t S0 = rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22);
+      const std::uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
       const std::uint32_t temp2 = S0 + maj;
 
-      hh = g; g = f; f = e;
+      hh = g;
+      g = f;
+      f = e;
       e = d + temp1;
-      d = c; c = b; b = a;
+      d = c;
+      c = b;
+      b = a;
       a = temp1 + temp2;
     }
 
-    h_[0] += a; h_[1] += b; h_[2] += c; h_[3] += d;
-    h_[4] += e; h_[5] += f; h_[6] += g; h_[7] += hh;
+    h_[0] += a;
+    h_[1] += b;
+    h_[2] += c;
+    h_[3] += d;
+    h_[4] += e;
+    h_[5] += f;
+    h_[6] += g;
+    h_[7] += hh;
   }
 
   std::uint32_t h_[8];
-  std::uint8_t  buf_[64]{};
-  std::size_t   buf_len_{0};
+  std::uint8_t buf_[64]{};
+  std::size_t buf_len_{0};
   std::uint64_t bit_count_{0};
 };
 
@@ -158,16 +173,19 @@ class Sha256 {
 
 void feed_u64(Sha256& sh, std::uint64_t v) {
   std::uint8_t b[8];
-  for (int i = 0; i < 8; ++i) b[i] = static_cast<std::uint8_t>(v >> (8 * i));
+  for (int i = 0; i < 8; ++i)
+    b[i] = static_cast<std::uint8_t>(v >> (8 * i));
   sh.update(b, 8);
 }
 
 void feed_str(Sha256& sh, std::string_view s) {
   feed_u64(sh, s.size());
-  if (!s.empty()) sh.update(s.data(), s.size());
+  if (!s.empty())
+    sh.update(s.data(), s.size());
 }
 
-void hash_value(Sha256& sh, const Value& v,
+void hash_value(Sha256& sh,
+                const Value& v,
                 std::span<const std::pair<std::string, ContentHash>> upstream) {
   const std::uint8_t kind_byte = static_cast<std::uint8_t>(v.kind());
   sh.update(&kind_byte, 1);
@@ -194,16 +212,22 @@ void hash_value(Sha256& sh, const Value& v,
       ContentHash::Bytes upbytes{};
       bool resolved = false;
       for (const auto& [id, ch] : upstream) {
-        if (id == ref.stage_id) { upbytes = ch.bytes(); resolved = true; break; }
+        if (id == ref.stage_id) {
+          upbytes = ch.bytes();
+          resolved = true;
+          break;
+        }
       }
-      if (!resolved) std::memset(upbytes.data(), 0xFF, upbytes.size());
+      if (!resolved)
+        std::memset(upbytes.data(), 0xFF, upbytes.size());
       sh.update(upbytes.data(), upbytes.size());
       return;
     }
     case Value::Kind::List: {
       const auto items = v.as_list();
       feed_u64(sh, items.size());
-      for (const auto& item : items) hash_value(sh, item, upstream);
+      for (const auto& item : items)
+        hash_value(sh, item, upstream);
       return;
     }
     case Value::Kind::Map: {
@@ -229,8 +253,7 @@ ContentHash::ContentHash(std::uint64_t seed) noexcept {
   // hex output predictable: ContentHash{0xDEADBEEFCAFEBABE}.hex() prefix is
   // "deadbeefcafebabe...".
   for (int i = 0; i < 8; ++i) {
-    bytes_[static_cast<std::size_t>(i)] =
-        static_cast<std::uint8_t>(seed >> (8 * (7 - i)));
+    bytes_[static_cast<std::size_t>(i)] = static_cast<std::uint8_t>(seed >> (8 * (7 - i)));
   }
 }
 
@@ -245,10 +268,9 @@ std::string ContentHash::hex() const {
   return out;
 }
 
-ContentHash hash_inputs(std::string_view             context,
-                        const Value&                 inputs,
-                        std::span<const std::pair<std::string, ContentHash>>
-                                                     upstream) {
+ContentHash hash_inputs(std::string_view context,
+                        const Value& inputs,
+                        std::span<const std::pair<std::string, ContentHash>> upstream) {
   Sha256 sh;
   feed_str(sh, context);
   hash_value(sh, inputs, upstream);
@@ -260,13 +282,14 @@ ContentHash hash_inputs(std::string_view             context,
 // ============================================================================
 
 struct Cache::Impl {
-  mutable std::shared_mutex                                mu;
-  std::unordered_map<ContentHash, std::shared_ptr<void>>   entries;
+  mutable std::shared_mutex mu;
+  std::unordered_map<ContentHash, std::shared_ptr<void>> entries;
 };
 
 Cache::Cache() : impl_(std::make_unique<Impl>()) {}
+
 Cache::~Cache() = default;
-Cache::Cache(Cache&&) noexcept            = default;
+Cache::Cache(Cache&&) noexcept = default;
 Cache& Cache::operator=(Cache&&) noexcept = default;
 
 void Cache::put(ContentHash key, std::shared_ptr<void> payload) {
@@ -277,7 +300,8 @@ void Cache::put(ContentHash key, std::shared_ptr<void> payload) {
 std::shared_ptr<void> Cache::get(ContentHash key) const {
   std::shared_lock lock(impl_->mu);
   auto it = impl_->entries.find(key);
-  if (it == impl_->entries.end()) return nullptr;
+  if (it == impl_->entries.end())
+    return nullptr;
   return it->second;
 }
 
@@ -304,10 +328,12 @@ namespace {
 
 std::filesystem::path home_dir() {
 #if defined(_WIN32)
-  if (const char* v = std::getenv("USERPROFILE"); v && *v) return v;
+  if (const char* v = std::getenv("USERPROFILE"); v && *v)
+    return v;
   return {};
 #else
-  if (const char* v = std::getenv("HOME"); v && *v) return v;
+  if (const char* v = std::getenv("HOME"); v && *v)
+    return v;
   return {};
 #endif
 }
@@ -318,22 +344,21 @@ DiskCache::DiskCache(std::filesystem::path dir) : dir_(std::move(dir)) {
   std::error_code ec;
   std::filesystem::create_directories(dir_, ec);
   if (ec && !std::filesystem::is_directory(dir_)) {
-    throw std::filesystem::filesystem_error(
-        "souxmar DiskCache: cannot create directory", dir_, ec);
+    throw std::filesystem::filesystem_error("souxmar DiskCache: cannot create directory", dir_, ec);
   }
 }
 
-bool DiskCache::put_bytes(ContentHash                       key,
-                          std::span<const std::uint8_t>     blob) const {
+bool DiskCache::put_bytes(ContentHash key, std::span<const std::uint8_t> blob) const {
   // tmp + rename for atomicity. The randomization avoids collisions when
   // two threads in the same process write the same key concurrently.
   thread_local std::mt19937_64 rng{std::random_device{}()};
   const auto target = dir_ / key.hex();
-  const auto tmp    = dir_ / (key.hex() + ".tmp." + std::to_string(rng()));
+  const auto tmp = dir_ / (key.hex() + ".tmp." + std::to_string(rng()));
 
   {
     std::ofstream sink(tmp, std::ios::binary | std::ios::trunc);
-    if (!sink.is_open()) return false;
+    if (!sink.is_open())
+      return false;
     if (!blob.empty()) {
       sink.write(reinterpret_cast<const char*>(blob.data()),
                  static_cast<std::streamsize>(blob.size()));
@@ -354,19 +379,21 @@ bool DiskCache::put_bytes(ContentHash                       key,
   return true;
 }
 
-std::optional<std::vector<std::uint8_t>>
-DiskCache::get_bytes(ContentHash key) const {
+std::optional<std::vector<std::uint8_t>> DiskCache::get_bytes(ContentHash key) const {
   const auto path = dir_ / key.hex();
   std::ifstream src(path, std::ios::binary);
-  if (!src.is_open()) return std::nullopt;
+  if (!src.is_open())
+    return std::nullopt;
   src.seekg(0, std::ios::end);
   const auto size = src.tellg();
-  if (size < 0) return std::nullopt;
+  if (size < 0)
+    return std::nullopt;
   src.seekg(0, std::ios::beg);
   std::vector<std::uint8_t> out(static_cast<std::size_t>(size));
   if (size > 0) {
     src.read(reinterpret_cast<char*>(out.data()), size);
-    if (!src.good() && !src.eof()) return std::nullopt;
+    if (!src.good() && !src.eof())
+      return std::nullopt;
   }
   return out;
 }
@@ -376,9 +403,9 @@ bool DiskCache::contains(ContentHash key) const {
   return std::filesystem::exists(dir_ / key.hex(), ec);
 }
 
-std::filesystem::path
-DiskCache::default_dir(const std::filesystem::path& override_path) {
-  if (!override_path.empty()) return override_path;
+std::filesystem::path DiskCache::default_dir(const std::filesystem::path& override_path) {
+  if (!override_path.empty())
+    return override_path;
 
   if (const char* v = std::getenv("SOUXMAR_CACHE_DIR"); v && *v) {
     return std::filesystem::path{v};

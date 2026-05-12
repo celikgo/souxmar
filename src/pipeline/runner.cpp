@@ -2,19 +2,19 @@
 
 #include "souxmar/pipeline/runner.h"
 
+#include "souxmar/pipeline/dag.h"
+#include "souxmar/pipeline/parallel_runner.h"
+
 #include <fmt/core.h>
 
 #include <algorithm>
 
-#include "souxmar/pipeline/dag.h"
-#include "souxmar/pipeline/parallel_runner.h"
-
 namespace souxmar::pipeline {
 
-RunResult run_pipeline(const Pipeline&    pipeline,
-                       IDispatcher&       dispatcher,
-                       Cache&             cache,
-                       const RunOptions&  options) {
+RunResult run_pipeline(const Pipeline& pipeline,
+                       IDispatcher& dispatcher,
+                       Cache& cache,
+                       const RunOptions& options) {
   // Dispatch into the parallel scheduler whenever the caller asked for
   // more than one worker. The parallel implementation handles cache,
   // disk_backing, and stop_on_first_failure with the same contract as
@@ -32,8 +32,7 @@ RunResult run_pipeline(const Pipeline&    pipeline,
     result.validation_errors.reserve(errors->size());
     for (const auto& e : *errors) {
       result.validation_errors.push_back(
-          e.stage_id.empty() ? e.message
-                             : fmt::format("[{}] {}", e.stage_id, e.message));
+          e.stage_id.empty() ? e.message : fmt::format("[{}] {}", e.stage_id, e.message));
     }
     return result;
   }
@@ -58,9 +57,7 @@ RunResult run_pipeline(const Pipeline&    pipeline,
 
     // Build the cache-context string: capability id + plugin version.
     auto version = dispatcher.plugin_version(stage.plugin);
-    auto context = version.empty()
-                       ? stage.plugin
-                       : fmt::format("{}@{}", stage.plugin, version);
+    auto context = version.empty() ? stage.plugin : fmt::format("{}@{}", stage.plugin, version);
 
     sr.content_hash = hash_inputs(context, stage.input, upstream_hashes);
 
@@ -73,8 +70,8 @@ RunResult run_pipeline(const Pipeline&    pipeline,
         result.stage_results.push_back(std::move(sr));
         continue;
       }
-      if (options.disk_backing && options.disk_backing->cache &&
-          options.disk_backing->deserialize) {
+      if (options.disk_backing && options.disk_backing->cache
+          && options.disk_backing->deserialize) {
         if (auto blob = options.disk_backing->cache->get_bytes(sr.content_hash)) {
           if (auto rehydrated = options.disk_backing->deserialize(*blob); rehydrated) {
             // Re-warm the in-memory cache so subsequent stages and reruns
@@ -95,7 +92,7 @@ RunResult run_pipeline(const Pipeline&    pipeline,
     auto dr = dispatcher.dispatch(ctx);
     if (auto* err = std::get_if<DispatchError>(&dr)) {
       sr.status = StageRunResult::Status::Failed;
-      sr.error  = *err;
+      sr.error = *err;
       encountered_failure = true;
     } else {
       auto payload = std::move(std::get<DispatchSuccess>(dr));
@@ -104,8 +101,8 @@ RunResult run_pipeline(const Pipeline&    pipeline,
         // Best-effort persist: if the dispatcher knows how to serialize this
         // payload type, write it through. A failed put is non-fatal — the
         // in-memory cache still holds the value for this run.
-        if (options.disk_backing && options.disk_backing->cache &&
-            options.disk_backing->serialize) {
+        if (options.disk_backing && options.disk_backing->cache
+            && options.disk_backing->serialize) {
           if (auto blob = options.disk_backing->serialize(payload); blob) {
             (void)options.disk_backing->cache->put_bytes(sr.content_hash, *blob);
           }
@@ -118,8 +115,7 @@ RunResult run_pipeline(const Pipeline&    pipeline,
     result.stage_results.push_back(std::move(sr));
   }
 
-  result.status = encountered_failure ? RunResult::Status::StageFailed
-                                       : RunResult::Status::Success;
+  result.status = encountered_failure ? RunResult::Status::StageFailed : RunResult::Status::Success;
   return result;
 }
 

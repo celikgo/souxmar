@@ -40,27 +40,26 @@ const pipeline::Value* geometry_map(const pipeline::Value& inputs,
 
 Tool make_read_geometry_summary_tool() {
   Tool t;
-  t.name             = "read_geometry_summary";
-  t.description      =
+  t.name = "read_geometry_summary";
+  t.description =
       "Inspect the current project's geometry. Returns vertex / edge / face / solid "
       "counts, the axis-aligned bounding box, and the list of named tags.";
-  t.category         = "Read";
-  t.confirmation     = Confirmation::Auto;
+  t.category = "Read";
+  t.confirmation = Confirmation::Auto;
   t.input_schema_doc =
-      "{geometry?: {num_vertices, num_edges, num_faces, num_solids, bbox: [x0,y0,z0,x1,y1,z1], tags?: [name]}}\n"
+      "{geometry?: {num_vertices, num_edges, num_faces, num_solids, bbox: [x0,y0,z0,x1,y1,z1], "
+      "tags?: [name]}}\n"
       "If `geometry` is absent the tool reads from session_state['geometry'].";
-  t.output_schema_doc =
-      "{num_vertices, num_edges, num_faces, num_solids, bbox, tags: [...] }";
+  t.output_schema_doc = "{num_vertices, num_edges, num_faces, num_solids, bbox, tags: [...] }";
   t.handler = [](const pipeline::Value& inputs, ToolContext& ctx) -> ToolResult {
     const auto* g = geometry_map(inputs, ctx.session_state);
     if (g == nullptr) {
-      return ToolResult{
-          pipeline::Value::null_value(),
-          "no geometry available",
-          ToolError{"NOT_AVAILABLE",
-              "no geometry in inputs or session_state",
-              "load a geometry first (Sprint 6: `reader.cad.step`) "
-              "or pass an inline `geometry:` argument"}};
+      return ToolResult{pipeline::Value::null_value(),
+                        "no geometry available",
+                        ToolError{"NOT_AVAILABLE",
+                                  "no geometry in inputs or session_state",
+                                  "load a geometry first (Sprint 6: `reader.cad.step`) "
+                                  "or pass an inline `geometry:` argument"}};
     }
 
     // Build a fresh Map with the documented output keys; missing fields
@@ -87,16 +86,11 @@ Tool make_read_geometry_summary_tool() {
                  ? std::to_string(static_cast<long long>(v.as_number()))
                  : std::string{"?"};
     };
-    std::string summary = "geometry: " +
-        count_or_q("num_vertices") + " v / " +
-        count_or_q("num_edges")    + " e / " +
-        count_or_q("num_faces")    + " f / " +
-        count_or_q("num_solids")   + " s";
+    std::string summary = "geometry: " + count_or_q("num_vertices") + " v / "
+                          + count_or_q("num_edges") + " e / " + count_or_q("num_faces") + " f / "
+                          + count_or_q("num_solids") + " s";
 
-    return ToolResult{
-        pipeline::Value::map(std::move(out)),
-        std::move(summary),
-        std::nullopt};
+    return ToolResult{pipeline::Value::map(std::move(out)), std::move(summary), std::nullopt};
   };
   return t;
 }

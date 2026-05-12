@@ -36,20 +36,19 @@ class TimeSeries {
   // Field for that pair, or nullptr if it doesn't exist. The loader is
   // called at most once per (frame, field) per cache eviction cycle.
   using FrameLoader =
-      std::function<std::unique_ptr<Field>(std::size_t frame_index,
-                                            std::string_view field_name)>;
+      std::function<std::unique_ptr<Field>(std::size_t frame_index, std::string_view field_name)>;
 
-  TimeSeries(std::vector<double>      frame_times,
+  TimeSeries(std::vector<double> frame_times,
              std::vector<std::string> field_names,
-             FrameLoader              loader,
-             std::size_t              initial_cache_window = 16);
+             FrameLoader loader,
+             std::size_t initial_cache_window = 16);
 
   ~TimeSeries();
 
   TimeSeries(TimeSeries&&) noexcept;
   TimeSeries& operator=(TimeSeries&&) noexcept;
 
-  TimeSeries(const TimeSeries&)            = delete;
+  TimeSeries(const TimeSeries&) = delete;
   TimeSeries& operator=(const TimeSeries&) = delete;
 
   // -------- Metadata --------
@@ -70,8 +69,7 @@ class TimeSeries {
   // or the loader returns nullptr. The pointer is valid until the next
   // call that mutates the cache (any frame()/cache_preload()/
   // set_cache_window() call).
-  [[nodiscard]] const Field* frame(std::size_t      frame_index,
-                                    std::string_view field_name);
+  [[nodiscard]] const Field* frame(std::size_t frame_index, std::string_view field_name);
 
   // -------- Cache control --------
 
@@ -79,7 +77,7 @@ class TimeSeries {
   // populated size triggers immediate LRU eviction. window_size == 0
   // disables caching (every frame() call hits the loader).
   void set_cache_window(std::size_t window_size);
-  [[nodiscard]] std::size_t cache_window()   const noexcept;
+  [[nodiscard]] std::size_t cache_window() const noexcept;
   [[nodiscard]] std::size_t cache_occupancy() const noexcept;  // count currently resident
 
   // Pre-warm: synchronously load [start_frame, start_frame + count) for
