@@ -56,14 +56,41 @@ function(souxmar_add_plugin TARGET_NAME)
     FOLDER                   "plugins"
   )
 
+  # Host-ABI symbols (souxmar_mesh_*, souxmar_field_*, souxmar_registry_*,
+  # ...) are *not* linked into the plugin — they live in libsouxmar-core,
+  # which is linked into whichever executable dlopens the plugin (the
+  # `souxmar` CLI, the test runner, the Tauri bridge). At plugin-build
+  # time these symbols are deliberately undefined; the loader resolves
+  # them against the host process's symbol table at dlopen().
+  #
+  # Linux's default `ld` already permits undefined symbols in SHARED
+  # objects, so no flag is needed there. macOS's `ld` is strict by
+  # default and requires opt-in via `-undefined dynamic_lookup`.
+  # Windows is unsupported by this path (plugins on Windows need an
+  # import library against the host executable, which the project does
+  # not yet ship; out-of-tree Windows plugins should link against
+  # souxmar-core.dll's .lib explicitly).
+  if(APPLE)
+    target_link_options(${TARGET_NAME} PRIVATE
+      "LINKER:-undefined,dynamic_lookup")
+  endif()
+
   # Keep the manifest beside the built binary so discovery finds them
   # together when SOUXMAR_PLUGIN_PATH points at the build directory.
-  set(_manifest_dst "$<TARGET_FILE_DIR:${TARGET_NAME}>/souxmar-plugin.toml")
+  #
+  # Note on BYPRODUCTS: an earlier revision declared the copied manifest
+  # as a BYPRODUCTS entry containing $<TARGET_FILE_DIR:${TARGET_NAME}>.
+  # On CMake >= 3.30 that path evaluates the generator expression in a
+  # scope where the just-created target isn't yet resolvable, producing
+  # "No target X" at generation. The COMMAND argument has no such
+  # constraint, so we inline the gen-expression there and skip
+  # BYPRODUCTS — the only consequence is that `ninja clean` won't
+  # delete the copied manifest, which is harmless (the target rebuild
+  # always re-copies it via copy_if_different).
   add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${SXP_MANIFEST}"
-            "${_manifest_dst}"
-    BYPRODUCTS "${_manifest_dst}"
+            "$<TARGET_FILE_DIR:${TARGET_NAME}>/souxmar-plugin.toml"
     COMMENT "souxmar: copying manifest for plugin '${TARGET_NAME}'"
     VERBATIM
   )
