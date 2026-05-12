@@ -1,0 +1,199 @@
+# OpenAPI 3.1 contract for the managed-ai-proxy v1 surface.
+# Sprint 14 push 3.
+#
+# Aligned with `include/souxmar/ai/provider.h`'s `ChatRequest` /
+# `ChatResponse` types — the desktop client speaks this shape to
+# the proxy via the same `ManagedProvider` adapter that lands in
+# Sprint 15 push 1.
+
+openapi: 3.1.0
+info:
+  title:       managed-ai-proxy
+  version:     v1
+  description: souxmar Pro-tier managed-AI gateway. See ADR-0019.
+  license:
+    name:      Apache-2.0
+    url:       https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: https://proxy.souxmar.dev
+    description: Production (Sprint 17+; today this URL 404s).
+  - url: http://127.0.0.1:8080
+    description: Local development.
+
+paths:
+  /v1/chat:
+    post:
+      summary:     Forward a ChatRequest to the upstream provider.
+      operationId: chatCompletion
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+      responses:
+        '200':
+          description: Forwarded successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+        '402':
+          description: Out of quota for the current billing period.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: Token missing / revoked / expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: |
+            MVP scaffold returns this for every request. Sprint 15
+            push 1 lands the real upstream forwarder.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /v1/account:
+    get:
+      summary:     Return the user's tier + bound email.
+      operationId: getAccount
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '503':
+          description: MVP scaffold — see /v1/chat.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /v1/quota:
+    get:
+      summary:     Return the user's quota counter.
+      operationId: getQuota
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotaCounter'
+        '503':
+          description: MVP scaffold — see /v1/chat.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type:    http
+      scheme:  bearer
+      bearerFormat: sxm_pro_<32-hex>
+
+  schemas:
+    ChatRequest:
+      type: object
+      required: [model, messages]
+      properties:
+        model:
+          type: string
+          description: Upstream model id (e.g. "claude-sonnet-4-6").
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+        tool_names:
+          type: array
+          items: { type: string }
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+        max_tokens:
+          type: integer
+          minimum: 1
+
+    ChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [system, user, assistant, tool]
+        content:
+          type: string
+
+    ChatResponse:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+        tokens_in:
+          type: integer
+        tokens_out:
+          type: integer
+
+    Account:
+      type: object
+      required: [user_id, tier, email]
+      properties:
+        user_id:
+          type: string
+        tier:
+          type: string
+          enum: [free, pro, team, enterprise]
+        email:
+          type: string
+
+    QuotaCounter:
+      type: object
+      required:
+        - user_id
+        - tier
+        - balance_tokens
+        - balance_dollars
+        - last_reset_at
+        - next_reset_at
+      properties:
+        user_id:          { type: string }
+        tier:             { type: string }
+        balance_tokens:   { type: integer, format: int64 }
+        balance_dollars:  { type: string,  description: "decimal as string" }
+        last_reset_at:    { type: string,  format: date-time }
+        next_reset_at:    { type: string,  format: date-time }
+
+    Problem:
+      type: object
+      required: [status, code]
+      properties:
+        status:
+          type: string
+          enum:
+            - bad_request
+            - unauthorized
+            - payment_required
+            - service_unavailable
+        code:
+          type: string
+        detail:
+          type: string
