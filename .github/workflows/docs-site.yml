@@ -13,6 +13,11 @@ on:
     paths:
       - "docs-site/**"
       - ".github/workflows/docs-site.yml"
+      # Sprint 13 push 2 — re-publish when the generator changes; the
+      # generated `docs-site/agents/tools.md` file itself is committed
+      # in-tree (the in-sync check happens in eval-nightly so we
+      # don't have to rebuild C++ inside the publish workflow).
+      - "scripts/docs-site/**"
   workflow_dispatch:
 
 permissions:

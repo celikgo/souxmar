@@ -46,6 +46,9 @@ add_executable(souxmar_integration_tests
   test_update_check_cli.cpp
   # Sprint 10 push 7.
   test_update_apply_rollback_cli.cpp
+  # Sprint 13 push 2 — VTU consumer-conformance carry-over from
+  # the Sprint 11 / 12 retro.
+  test_vtu_consumer_conformance.cpp
 )
 
 target_include_directories(souxmar_integration_tests

@@ -67,8 +67,13 @@ jobs:
             -DSOUXMAR_BUILD_EXAMPLES=ON \
             -DSOUXMAR_BUILD_CLI=ON
 
-      - name: Build core + plugins + souxmar-eval
-        run: cmake --build --preset ci-linux-clang --target souxmar_eval
+      - name: Build core + plugins + souxmar-eval + souxmar CLI
+        # Sprint 13 push 2 — add the CLI binary so the
+        # `gen-agent-tools.py --check-only` step downstream has a
+        # `souxmar` to invoke.
+        run: |
+          cmake --build --preset ci-linux-clang --target souxmar_eval
+          cmake --build --preset ci-linux-clang --target souxmar
 
       - name: Run the agent eval suite
         # Sprint 9 push 10 — `--latency-output` emits a JSON aggregate
@@ -136,3 +141,17 @@ jobs:
         with:
           name: synth-load-report
           path: synth-load-report.json
+
+      # Sprint 13 push 2 — verify the auto-generated agent-tool docs
+      # page on docs.souxmar.dev is in sync with what the binary
+      # actually exposes. The page is committed in-tree
+      # (`docs-site/agents/tools.md`); if the registry changes
+      # without the page being regenerated, this step fails the PR.
+      - name: Verify generated agent tool docs are in sync
+        run: |
+          # The C++ build target above produces `souxmar` at this
+          # path on the ci-linux-clang preset.
+          scripts/docs-site/gen-agent-tools.py \
+            --engine     build/ci-linux-clang/tools/souxmar/souxmar \
+            --out        docs-site/agents/tools.md \
+            --check-only

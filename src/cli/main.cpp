@@ -82,7 +82,7 @@ void print_usage() {
       "  souxmar plugin list [--plugin-path <dir>]...\n"
       "  souxmar plugin search [<query>] [--capability <prefix>] [--index <path>]\n"
       "  souxmar plugin validate-index [--index <path>]\n"
-      "  souxmar agent list\n"
+      "  souxmar agent list [--json]\n"
       "  souxmar agent invoke <tool> [--input <yaml>] [--input-file <path>] [--yes]\n"
       "                              [--audit-log <path>] [--budget-config <path>]\n"
       "                              [--plugin-path <dir>]...\n"
@@ -444,8 +444,62 @@ std::string_view confirmation_name(souxmar::ai::Confirmation c) {
   return "?";
 }
 
-int cmd_agent_list() {
+// Sprint 13 push 2 — escape a string for JSON. Same scope as
+// the encoder in src/ai/provider.cpp (the existing Ollama path
+// hand-rolls its own); kept local because the dependency direction
+// (cli → ai → provider) would otherwise drag the provider into the
+// CLI link line.
+std::string json_escape(std::string_view in) {
+  std::string out;
+  out.reserve(in.size() + 2);
+  for (char c : in) {
+    switch (c) {
+      case '"':  out += "\\\""; break;
+      case '\\': out += "\\\\"; break;
+      case '\b': out += "\\b";  break;
+      case '\f': out += "\\f";  break;
+      case '\n': out += "\\n";  break;
+      case '\r': out += "\\r";  break;
+      case '\t': out += "\\t";  break;
+      default:
+        if (static_cast<unsigned char>(c) < 0x20) {
+          out += fmt::format("\\u{:04x}", static_cast<unsigned>(c));
+        } else {
+          out += c;
+        }
+    }
+  }
+  return out;
+}
+
+int cmd_agent_list(bool json_output) {
   const auto registry = souxmar::ai::default_v1_tools();
+
+  if (json_output) {
+    // Sprint 13 push 2 — schema=1 emit. The shape is consumed by
+    // scripts/docs-site/gen-agent-tools.py; documented in
+    // docs-site/agents/tools.md's header. Tools listed sorted by
+    // name (registry.list() already sorts) so output is
+    // byte-deterministic across runs.
+    fmt::print("{{\n  \"schema\": 1,\n");
+    fmt::print("  \"contract_version\": \"v1\",\n");
+    fmt::print("  \"tool_count\": {},\n", registry.size());
+    fmt::print("  \"tools\": [\n");
+    const auto names = registry.list();
+    for (std::size_t i = 0; i < names.size(); ++i) {
+      const auto* t = registry.find(names[i]);
+      const char* comma = (i + 1 == names.size()) ? "" : ",";
+      fmt::print("    {{\n");
+      fmt::print("      \"name\": \"{}\",\n",         json_escape(t->name));
+      fmt::print("      \"category\": \"{}\",\n",     json_escape(t->category));
+      fmt::print("      \"confirmation\": \"{}\",\n", confirmation_name(t->confirmation));
+      fmt::print("      \"description\": \"{}\"\n",   json_escape(t->description));
+      fmt::print("    }}{}\n", comma);
+    }
+    fmt::print("  ]\n}}\n");
+    return kExitOk;
+  }
+
   fmt::print("souxmar agent tools (v1, {} total):\n\n", registry.size());
   for (const auto& name : registry.list()) {
     const auto* t = registry.find(name);
@@ -1362,7 +1416,11 @@ int main(int argc, char** argv) {
       return kExitUsage;
     }
     if (positionals[0] == "list") {
-      return cmd_agent_list();
+      // Sprint 13 push 2 — reuse the shared --json flag bool
+      // (already collected in the top-level parse loop). The
+      // generator at scripts/docs-site/gen-agent-tools.py is the
+      // first consumer.
+      return cmd_agent_list(update_flags.json);
     }
     if (positionals[0] == "invoke") {
       if (positionals.size() < 2) {
