@@ -47,6 +47,8 @@ Issues are auto-labelled `needs-triage` on creation. The maintainer on triage ro
 
 Priority is the maintainer's call, not the reporter's. If you disagree with a priority assignment, leave a comment with the reasoning; the maintainer either re-labels or explains why the original stands.
 
+When a bug is fixed and the fix lands in a release, the resolving PR adds a short record under [`docs/bug-reports/`](bug-reports/) — date-stamped, with symptom + root cause + what the fix covers + what it intentionally doesn't. Cross-referenced from the closing PR; ratifies the ADR-0017 triage convention. See [`docs/bug-reports/2026-05-12-cfd-stub-bcs.md`](bug-reports/2026-05-12-cfd-stub-bcs.md) for the first such record.
+
 ## Public alpha (v0.9.0) — what to expect
 
 Through the v0.9.x beta and the v0.9.0 alpha window:
