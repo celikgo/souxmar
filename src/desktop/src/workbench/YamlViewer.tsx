@@ -18,6 +18,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { invokeCommand } from "../tauri/bridge";
 import { SolversPanel } from "./SolversPanel";
 import { MaterialsPanel } from "./MaterialsPanel";
+import { BoundaryConditionsPanel } from "./BoundaryConditionsPanel";
 
 interface Props {
   projectPath: string;
@@ -143,6 +144,10 @@ export function YamlViewer({ projectPath, relPath }: Props) {
             onChange={(next) => setText(next)}
           />
           <MaterialsPanel
+            currentText={text}
+            onChange={(next) => setText(next)}
+          />
+          <BoundaryConditionsPanel
             currentText={text}
             onChange={(next) => setText(next)}
           />
