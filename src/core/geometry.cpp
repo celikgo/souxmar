@@ -19,24 +19,24 @@ class Geometry::Impl {
 
   // For non-vertex entities we currently store only bookkeeping. Future
   // sprints add per-kind geometric payloads behind this same façade.
-  std::vector<std::int32_t>  edge_count_pad;   // size acts as count
-  std::vector<std::int32_t>  face_count_pad;
-  std::vector<std::int32_t>  solid_count_pad;
+  std::vector<std::int32_t> edge_count_pad;  // size acts as count
+  std::vector<std::int32_t> face_count_pad;
+  std::vector<std::int32_t> solid_count_pad;
 
   // (kind, index) -> tag / name. Sparse — most entities never get a name.
   struct EntityKey {
-    EntityKind    kind;
+    EntityKind kind;
     std::uint32_t index;
     bool operator==(const EntityKey& other) const noexcept = default;
   };
+
   struct EntityKeyHash {
     std::size_t operator()(const EntityKey& k) const noexcept {
-      return std::hash<std::uint64_t>{}(
-          (static_cast<std::uint64_t>(k.kind) << 32) | k.index);
+      return std::hash<std::uint64_t>{}((static_cast<std::uint64_t>(k.kind) << 32) | k.index);
     }
   };
 
-  std::unordered_map<EntityKey, EntityTag,   EntityKeyHash> tags;
+  std::unordered_map<EntityKey, EntityTag, EntityKeyHash> tags;
   std::unordered_map<EntityKey, std::string, EntityKeyHash> names;
 
   // Adapter slot for native handles owned by an adapter (e.g. OCCT).
@@ -51,24 +51,40 @@ class Geometry::Impl {
 };
 
 Geometry::Geometry() : impl_(std::make_unique<Impl>()) {}
+
 Geometry::~Geometry() = default;
 Geometry::Geometry(Geometry&&) noexcept = default;
 Geometry& Geometry::operator=(Geometry&&) noexcept = default;
 
 std::size_t Geometry::count(EntityKind kind) const noexcept {
   switch (kind) {
-    case EntityKind::Vertex: return impl_->vertices.size();
-    case EntityKind::Edge:   return impl_->edge_count_pad.size();
-    case EntityKind::Face:   return impl_->face_count_pad.size();
-    case EntityKind::Solid:  return impl_->solid_count_pad.size();
+    case EntityKind::Vertex:
+      return impl_->vertices.size();
+    case EntityKind::Edge:
+      return impl_->edge_count_pad.size();
+    case EntityKind::Face:
+      return impl_->face_count_pad.size();
+    case EntityKind::Solid:
+      return impl_->solid_count_pad.size();
   }
   return 0;
 }
 
-std::size_t Geometry::num_vertices() const noexcept { return count(EntityKind::Vertex); }
-std::size_t Geometry::num_edges()    const noexcept { return count(EntityKind::Edge); }
-std::size_t Geometry::num_faces()    const noexcept { return count(EntityKind::Face); }
-std::size_t Geometry::num_solids()   const noexcept { return count(EntityKind::Solid); }
+std::size_t Geometry::num_vertices() const noexcept {
+  return count(EntityKind::Vertex);
+}
+
+std::size_t Geometry::num_edges() const noexcept {
+  return count(EntityKind::Edge);
+}
+
+std::size_t Geometry::num_faces() const noexcept {
+  return count(EntityKind::Face);
+}
+
+std::size_t Geometry::num_solids() const noexcept {
+  return count(EntityKind::Solid);
+}
 
 std::array<double, 3> Geometry::vertex_position(VertexIndex v) const {
   if (v.value >= impl_->vertices.size()) {
@@ -111,8 +127,7 @@ std::array<double, 6> Geometry::bounding_box() const {
 }
 
 bool Geometry::empty() const noexcept {
-  return num_vertices() == 0 && num_edges() == 0 &&
-         num_faces() == 0 && num_solids() == 0;
+  return num_vertices() == 0 && num_edges() == 0 && num_faces() == 0 && num_solids() == 0;
 }
 
 VertexIndex Geometry::add_vertex(std::array<double, 3> position) {
@@ -157,7 +172,7 @@ void Geometry::set_adapter_data(void* data, void (*deleter)(void*)) noexcept {
   if (impl_->adapter_data && impl_->adapter_deleter) {
     impl_->adapter_deleter(impl_->adapter_data);
   }
-  impl_->adapter_data    = data;
+  impl_->adapter_data = data;
   impl_->adapter_deleter = deleter;
 }
 

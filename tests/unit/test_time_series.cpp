@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include "souxmar/core/field.h"
 #include "souxmar/core/time_series.h"
 
 #include <gtest/gtest.h>
@@ -9,8 +10,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include "souxmar/core/field.h"
 
 using namespace souxmar::core;
 
@@ -23,12 +22,12 @@ namespace {
 struct CountingLoader {
   std::shared_ptr<std::atomic<int>> calls = std::make_shared<std::atomic<int>>(0);
 
-  std::unique_ptr<Field> operator()(std::size_t frame_index,
-                                     std::string_view field_name) const {
+  std::unique_ptr<Field> operator()(std::size_t frame_index, std::string_view field_name) const {
     calls->fetch_add(1, std::memory_order_relaxed);
-    if (field_name != "scalar") return nullptr;  // only one known field
-    auto f = std::make_unique<Field>(std::string{field_name},
-                                      FieldLocation::Nodal, FieldKind::Scalar, 4);
+    if (field_name != "scalar")
+      return nullptr;  // only one known field
+    auto f = std::make_unique<Field>(
+        std::string{field_name}, FieldLocation::Nodal, FieldKind::Scalar, 4);
     auto buf = f->step(0);
     for (std::size_t i = 0; i < 4; ++i) {
       buf[i] = static_cast<double>(frame_index * 100 + i);
@@ -38,9 +37,10 @@ struct CountingLoader {
 };
 
 TimeSeries MakeSeries(std::size_t window = 16) {
-  std::vector<double>      times;
+  std::vector<double> times;
   std::vector<std::string> names = {"scalar"};
-  for (std::size_t i = 0; i < 10; ++i) times.push_back(static_cast<double>(i) * 0.1);
+  for (std::size_t i = 0; i < 10; ++i)
+    times.push_back(static_cast<double>(i) * 0.1);
   return TimeSeries(std::move(times), std::move(names), CountingLoader{}, window);
 }
 
@@ -81,8 +81,7 @@ TEST(TimeSeries, FrameValuesReflectLoaderOutput) {
 TEST(TimeSeries, CacheHitDoesNotInvokeLoader) {
   CountingLoader loader;
   auto calls = loader.calls;
-  TimeSeries ts(std::vector<double>{0.0, 1.0, 2.0}, std::vector<std::string>{"scalar"},
-                loader, 16);
+  TimeSeries ts(std::vector<double>{0.0, 1.0, 2.0}, std::vector<std::string>{"scalar"}, loader, 16);
   EXPECT_EQ(calls->load(), 0);
   EXPECT_NE(ts.frame(0, "scalar"), nullptr);
   EXPECT_EQ(calls->load(), 1);
@@ -96,7 +95,8 @@ TEST(TimeSeries, LRUEvictionRespectsWindow) {
   auto calls = loader.calls;
   // Window of 2: holds at most 2 frames cached.
   std::vector<double> times;
-  for (std::size_t i = 0; i < 5; ++i) times.push_back(static_cast<double>(i));
+  for (std::size_t i = 0; i < 5; ++i)
+    times.push_back(static_cast<double>(i));
   TimeSeries ts(std::move(times), {"scalar"}, loader, 2);
 
   // Load frames 0, 1, 2 sequentially. After this, cache should hold only
@@ -119,7 +119,8 @@ TEST(TimeSeries, LRUEvictionRespectsWindow) {
 TEST(TimeSeries, SetCacheWindowEvictsImmediately) {
   auto ts = MakeSeries(/*window=*/16);
   // Populate 5 frames.
-  for (std::size_t i = 0; i < 5; ++i) (void)ts.frame(i, "scalar");
+  for (std::size_t i = 0; i < 5; ++i)
+    (void)ts.frame(i, "scalar");
   EXPECT_EQ(ts.cache_occupancy(), 5u);
 
   // Shrinking the window evicts down to the new size.
@@ -131,7 +132,8 @@ TEST(TimeSeries, CachePreloadFillsRange) {
   CountingLoader loader;
   auto calls = loader.calls;
   std::vector<double> times;
-  for (std::size_t i = 0; i < 10; ++i) times.push_back(static_cast<double>(i));
+  for (std::size_t i = 0; i < 10; ++i)
+    times.push_back(static_cast<double>(i));
   TimeSeries ts(std::move(times), {"scalar"}, loader, 16);
 
   const std::size_t loaded = ts.cache_preload(2, 4);
@@ -140,7 +142,8 @@ TEST(TimeSeries, CachePreloadFillsRange) {
   EXPECT_EQ(ts.cache_occupancy(), 4u);
 
   // Accessing pre-loaded frames doesn't increment loader calls.
-  for (std::size_t i = 2; i < 6; ++i) (void)ts.frame(i, "scalar");
+  for (std::size_t i = 2; i < 6; ++i)
+    (void)ts.frame(i, "scalar");
   EXPECT_EQ(calls->load(), 4);
 }
 

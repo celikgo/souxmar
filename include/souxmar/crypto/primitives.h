@@ -42,7 +42,7 @@ namespace souxmar::crypto {
 // ed25519 fixed sizes (RFC 8032).
 inline constexpr std::size_t kEd25519PublicKeyBytes = 32;
 inline constexpr std::size_t kEd25519SignatureBytes = 64;
-inline constexpr std::size_t kSha256DigestBytes     = 32;
+inline constexpr std::size_t kSha256DigestBytes = 32;
 
 // ---- Signature status ---------------------------------------------------
 //
@@ -52,17 +52,17 @@ inline constexpr std::size_t kSha256DigestBytes     = 32;
 // any audit log or test.
 
 enum class SignatureStatus : std::uint8_t {
-  Ok                        = 0,
-  BadSignature              = 1,
+  Ok = 0,
+  BadSignature = 1,
   // Note: UnknownKeyId is *not* a primitive concern — the primitive
   // takes (message, signature, public_key) directly. The caller's
   // trust-policy layer maps a key-id to a public-key first, then
   // calls the primitive; if the lookup fails, the caller raises its
   // own UnknownKeyId.
-  MalformedSignature        = 3,
-  MalformedPublicKey        = 4,
-  EmptyMessage              = 5,
-  CryptoLibraryUnavailable  = 6,
+  MalformedSignature = 3,
+  MalformedPublicKey = 4,
+  EmptyMessage = 5,
+  CryptoLibraryUnavailable = 6,
 };
 
 [[nodiscard]] std::string_view to_string(SignatureStatus) noexcept;
@@ -71,18 +71,15 @@ enum class SignatureStatus : std::uint8_t {
 
 // Decode lowercase-canonical hex into bytes. `out` is cleared on
 // failure. Returns false on odd length or non-[0-9a-f] characters.
-[[nodiscard]] bool
-hex_decode(std::string_view hex, std::vector<std::uint8_t>& out);
+[[nodiscard]] bool hex_decode(std::string_view hex, std::vector<std::uint8_t>& out);
 
-[[nodiscard]] std::string
-hex_encode(std::span<const std::uint8_t> bytes);
+[[nodiscard]] std::string hex_encode(std::span<const std::uint8_t> bytes);
 
 // ---- ed25519 verify -----------------------------------------------------
 
-[[nodiscard]] SignatureStatus
-ed25519_verify(std::span<const std::uint8_t> message,
-               std::span<const std::uint8_t> signature,
-               std::span<const std::uint8_t> public_key);
+[[nodiscard]] SignatureStatus ed25519_verify(std::span<const std::uint8_t> message,
+                                             std::span<const std::uint8_t> signature,
+                                             std::span<const std::uint8_t> public_key);
 
 // ---- sha256 -------------------------------------------------------------
 

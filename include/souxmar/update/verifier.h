@@ -56,31 +56,31 @@ inline constexpr std::size_t kEd25519SignatureBytes = 64;
 // (push 7) records it. Strings are diagnostics-only — *never* parse
 // to_string() output.
 enum class SignatureStatus : std::uint8_t {
-  Ok                        = 0,
+  Ok = 0,
   // The signature did not verify against the public key. Could be a
   // wrong key, a tampered manifest, or a corrupted signature — the
   // verifier deliberately collapses all three (cryptographic
   // indistinguishability) so the apply gate treats them identically.
-  BadSignature              = 1,
+  BadSignature = 1,
   // The manifest's public_key_id is not in the trust store. Either
   // the manifest came from a different signer than this client knows
   // about, or the client is too old to recognise the key (signing-key
   // rotation = separate coordinated event, ADR-0013 § "Pinned key id,
   // separate rotation event").
-  UnknownKeyId              = 2,
+  UnknownKeyId = 2,
   // Signature length is not exactly kEd25519SignatureBytes.
-  MalformedSignature        = 3,
+  MalformedSignature = 3,
   // Public key length is not exactly kEd25519PublicKeyBytes.
-  MalformedPublicKey        = 4,
+  MalformedPublicKey = 4,
   // Empty message — we refuse to even attempt verification of a
   // zero-byte manifest. A real release manifest is ~50 lines of TOML;
   // empty is always wrong.
-  EmptyMessage              = 5,
+  EmptyMessage = 5,
   // libsodium failed to initialise — the platform's CSPRNG is
   // unavailable or the library was built broken. Unrecoverable; the
   // state machine should surface this as "your install is broken,
   // reinstall" rather than retrying.
-  CryptoLibraryUnavailable  = 6,
+  CryptoLibraryUnavailable = 6,
 };
 
 [[nodiscard]] std::string_view to_string(SignatureStatus) noexcept;
@@ -92,8 +92,8 @@ enum class SignatureStatus : std::uint8_t {
 // rotation = ship a new client. See docs/SECURITY.md (lands with
 // push 7).
 struct TrustedKey {
-  std::string                public_key_id;
-  std::vector<std::uint8_t>  public_key;   // exactly kEd25519PublicKeyBytes
+  std::string public_key_id;
+  std::vector<std::uint8_t> public_key;  // exactly kEd25519PublicKeyBytes
 };
 
 // In-memory trust store: an ordered set of TrustedKey, looked up by
@@ -112,21 +112,24 @@ class TrustStore {
   // application that embeds the release key list) should treat it as
   // a hard error during startup, not propagate it as a runtime
   // condition.
-  [[nodiscard]] bool add(std::string                   id,
-                         std::span<const std::uint8_t> public_key);
+  [[nodiscard]] bool add(std::string id, std::span<const std::uint8_t> public_key);
 
   // Convenience for the common embedding case: keys are typically
   // compiled in as 64-character lowercase-hex literals. Returns false
   // on malformed hex or wrong decoded length.
-  [[nodiscard]] bool add_hex(std::string      id,
-                             std::string_view hex_pubkey);
+  [[nodiscard]] bool add_hex(std::string id, std::string_view hex_pubkey);
 
   // Lookup by id. Returns nullptr if the id is not present; never
   // throws.
   [[nodiscard]] const TrustedKey* find(std::string_view id) const noexcept;
 
-  [[nodiscard]] bool         empty() const noexcept { return keys_.empty(); }
-  [[nodiscard]] std::size_t  size()  const noexcept { return keys_.size(); }
+  [[nodiscard]] bool empty() const noexcept {
+    return keys_.empty();
+  }
+
+  [[nodiscard]] std::size_t size() const noexcept {
+    return keys_.size();
+  }
 
   // For iteration in tests + the `--print-trust-store` CLI dump.
   [[nodiscard]] const std::vector<TrustedKey>& keys() const noexcept {
@@ -147,8 +150,7 @@ class TrustStore {
 // `out` is cleared on failure. Empty input decodes to an empty vector
 // (returns true) — callers that need a non-empty result should length-
 // check after decoding.
-[[nodiscard]] bool
-hex_decode(std::string_view hex, std::vector<std::uint8_t>& out);
+[[nodiscard]] bool hex_decode(std::string_view hex, std::vector<std::uint8_t>& out);
 
 // Encode bytes to lowercase hex. Used by the `--print-trust-store`
 // dump and by the audit-log writer in push 7.
@@ -174,18 +176,17 @@ hex_decode(std::string_view hex, std::vector<std::uint8_t>& out);
 // Low-level: verify a detached ed25519 signature directly. Returns
 // Ok only when libsodium's crypto_sign_verify_detached returns 0
 // for the given (message, signature, public_key) triple.
-[[nodiscard]] SignatureStatus
-verify_detached_ed25519(std::span<const std::uint8_t> message,
-                        std::span<const std::uint8_t> signature,
-                        std::span<const std::uint8_t> public_key);
+[[nodiscard]] SignatureStatus verify_detached_ed25519(std::span<const std::uint8_t> message,
+                                                      std::span<const std::uint8_t> signature,
+                                                      std::span<const std::uint8_t> public_key);
 
 // High-level: look up `key_id` in `trust`, then verify. Returns
 // UnknownKeyId if the lookup fails (before any crypto work happens),
 // otherwise forwards to verify_detached_ed25519.
-[[nodiscard]] SignatureStatus
-verify_manifest_signature(std::span<const std::uint8_t> manifest_bytes,
-                          std::span<const std::uint8_t> signature_bytes,
-                          std::string_view              key_id,
-                          const TrustStore&             trust);
+[[nodiscard]] SignatureStatus verify_manifest_signature(
+    std::span<const std::uint8_t> manifest_bytes,
+    std::span<const std::uint8_t> signature_bytes,
+    std::string_view key_id,
+    const TrustStore& trust);
 
 }  // namespace souxmar::update

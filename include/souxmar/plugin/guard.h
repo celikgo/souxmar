@@ -21,15 +21,15 @@
 namespace souxmar::plugin {
 
 enum class GuardOutcome {
-  Ok            = 0,
-  CppException  = 1,
-  Signal        = 2,  // unused at Sprint 2; reserved for the Sprint 5 hardening
-  Unknown       = 99,
+  Ok = 0,
+  CppException = 1,
+  Signal = 2,  // unused at Sprint 2; reserved for the Sprint 5 hardening
+  Unknown = 99,
 };
 
 struct GuardResult {
   GuardOutcome outcome;
-  std::string  detail;  // exception what(), signal name, or empty on Ok
+  std::string detail;  // exception what(), signal name, or empty on Ok
 };
 
 // Run `fn` inside the crash-isolation frame. Returns Ok if `fn` returned

@@ -13,13 +13,13 @@ namespace {
 
 TEST(Field, ScalarMetadata) {
   Field f("temperature", FieldLocation::Nodal, FieldKind::Scalar, 100);
-  EXPECT_EQ(f.name(),           "temperature");
-  EXPECT_EQ(f.location(),       FieldLocation::Nodal);
-  EXPECT_EQ(f.kind(),           FieldKind::Scalar);
-  EXPECT_EQ(f.components(),     1u);
-  EXPECT_EQ(f.count(),          100u);
+  EXPECT_EQ(f.name(), "temperature");
+  EXPECT_EQ(f.location(), FieldLocation::Nodal);
+  EXPECT_EQ(f.kind(), FieldKind::Scalar);
+  EXPECT_EQ(f.components(), 1u);
+  EXPECT_EQ(f.count(), 100u);
   EXPECT_EQ(f.num_time_steps(), 1u);
-  EXPECT_EQ(f.data().size(),    100u);
+  EXPECT_EQ(f.data().size(), 100u);
 }
 
 TEST(Field, VectorAllocates3xN) {
@@ -36,7 +36,8 @@ TEST(Field, TensorAllocates9xN) {
 
 TEST(Field, ZeroInitialised) {
   Field f("density", FieldLocation::Cell, FieldKind::Scalar, 5);
-  for (double v : f.data()) EXPECT_DOUBLE_EQ(v, 0.0);
+  for (double v : f.data())
+    EXPECT_DOUBLE_EQ(v, 0.0);
 }
 
 TEST(Field, AtAccessRoundtrip) {
@@ -62,7 +63,7 @@ TEST(Field, OutOfRangeAtThrows) {
 TEST(Field, TimeStepsAllocateContiguously) {
   Field f("temp", FieldLocation::Nodal, FieldKind::Scalar, 10, 4);
   EXPECT_EQ(f.num_time_steps(), 4u);
-  EXPECT_EQ(f.data().size(),    40u);
+  EXPECT_EQ(f.data().size(), 40u);
 
   // Write at time 2, location 5; verify with span lookup.
   f.at(5, 2)[0] = 7.5;
@@ -86,9 +87,7 @@ TEST(Field, OutOfRangeStepThrows) {
 }
 
 TEST(Field, ZeroTimeStepsRejected) {
-  EXPECT_THROW(
-      Field("bad", FieldLocation::Nodal, FieldKind::Scalar, 1, 0),
-      std::invalid_argument);
+  EXPECT_THROW(Field("bad", FieldLocation::Nodal, FieldKind::Scalar, 1, 0), std::invalid_argument);
 }
 
 TEST(Field, MoveTransfers) {

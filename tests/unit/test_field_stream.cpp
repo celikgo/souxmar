@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include "souxmar/core/field.h"
 #include "souxmar/core/field_stream.h"
 
 #include <gtest/gtest.h>
 
 #include <cstddef>
 #include <vector>
-
-#include "souxmar/core/field.h"
 
 using namespace souxmar::core;
 
@@ -17,7 +16,8 @@ namespace {
 Field MakeScalarField(std::vector<double> values) {
   Field f("test", FieldLocation::Nodal, FieldKind::Scalar, values.size());
   auto buf = f.step(0);
-  for (std::size_t i = 0; i < values.size(); ++i) buf[i] = values[i];
+  for (std::size_t i = 0; i < values.size(); ++i)
+    buf[i] = values[i];
   return f;
 }
 
@@ -54,10 +54,10 @@ TEST(FieldStream, VectorRangeIsPerComponent) {
   ASSERT_EQ(s.range_min().size(), 3u);
   EXPECT_DOUBLE_EQ(s.range_min()[0], -3.0);
   EXPECT_DOUBLE_EQ(s.range_min()[1], -5.0);
-  EXPECT_DOUBLE_EQ(s.range_min()[2],  0.0);
-  EXPECT_DOUBLE_EQ(s.range_max()[0],  1.0);
-  EXPECT_DOUBLE_EQ(s.range_max()[1],  2.0);
-  EXPECT_DOUBLE_EQ(s.range_max()[2],  7.0);
+  EXPECT_DOUBLE_EQ(s.range_min()[2], 0.0);
+  EXPECT_DOUBLE_EQ(s.range_max()[0], 1.0);
+  EXPECT_DOUBLE_EQ(s.range_max()[1], 2.0);
+  EXPECT_DOUBLE_EQ(s.range_max()[2], 7.0);
 }
 
 TEST(FieldStream, ValuesAreF32DownCastOfSource) {
@@ -97,9 +97,9 @@ TEST(FieldStream, ValueLayoutMatchesSoA) {
   FieldStream s(f);
   const auto v = s.values();
   ASSERT_EQ(v.size(), 12u);
-  EXPECT_FLOAT_EQ(v[0],  1.0f);
-  EXPECT_FLOAT_EQ(v[1],  2.0f);
-  EXPECT_FLOAT_EQ(v[2],  3.0f);
-  EXPECT_FLOAT_EQ(v[3],  4.0f);
+  EXPECT_FLOAT_EQ(v[0], 1.0f);
+  EXPECT_FLOAT_EQ(v[1], 2.0f);
+  EXPECT_FLOAT_EQ(v[2], 3.0f);
+  EXPECT_FLOAT_EQ(v[3], 4.0f);
   EXPECT_FLOAT_EQ(v[11], 12.0f);
 }

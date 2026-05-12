@@ -43,13 +43,12 @@ void souxmar_timeseries_close(souxmar_timeseries_t* series);
 size_t souxmar_timeseries_frame_count(const souxmar_timeseries_t* series);
 
 souxmar_status_t souxmar_timeseries_time(const souxmar_timeseries_t* series,
-                                          size_t                       frame_index,
-                                          double*                      out_time);
+                                         size_t frame_index,
+                                         double* out_time);
 
 size_t souxmar_timeseries_field_count(const souxmar_timeseries_t* series);
 
-const char* souxmar_timeseries_field_name(const souxmar_timeseries_t* series,
-                                           size_t                       field_index);
+const char* souxmar_timeseries_field_name(const souxmar_timeseries_t* series, size_t field_index);
 
 /* ---- Frame access ----
  *
@@ -59,21 +58,20 @@ const char* souxmar_timeseries_field_name(const souxmar_timeseries_t* series,
  * calls the API. The host promises the returned field is in the
  * cache window. */
 const souxmar_field_t* souxmar_timeseries_frame(souxmar_timeseries_t* series,
-                                                  size_t                 frame_index,
-                                                  const char*            field_name);
+                                                size_t frame_index,
+                                                const char* field_name);
 
 /* ---- Cache control ----
  *
  * window_size: how many frames the host may keep resident. Defaults
  * to 16. Setting 0 disables caching (every frame request hits disk).
  * Setting SIZE_MAX pins the whole series (caller's risk). */
-souxmar_status_t souxmar_timeseries_cache_window(souxmar_timeseries_t* series,
-                                                  size_t                 window_size);
+souxmar_status_t souxmar_timeseries_cache_window(souxmar_timeseries_t* series, size_t window_size);
 
 /* Pre-warm the cache so playback can start without disk stalls. */
 souxmar_status_t souxmar_timeseries_cache_preload(souxmar_timeseries_t* series,
-                                                   size_t                 start_frame,
-                                                   size_t                 count);
+                                                  size_t start_frame,
+                                                  size_t count);
 
 SOUXMAR_C_END
 #endif /* SOUXMAR_C_TIMESERIES_H */

@@ -8,20 +8,20 @@
 
 #pragma once
 
+#include "souxmar/pipeline/pipeline.h"
+
 #include <filesystem>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <variant>
 
-#include "souxmar/pipeline/pipeline.h"
-
 namespace souxmar::pipeline {
 
 struct ParseError {
-  std::string                  message;
-  std::optional<std::size_t>   line;     // 1-based, when available
-  std::optional<std::size_t>   column;   // 1-based, when available
+  std::string message;
+  std::optional<std::size_t> line;    // 1-based, when available
+  std::optional<std::size_t> column;  // 1-based, when available
 };
 
 using ParseResult = std::variant<Pipeline, ParseError>;

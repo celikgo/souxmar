@@ -28,7 +28,9 @@
 #include <string>
 #include <string_view>
 
-namespace souxmar::pipeline { class Value; }
+namespace souxmar::pipeline {
+class Value;
+}
 
 namespace souxmar::ai {
 
@@ -37,19 +39,18 @@ namespace souxmar::ai {
 // `consumed_*` after a provider call; the dispatcher reads them when
 // writing the audit entry.
 struct SessionBudget {
-  std::size_t max_input_tokens   = 0;
-  std::size_t max_output_tokens  = 0;
-  std::size_t max_total_tokens   = 0;
+  std::size_t max_input_tokens = 0;
+  std::size_t max_output_tokens = 0;
+  std::size_t max_total_tokens = 0;
 
-  std::size_t consumed_input     = 0;
-  std::size_t consumed_output    = 0;
+  std::size_t consumed_input = 0;
+  std::size_t consumed_output = 0;
 
   // Fired once per crossed threshold per axis. `pct` is the threshold
   // percentage just reached (50 / 80 / 100). `axis` is "input", "output",
   // or "total". Callbacks should NOT throw — the dispatcher invokes them
   // in line with audit writes.
-  std::function<void(int pct, std::string_view axis,
-                     const SessionBudget& current)>  on_threshold;
+  std::function<void(int pct, std::string_view axis, const SessionBudget& current)> on_threshold;
 
   [[nodiscard]] std::size_t consumed_total() const noexcept {
     return consumed_input + consumed_output;
@@ -82,7 +83,7 @@ class AuditLog {
   explicit AuditLog(std::filesystem::path path);
   ~AuditLog();
 
-  AuditLog(const AuditLog&)            = delete;
+  AuditLog(const AuditLog&) = delete;
   AuditLog& operator=(const AuditLog&) = delete;
   AuditLog(AuditLog&&) noexcept;
   AuditLog& operator=(AuditLog&&) noexcept;
@@ -92,20 +93,20 @@ class AuditLog {
   // human-readable line the agent UI would render). Other fields are
   // computed by the dispatcher.
   struct Entry {
-    std::string                 tool_name;
-    std::string                 outcome;
-    std::string                 summary;
-    std::string                 input_hash;     // hex SHA-256 over inputs
-    std::chrono::milliseconds   duration{};
-    const SessionBudget*        budget = nullptr;  // optional snapshot
+    std::string tool_name;
+    std::string outcome;
+    std::string summary;
+    std::string input_hash;  // hex SHA-256 over inputs
+    std::chrono::milliseconds duration{};
+    const SessionBudget* budget = nullptr;  // optional snapshot
 
     // Sprint 9 push 9 — net change in process-wide in-use heap bytes
     // across this tool's dispatch (via `souxmar::plugin::HeapAccountant`).
     // Signed: negative for net-freeing tools. Defaults to 0; the
     // dispatcher populates it on platforms where HeapAccountant is
     // supported and skips serialising the field otherwise.
-    std::int64_t                heap_bytes_delta = 0;
-    bool                        heap_supported   = false;
+    std::int64_t heap_bytes_delta = 0;
+    bool heap_supported = false;
   };
 
   // Append one entry. Failure to write is silently ignored — the audit
@@ -115,8 +116,8 @@ class AuditLog {
   // Default path: `.souxmar/chat/audit.log` under `project_root` (or the
   // current working directory if `project_root` is empty). The directory
   // structure is created lazily on first append.
-  [[nodiscard]] static std::filesystem::path
-  default_path(const std::filesystem::path& project_root = {});
+  [[nodiscard]] static std::filesystem::path default_path(
+      const std::filesystem::path& project_root = {});
 
   [[nodiscard]] const std::filesystem::path& path() const noexcept;
 

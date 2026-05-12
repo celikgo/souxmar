@@ -12,11 +12,11 @@
 
 #pragma once
 
+#include "souxmar/pipeline/pipeline.h"
+
 #include <string>
 #include <variant>
 #include <vector>
-
-#include "souxmar/pipeline/pipeline.h"
 
 namespace souxmar::pipeline {
 
@@ -33,7 +33,6 @@ using DagResult = std::variant<std::vector<std::size_t>, std::vector<DagError>>;
 
 // Helper exposed for tests / tooling. Returns the set of stage ids referenced
 // (transitively) by `value` via StageRef.
-[[nodiscard]] std::vector<std::string>
-collect_stage_refs(const Value& value);
+[[nodiscard]] std::vector<std::string> collect_stage_refs(const Value& value);
 
 }  // namespace souxmar::pipeline

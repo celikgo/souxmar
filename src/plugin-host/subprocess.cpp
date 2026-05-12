@@ -13,17 +13,19 @@
 #include <vector>
 
 #if defined(_WIN32)
-  #define WIN32_LEAN_AND_MEAN
-  #include <windows.h>
-  #include <cstring>
+#define WIN32_LEAN_AND_MEAN
+#include <cstring>
+
+#include <windows.h>
 #else
-  #include <fcntl.h>
-  #include <poll.h>
-  #include <signal.h>
-  #include <spawn.h>
-  #include <sys/types.h>
-  #include <sys/wait.h>
-  #include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+#include <fcntl.h>
+#include <poll.h>
+#include <signal.h>
+#include <spawn.h>
+#include <unistd.h>
 extern char** environ;
 #endif
 
@@ -37,18 +39,21 @@ namespace {
 // (bytes, truncated). When `cap == 0`, no cap.
 struct DrainResult {
   std::string bytes;
-  bool        truncated = false;
+  bool truncated = false;
 };
+
 DrainResult drain_fd_capped(int fd, std::size_t cap) {
   DrainResult r;
   std::array<char, 4096> buf{};
   for (;;) {
     const ssize_t n = ::read(fd, buf.data(), buf.size());
     if (n < 0) {
-      if (errno == EINTR) continue;
+      if (errno == EINTR)
+        continue;
       break;  // EAGAIN / EBADF / pipe closed; loop exits in poll() above
     }
-    if (n == 0) break;  // EOF
+    if (n == 0)
+      break;  // EOF
     if (cap == 0 || r.bytes.size() + static_cast<std::size_t>(n) <= cap) {
       r.bytes.append(buf.data(), static_cast<std::size_t>(n));
     } else {
@@ -74,14 +79,16 @@ SubprocessResult run_posix(const SubprocessOptions& opts) {
 
   // Pipes: parent reads stdout (out_pipe[0]) + stderr (err_pipe[0]);
   // parent writes to stdin (in_pipe[1]); child uses the opposite ends.
-  int in_pipe[2]  = {-1, -1};
+  int in_pipe[2] = {-1, -1};
   int out_pipe[2] = {-1, -1};
   int err_pipe[2] = {-1, -1};
   auto close_all = [&] {
-    for (int* fd : {&in_pipe[0],  &in_pipe[1],
-                    &out_pipe[0], &out_pipe[1],
-                    &err_pipe[0], &err_pipe[1]}) {
-      if (*fd >= 0) { ::close(*fd); *fd = -1; }
+    for (int* fd :
+         {&in_pipe[0], &in_pipe[1], &out_pipe[0], &out_pipe[1], &err_pipe[0], &err_pipe[1]}) {
+      if (*fd >= 0) {
+        ::close(*fd);
+        *fd = -1;
+      }
     }
   };
   if (::pipe(in_pipe) != 0 || ::pipe(out_pipe) != 0 || ::pipe(err_pipe) != 0) {
@@ -97,23 +104,27 @@ SubprocessResult run_posix(const SubprocessOptions& opts) {
   // Build argv as a NULL-terminated C array.
   std::vector<char*> argv_c;
   argv_c.reserve(opts.argv.size() + 1);
-  for (const auto& a : opts.argv) argv_c.push_back(const_cast<char*>(a.c_str()));
+  for (const auto& a : opts.argv)
+    argv_c.push_back(const_cast<char*>(a.c_str()));
   argv_c.push_back(nullptr);
 
   // Build envp by overlaying opts.env onto the parent's environment.
   // Empty values delete the key (POSIX has no "unset" via execve, so
   // we just omit it from the assembled envp).
   std::vector<std::string> env_storage;
-  std::vector<char*>       envp_c;
+  std::vector<char*> envp_c;
   std::map<std::string, std::string> merged;
   for (char** e = environ; *e; ++e) {
     std::string line(*e);
     const auto eq = line.find('=');
-    if (eq != std::string::npos) merged[line.substr(0, eq)] = line.substr(eq + 1);
+    if (eq != std::string::npos)
+      merged[line.substr(0, eq)] = line.substr(eq + 1);
   }
   for (const auto& [k, v] : opts.env) {
-    if (v.empty()) merged.erase(k);
-    else           merged[k] = v;
+    if (v.empty())
+      merged.erase(k);
+    else
+      merged[k] = v;
   }
   for (const auto& [k, v] : merged) {
     env_storage.push_back(k + "=" + v);
@@ -128,15 +139,15 @@ SubprocessResult run_posix(const SubprocessOptions& opts) {
   posix_spawn_file_actions_init(&file_actions);
   // Child's stdin ← in_pipe read end; close write end.
   posix_spawn_file_actions_addclose(&file_actions, in_pipe[1]);
-  posix_spawn_file_actions_adddup2(&file_actions,  in_pipe[0], STDIN_FILENO);
+  posix_spawn_file_actions_adddup2(&file_actions, in_pipe[0], STDIN_FILENO);
   posix_spawn_file_actions_addclose(&file_actions, in_pipe[0]);
   // Child's stdout → out_pipe write end; close read end.
   posix_spawn_file_actions_addclose(&file_actions, out_pipe[0]);
-  posix_spawn_file_actions_adddup2(&file_actions,  out_pipe[1], STDOUT_FILENO);
+  posix_spawn_file_actions_adddup2(&file_actions, out_pipe[1], STDOUT_FILENO);
   posix_spawn_file_actions_addclose(&file_actions, out_pipe[1]);
   // Child's stderr → err_pipe write end; close read end.
   posix_spawn_file_actions_addclose(&file_actions, err_pipe[0]);
-  posix_spawn_file_actions_adddup2(&file_actions,  err_pipe[1], STDERR_FILENO);
+  posix_spawn_file_actions_adddup2(&file_actions, err_pipe[1], STDERR_FILENO);
   posix_spawn_file_actions_addclose(&file_actions, err_pipe[1]);
   if (!opts.work_dir.empty()) {
     // posix_spawn_file_actions_addchdir_np is non-portable; fall back
@@ -149,7 +160,7 @@ SubprocessResult run_posix(const SubprocessOptions& opts) {
 
   // Save + change cwd if requested. Restored unconditionally below.
   std::filesystem::path saved_cwd;
-  std::error_code        cwd_ec;
+  std::error_code cwd_ec;
   if (!opts.work_dir.empty()) {
     saved_cwd = std::filesystem::current_path(cwd_ec);
     std::filesystem::current_path(opts.work_dir, cwd_ec);
@@ -165,8 +176,7 @@ SubprocessResult run_posix(const SubprocessOptions& opts) {
   const auto t_start = std::chrono::steady_clock::now();
 
   pid_t pid = 0;
-  const int rc = posix_spawnp(
-      &pid, argv_c[0], &file_actions, &attr, argv_c.data(), envp_c.data());
+  const int rc = posix_spawnp(&pid, argv_c[0], &file_actions, &attr, argv_c.data(), envp_c.data());
 
   if (!saved_cwd.empty()) {
     std::filesystem::current_path(saved_cwd, cwd_ec);  // best-effort
@@ -180,42 +190,50 @@ SubprocessResult run_posix(const SubprocessOptions& opts) {
   }
 
   // Close child-only ends in the parent so EOF reaches the reader.
-  ::close(in_pipe[0]);  in_pipe[0]  = -1;
-  ::close(out_pipe[1]); out_pipe[1] = -1;
-  ::close(err_pipe[1]); err_pipe[1] = -1;
+  ::close(in_pipe[0]);
+  in_pipe[0] = -1;
+  ::close(out_pipe[1]);
+  out_pipe[1] = -1;
+  ::close(err_pipe[1]);
+  err_pipe[1] = -1;
 
   // Push stdin in one write + close. Stdin is bounded by the caller;
   // we don't currently support iterative stdin streaming.
   if (!opts.stdin_bytes.empty()) {
-    const char*  p   = opts.stdin_bytes.data();
-    std::size_t  rem = opts.stdin_bytes.size();
+    const char* p = opts.stdin_bytes.data();
+    std::size_t rem = opts.stdin_bytes.size();
     while (rem > 0) {
       const ssize_t n = ::write(in_pipe[1], p, rem);
       if (n < 0) {
-        if (errno == EINTR) continue;
+        if (errno == EINTR)
+          continue;
         break;
       }
-      p   += n;
+      p += n;
       rem -= static_cast<std::size_t>(n);
     }
   }
-  ::close(in_pipe[1]); in_pipe[1] = -1;
+  ::close(in_pipe[1]);
+  in_pipe[1] = -1;
 
   // Poll the two output fds while the child runs. We don't strictly
   // need poll() for correctness — sequential `read` would work — but
   // poll keeps us responsive to the timeout deadline.
   DrainResult stdout_drain{};
   DrainResult stderr_drain{};
-  const auto deadline = (opts.timeout.count() > 0)
-      ? t_start + opts.timeout
-      : std::chrono::steady_clock::time_point::max();
+  const auto deadline = (opts.timeout.count() > 0) ? t_start + opts.timeout
+                                                   : std::chrono::steady_clock::time_point::max();
 
   bool killed_by_timeout = false;
   while (out_pipe[0] >= 0 || err_pipe[0] >= 0) {
     pollfd fds[2];
-    int    nfds = 0;
-    if (out_pipe[0] >= 0) { fds[nfds++] = {out_pipe[0], POLLIN, 0}; }
-    if (err_pipe[0] >= 0) { fds[nfds++] = {err_pipe[0], POLLIN, 0}; }
+    int nfds = 0;
+    if (out_pipe[0] >= 0) {
+      fds[nfds++] = {out_pipe[0], POLLIN, 0};
+    }
+    if (err_pipe[0] >= 0) {
+      fds[nfds++] = {err_pipe[0], POLLIN, 0};
+    }
 
     int timeout_ms = -1;
     if (deadline != std::chrono::steady_clock::time_point::max()) {
@@ -225,7 +243,8 @@ SubprocessResult run_posix(const SubprocessOptions& opts) {
     }
     const int pr = ::poll(fds, static_cast<nfds_t>(nfds), timeout_ms);
     if (pr < 0) {
-      if (errno == EINTR) continue;
+      if (errno == EINTR)
+        continue;
       break;
     }
     if (pr == 0) {
@@ -248,8 +267,10 @@ SubprocessResult run_posix(const SubprocessOptions& opts) {
         }
         if (fds[i].revents & POLLHUP) {
           ::close(fd);
-          if (fd == out_pipe[0]) out_pipe[0] = -1;
-          else                   err_pipe[0] = -1;
+          if (fd == out_pipe[0])
+            out_pipe[0] = -1;
+          else
+            err_pipe[0] = -1;
         }
       }
     }
@@ -259,28 +280,32 @@ SubprocessResult run_posix(const SubprocessOptions& opts) {
     auto d = drain_fd_capped(out_pipe[0], opts.max_capture_bytes);
     stdout_drain.bytes.append(d.bytes);
     stdout_drain.truncated = stdout_drain.truncated || d.truncated;
-    ::close(out_pipe[0]); out_pipe[0] = -1;
+    ::close(out_pipe[0]);
+    out_pipe[0] = -1;
   }
   if (err_pipe[0] >= 0) {
     auto d = drain_fd_capped(err_pipe[0], opts.max_capture_bytes);
     stderr_drain.bytes.append(d.bytes);
     stderr_drain.truncated = stderr_drain.truncated || d.truncated;
-    ::close(err_pipe[0]); err_pipe[0] = -1;
+    ::close(err_pipe[0]);
+    err_pipe[0] = -1;
   }
 
   int status = 0;
   ::waitpid(pid, &status, 0);
   const auto t_end = std::chrono::steady_clock::now();
 
-  r.ok                 = true;
-  r.duration           = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start);
-  r.stdout_bytes       = std::move(stdout_drain.bytes);
-  r.stderr_bytes       = std::move(stderr_drain.bytes);
-  r.stdout_truncated   = stdout_drain.truncated;
-  r.stderr_truncated   = stderr_drain.truncated;
-  r.timed_out          = killed_by_timeout;
-  if (WIFEXITED(status))   r.exit_code    = WEXITSTATUS(status);
-  if (WIFSIGNALED(status)) r.fatal_signal = WTERMSIG(status);
+  r.ok = true;
+  r.duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start);
+  r.stdout_bytes = std::move(stdout_drain.bytes);
+  r.stderr_bytes = std::move(stderr_drain.bytes);
+  r.stdout_truncated = stdout_drain.truncated;
+  r.stderr_truncated = stderr_drain.truncated;
+  r.timed_out = killed_by_timeout;
+  if (WIFEXITED(status))
+    r.exit_code = WEXITSTATUS(status);
+  if (WIFSIGNALED(status))
+    r.fatal_signal = WTERMSIG(status);
   close_all();
   return r;
 }
@@ -293,7 +318,8 @@ SubprocessResult run_posix(const SubprocessOptions& opts) {
 // consumers can treat "child crashed" uniformly across platforms.
 
 std::wstring to_wide(std::string_view s) {
-  if (s.empty()) return {};
+  if (s.empty())
+    return {};
   const int len = MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0);
   std::wstring out(len, L'\0');
   MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), out.data(), len);
@@ -301,22 +327,31 @@ std::wstring to_wide(std::string_view s) {
 }
 
 std::string from_wide(const std::wstring& s) {
-  if (s.empty()) return {};
-  const int len = WideCharToMultiByte(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0, nullptr, nullptr);
+  if (s.empty())
+    return {};
+  const int len = WideCharToMultiByte(
+      CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0, nullptr, nullptr);
   std::string out(len, '\0');
-  WideCharToMultiByte(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), out.data(), len, nullptr, nullptr);
+  WideCharToMultiByte(
+      CP_UTF8, 0, s.data(), static_cast<int>(s.size()), out.data(), len, nullptr, nullptr);
   return out;
 }
 
 int map_status_exception_to_signal(DWORD code) noexcept {
   // Synthetic signal-like values so cross-platform consumers can pattern-match.
   switch (code) {
-    case STATUS_ACCESS_VIOLATION:    return 11; // SIGSEGV
-    case STATUS_STACK_OVERFLOW:      return 11; // SIGSEGV
-    case STATUS_ILLEGAL_INSTRUCTION: return 4;  // SIGILL
-    case STATUS_FLOAT_DIVIDE_BY_ZERO:return 8;  // SIGFPE
-    case STATUS_INTEGER_DIVIDE_BY_ZERO: return 8; // SIGFPE
-    default: return 0;
+    case STATUS_ACCESS_VIOLATION:
+      return 11;  // SIGSEGV
+    case STATUS_STACK_OVERFLOW:
+      return 11;  // SIGSEGV
+    case STATUS_ILLEGAL_INSTRUCTION:
+      return 4;  // SIGILL
+    case STATUS_FLOAT_DIVIDE_BY_ZERO:
+      return 8;  // SIGFPE
+    case STATUS_INTEGER_DIVIDE_BY_ZERO:
+      return 8;  // SIGFPE
+    default:
+      return 0;
   }
 }
 
@@ -330,67 +365,79 @@ SubprocessResult run_windows(const SubprocessOptions& opts) {
   // is a hot mess — we use the standard MSVC algorithm.
   std::wstring cmdline;
   auto quote = [](std::wstring& out, const std::wstring& arg) {
-    if (!arg.empty() &&
-        arg.find_first_of(L" \t\n\v\"") == std::wstring::npos) {
+    if (!arg.empty() && arg.find_first_of(L" \t\n\v\"") == std::wstring::npos) {
       out += arg;
       return;
     }
     out += L'"';
     for (std::size_t i = 0; i < arg.size(); ++i) {
       std::size_t bs = 0;
-      while (i < arg.size() && arg[i] == L'\\') { ++bs; ++i; }
-      if (i == arg.size())          out.append(bs * 2, L'\\');
-      else if (arg[i] == L'"')      { out.append(bs * 2 + 1, L'\\'); out += L'"'; }
-      else                          { out.append(bs, L'\\'); out += arg[i]; }
+      while (i < arg.size() && arg[i] == L'\\') {
+        ++bs;
+        ++i;
+      }
+      if (i == arg.size())
+        out.append(bs * 2, L'\\');
+      else if (arg[i] == L'"') {
+        out.append(bs * 2 + 1, L'\\');
+        out += L'"';
+      } else {
+        out.append(bs, L'\\');
+        out += arg[i];
+      }
     }
     out += L'"';
   };
   for (std::size_t i = 0; i < opts.argv.size(); ++i) {
-    if (i) cmdline += L' ';
+    if (i)
+      cmdline += L' ';
     quote(cmdline, to_wide(opts.argv[i]));
   }
   std::wstring program = to_wide(opts.argv[0]);
 
   SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE};
-  HANDLE in_r = nullptr,  in_w = nullptr;
+  HANDLE in_r = nullptr, in_w = nullptr;
   HANDLE out_r = nullptr, out_w = nullptr;
   HANDLE err_r = nullptr, err_w = nullptr;
-  if (!CreatePipe(&in_r,  &in_w,  &sa, 0) ||
-      !CreatePipe(&out_r, &out_w, &sa, 0) ||
-      !CreatePipe(&err_r, &err_w, &sa, 0)) {
+  if (!CreatePipe(&in_r, &in_w, &sa, 0) || !CreatePipe(&out_r, &out_w, &sa, 0)
+      || !CreatePipe(&err_r, &err_w, &sa, 0)) {
     r.error_message = "CreatePipe failed";
     return r;
   }
-  SetHandleInformation(in_w,  HANDLE_FLAG_INHERIT, 0);
+  SetHandleInformation(in_w, HANDLE_FLAG_INHERIT, 0);
   SetHandleInformation(out_r, HANDLE_FLAG_INHERIT, 0);
   SetHandleInformation(err_r, HANDLE_FLAG_INHERIT, 0);
 
   STARTUPINFOW si{};
-  si.cb         = sizeof(si);
-  si.hStdInput  = in_r;
+  si.cb = sizeof(si);
+  si.hStdInput = in_r;
   si.hStdOutput = out_w;
-  si.hStdError  = err_w;
-  si.dwFlags    = STARTF_USESTDHANDLES;
+  si.hStdError = err_w;
+  si.dwFlags = STARTF_USESTDHANDLES;
 
   PROCESS_INFORMATION pi{};
 
   std::wstring wd = opts.work_dir.empty() ? std::wstring{} : opts.work_dir.wstring();
 
   const auto t_start = std::chrono::steady_clock::now();
-  const BOOL spawned = CreateProcessW(
-      program.empty() ? nullptr : program.c_str(),
-      cmdline.data(),
-      nullptr, nullptr,
-      TRUE,
-      0,
-      nullptr,
-      wd.empty() ? nullptr : wd.c_str(),
-      &si, &pi);
+  const BOOL spawned = CreateProcessW(program.empty() ? nullptr : program.c_str(),
+                                      cmdline.data(),
+                                      nullptr,
+                                      nullptr,
+                                      TRUE,
+                                      0,
+                                      nullptr,
+                                      wd.empty() ? nullptr : wd.c_str(),
+                                      &si,
+                                      &pi);
   if (!spawned) {
     r.error_message = "CreateProcessW failed (GLE=" + std::to_string(GetLastError()) + ")";
-    CloseHandle(in_r); CloseHandle(in_w);
-    CloseHandle(out_r); CloseHandle(out_w);
-    CloseHandle(err_r); CloseHandle(err_w);
+    CloseHandle(in_r);
+    CloseHandle(in_w);
+    CloseHandle(out_r);
+    CloseHandle(out_w);
+    CloseHandle(err_r);
+    CloseHandle(err_w);
     return r;
   }
   CloseHandle(in_r);
@@ -399,8 +446,11 @@ SubprocessResult run_windows(const SubprocessOptions& opts) {
 
   if (!opts.stdin_bytes.empty()) {
     DWORD written = 0;
-    WriteFile(in_w, opts.stdin_bytes.data(),
-              static_cast<DWORD>(opts.stdin_bytes.size()), &written, nullptr);
+    WriteFile(in_w,
+              opts.stdin_bytes.data(),
+              static_cast<DWORD>(opts.stdin_bytes.size()),
+              &written,
+              nullptr);
   }
   CloseHandle(in_w);
 
@@ -421,9 +471,8 @@ SubprocessResult run_windows(const SubprocessOptions& opts) {
     }
   };
 
-  const DWORD wait_ms = (opts.timeout.count() > 0)
-      ? static_cast<DWORD>(opts.timeout.count())
-      : INFINITE;
+  const DWORD wait_ms =
+      (opts.timeout.count() > 0) ? static_cast<DWORD>(opts.timeout.count()) : INFINITE;
   const DWORD wr = WaitForSingleObject(pi.hProcess, wait_ms);
   bool timed_out = false;
   if (wr == WAIT_TIMEOUT) {
@@ -443,8 +492,8 @@ SubprocessResult run_windows(const SubprocessOptions& opts) {
   CloseHandle(pi.hThread);
 
   const auto t_end = std::chrono::steady_clock::now();
-  r.ok        = true;
-  r.duration  = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start);
+  r.ok = true;
+  r.duration = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start);
   r.timed_out = timed_out;
   // Windows surfaces structured-exception "crashes" as the exit
   // code. Translate the well-known codes into signal-like values;
@@ -479,9 +528,9 @@ SubprocessResult run_subprocess(const SubprocessOptions& opts) noexcept {
   }
 }
 
-std::optional<std::filesystem::path>
-find_executable_on_path(std::string_view program) noexcept {
-  if (program.empty()) return std::nullopt;
+std::optional<std::filesystem::path> find_executable_on_path(std::string_view program) noexcept {
+  if (program.empty())
+    return std::nullopt;
   std::filesystem::path p(program);
   std::error_code ec;
   if (p.is_absolute()) {
@@ -489,34 +538,34 @@ find_executable_on_path(std::string_view program) noexcept {
   }
 #if defined(_WIN32)
   const char* path_env = std::getenv("PATH");
-  const char  sep      = ';';
+  const char sep = ';';
 #else
   const char* path_env = std::getenv("PATH");
-  const char  sep      = ':';
+  const char sep = ':';
 #endif
-  if (!path_env) return std::nullopt;
+  if (!path_env)
+    return std::nullopt;
   std::string env(path_env);
   std::size_t start = 0;
   while (start <= env.size()) {
     const auto end = env.find(sep, start);
-    const auto dir = env.substr(start,
-        end == std::string::npos ? env.size() - start : end - start);
+    const auto dir = env.substr(start, end == std::string::npos ? env.size() - start : end - start);
     if (!dir.empty()) {
       auto candidate = std::filesystem::path(dir) / std::string(program);
-      if (std::filesystem::exists(candidate, ec) &&
-          !std::filesystem::is_directory(candidate, ec)) {
+      if (std::filesystem::exists(candidate, ec) && !std::filesystem::is_directory(candidate, ec)) {
         return candidate;
       }
 #if defined(_WIN32)
       auto candidate_exe = candidate;
       candidate_exe += ".exe";
-      if (std::filesystem::exists(candidate_exe, ec) &&
-          !std::filesystem::is_directory(candidate_exe, ec)) {
+      if (std::filesystem::exists(candidate_exe, ec)
+          && !std::filesystem::is_directory(candidate_exe, ec)) {
         return candidate_exe;
       }
 #endif
     }
-    if (end == std::string::npos) break;
+    if (end == std::string::npos)
+      break;
     start = end + 1;
   }
   return std::nullopt;

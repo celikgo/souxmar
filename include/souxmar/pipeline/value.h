@@ -31,13 +31,13 @@ struct StageRef {
 class Value {
  public:
   enum class Kind : std::uint8_t {
-    Null    = 0,
-    Bool    = 1,
-    Number  = 2,
-    String  = 3,
-    Stage   = 4,  // StageRef
-    List    = 5,
-    Map     = 6,
+    Null = 0,
+    Bool = 1,
+    Number = 2,
+    String = 3,
+    Stage = 4,  // StageRef
+    List = 5,
+    Map = 6,
   };
 
   // ---- Construction ----
@@ -60,23 +60,26 @@ class Value {
   // ---- Inspection ----
 
   [[nodiscard]] Kind kind() const noexcept;
-  [[nodiscard]] bool is(Kind k) const noexcept { return kind() == k; }
+
+  [[nodiscard]] bool is(Kind k) const noexcept {
+    return kind() == k;
+  }
 
   // Throws std::runtime_error if the active kind does not match.
-  [[nodiscard]] bool                                 as_bool()   const;
-  [[nodiscard]] double                               as_number() const;
-  [[nodiscard]] std::string_view                     as_string() const;
-  [[nodiscard]] const StageRef&                      as_stage()  const;
-  [[nodiscard]] std::span<const Value>               as_list()   const;
-  [[nodiscard]] const std::map<std::string, Value>&  as_map()    const;
+  [[nodiscard]] bool as_bool() const;
+  [[nodiscard]] double as_number() const;
+  [[nodiscard]] std::string_view as_string() const;
+  [[nodiscard]] const StageRef& as_stage() const;
+  [[nodiscard]] std::span<const Value> as_list() const;
+  [[nodiscard]] const std::map<std::string, Value>& as_map() const;
 
   // Convenience: try-get returns nullptr if wrong kind.
-  [[nodiscard]] const bool*                                try_bool()   const noexcept;
-  [[nodiscard]] const double*                              try_number() const noexcept;
-  [[nodiscard]] const std::string*                         try_string() const noexcept;
-  [[nodiscard]] const StageRef*                            try_stage()  const noexcept;
-  [[nodiscard]] const std::vector<Value>*                  try_list()   const noexcept;
-  [[nodiscard]] const std::map<std::string, Value>*        try_map()    const noexcept;
+  [[nodiscard]] const bool* try_bool() const noexcept;
+  [[nodiscard]] const double* try_number() const noexcept;
+  [[nodiscard]] const std::string* try_string() const noexcept;
+  [[nodiscard]] const StageRef* try_stage() const noexcept;
+  [[nodiscard]] const std::vector<Value>* try_list() const noexcept;
+  [[nodiscard]] const std::map<std::string, Value>* try_map() const noexcept;
 
   // Convenience: Map field access. Returns nullptr if not a Map or no such key.
   [[nodiscard]] const Value* find(std::string_view key) const noexcept;
@@ -104,7 +107,7 @@ class Value {
 // design: unknown YAML constructs throw via the underlying yaml-cpp.
 // StageRef is recognised as the `{ from: <stage_id> }` shorthand for
 // parity with the pipeline parser.
-[[nodiscard]] Value       parse_value_yaml(std::string_view yaml_source);
+[[nodiscard]] Value parse_value_yaml(std::string_view yaml_source);
 [[nodiscard]] std::string emit_value_yaml(const Value& value);
 
 }  // namespace souxmar::pipeline

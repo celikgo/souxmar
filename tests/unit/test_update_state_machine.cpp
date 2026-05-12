@@ -29,67 +29,61 @@ namespace {
 // the gate.
 Manifest base_manifest() {
   Manifest m;
-  m.schema                       = kManifestSchemaV1;
-  m.generated_at                 = "2026-05-11T14:00:00Z";
-  m.channel.name                 = Channel::Stable;
-  m.channel.expires_at           = "2026-08-11T14:00:00Z";
-  m.release.version              = "0.9.0";
-  m.release.released_at          = "2026-05-10T10:00:00Z";
+  m.schema = kManifestSchemaV1;
+  m.generated_at = "2026-05-11T14:00:00Z";
+  m.channel.name = Channel::Stable;
+  m.channel.expires_at = "2026-08-11T14:00:00Z";
+  m.release.version = "0.9.0";
+  m.release.released_at = "2026-05-10T10:00:00Z";
   m.release.min_previous_version = "0.8.0";
-  m.release.rollback_target      = "0.8.4";
-  m.release.notes_url            = "https://souxmar.dev/releases/0.9.0";
-  m.release.mandatory            = false;
-  m.signing.algorithm            = "ed25519";
-  m.signing.public_key_id        = "release-2026";
+  m.release.rollback_target = "0.8.4";
+  m.release.notes_url = "https://souxmar.dev/releases/0.9.0";
+  m.release.mandatory = false;
+  m.signing.algorithm = "ed25519";
+  m.signing.public_key_id = "release-2026";
 
   Artifact linux_x86;
-  linux_x86.os     = Os::Linux;
-  linux_x86.arch   = Arch::X86_64;
-  linux_x86.url    = "https://dl.souxmar.dev/0.9.0/linux-x86_64.tar.zst";
+  linux_x86.os = Os::Linux;
+  linux_x86.arch = Arch::X86_64;
+  linux_x86.url = "https://dl.souxmar.dev/0.9.0/linux-x86_64.tar.zst";
   linux_x86.sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-  linux_x86.size   = 48217600;
+  linux_x86.size = 48217600;
   m.artifacts.push_back(linux_x86);
   return m;
 }
 
 CurrentInstall base_install() {
   return CurrentInstall{
-      .current_version       = "0.8.5",
+      .current_version = "0.8.5",
       .max_version_ever_seen = "0.8.5",
-      .platform              = HostPlatform{Os::Linux, Arch::X86_64},
+      .platform = HostPlatform{Os::Linux, Arch::X86_64},
   };
 }
 
 // Clock pinned to a moment well inside the manifest's expiry window.
 FixedTimeSource clock_before_expiry() {
-  return FixedTimeSource{
-      *parse_rfc3339_utc("2026-05-12T00:00:00Z")};
+  return FixedTimeSource{*parse_rfc3339_utc("2026-05-12T00:00:00Z")};
 }
 
 // Clock pinned to a moment well after the expiry window.
 FixedTimeSource clock_after_expiry() {
-  return FixedTimeSource{
-      *parse_rfc3339_utc("2027-01-01T00:00:00Z")};
+  return FixedTimeSource{*parse_rfc3339_utc("2027-01-01T00:00:00Z")};
 }
 
 const UpdateApply& expect_apply(const UpdateDecision& d) {
   if (auto* r = std::get_if<UpdateRefusal>(&d)) {
-    ADD_FAILURE() << "expected Apply, got refusal "
-                  << to_string(r->reason) << ": " << r->detail;
+    ADD_FAILURE() << "expected Apply, got refusal " << to_string(r->reason) << ": " << r->detail;
   }
   return std::get<UpdateApply>(d);
 }
 
-const UpdateRefusal& expect_refusal(const UpdateDecision& d,
-                                    RefusalReason         expected) {
+const UpdateRefusal& expect_refusal(const UpdateDecision& d, RefusalReason expected) {
   if (auto* a = std::get_if<UpdateApply>(&d)) {
-    ADD_FAILURE() << "expected refusal " << to_string(expected)
-                  << ", got Apply " << a->version;
+    ADD_FAILURE() << "expected refusal " << to_string(expected) << ", got Apply " << a->version;
   }
   const auto& r = std::get<UpdateRefusal>(d);
-  EXPECT_EQ(r.reason, expected)
-      << "wrong refusal reason: got " << to_string(r.reason)
-      << " ('" << r.detail << "')";
+  EXPECT_EQ(r.reason, expected) << "wrong refusal reason: got " << to_string(r.reason) << " ('"
+                                << r.detail << "')";
   return r;
 }
 
@@ -136,19 +130,19 @@ TEST(UpdateRfc3339, RejectsOutOfRangeFields) {
 // ===========================================================================
 
 TEST(UpdateVersionCompare, WellFormed) {
-  EXPECT_EQ(*compare_versions("0.9.0", "0.9.0"),  0);
+  EXPECT_EQ(*compare_versions("0.9.0", "0.9.0"), 0);
   EXPECT_EQ(*compare_versions("0.9.0", "0.9.1"), -1);
   EXPECT_EQ(*compare_versions("0.9.1", "0.9.0"), +1);
-  EXPECT_EQ(*compare_versions("0.9.0", "0.10.0"), -1);   // numeric, not lex
+  EXPECT_EQ(*compare_versions("0.9.0", "0.10.0"), -1);  // numeric, not lex
   EXPECT_EQ(*compare_versions("0.10.0", "0.9.0"), +1);
   EXPECT_EQ(*compare_versions("1.0.0", "0.99.0"), +1);
 }
 
 TEST(UpdateVersionCompare, MalformedReturnsNullopt) {
-  EXPECT_FALSE(compare_versions("",        "0.9.0").has_value());
-  EXPECT_FALSE(compare_versions("0.9",     "0.9.0").has_value());
+  EXPECT_FALSE(compare_versions("", "0.9.0").has_value());
+  EXPECT_FALSE(compare_versions("0.9", "0.9.0").has_value());
   EXPECT_FALSE(compare_versions("0.9.0.0", "0.9.0").has_value());
-  EXPECT_FALSE(compare_versions("v0.9.0",  "0.9.0").has_value());
+  EXPECT_FALSE(compare_versions("v0.9.0", "0.9.0").has_value());
   EXPECT_FALSE(compare_versions("0.9.0-beta3", "0.9.0").has_value());
 }
 
@@ -159,12 +153,12 @@ TEST(UpdateVersionCompare, MalformedReturnsNullopt) {
 TEST(UpdateHostPlatform, ParseRoundtrip) {
   const auto p = parse_host_platform("linux/x86_64");
   ASSERT_TRUE(p.has_value());
-  EXPECT_EQ(p->os,   Os::Linux);
+  EXPECT_EQ(p->os, Os::Linux);
   EXPECT_EQ(p->arch, Arch::X86_64);
 
   const auto p2 = parse_host_platform("macos/aarch64");
   ASSERT_TRUE(p2.has_value());
-  EXPECT_EQ(p2->os,   Os::Macos);
+  EXPECT_EQ(p2->os, Os::Macos);
   EXPECT_EQ(p2->arch, Arch::Aarch64);
 }
 
@@ -181,16 +175,15 @@ TEST(UpdateHostPlatform, RejectsMalformed) {
 // ===========================================================================
 
 TEST(UpdateApplyGate, HappyPathApplies) {
-  const auto m       = base_manifest();
+  const auto m = base_manifest();
   const auto install = base_install();
-  const auto clk     = clock_before_expiry();
+  const auto clk = clock_before_expiry();
   const auto& a = expect_apply(apply_gate(m, install, clk));
-  EXPECT_EQ(a.version,         "0.9.0");
-  EXPECT_EQ(a.artifact.os,     Os::Linux);
-  EXPECT_EQ(a.artifact.arch,   Arch::X86_64);
-  EXPECT_EQ(a.mandatory,       false);
-  EXPECT_EQ(a.artifact.url,
-            "https://dl.souxmar.dev/0.9.0/linux-x86_64.tar.zst");
+  EXPECT_EQ(a.version, "0.9.0");
+  EXPECT_EQ(a.artifact.os, Os::Linux);
+  EXPECT_EQ(a.artifact.arch, Arch::X86_64);
+  EXPECT_EQ(a.mandatory, false);
+  EXPECT_EQ(a.artifact.url, "https://dl.souxmar.dev/0.9.0/linux-x86_64.tar.zst");
 }
 
 TEST(UpdateApplyGate, HappyPathOnFreshInstall) {
@@ -200,19 +193,19 @@ TEST(UpdateApplyGate, HappyPathOnFreshInstall) {
   install.current_version.clear();
   install.max_version_ever_seen.clear();
   const auto clk = clock_before_expiry();
-  const auto& a  = expect_apply(apply_gate(base_manifest(), install, clk));
+  const auto& a = expect_apply(apply_gate(base_manifest(), install, clk));
   EXPECT_EQ(a.version, "0.9.0");
 }
 
 TEST(UpdateApplyGate, HappyPathWithEmptyExpiry) {
   auto m = base_manifest();
-  m.channel.expires_at.clear();  // freshness check disabled
-  const auto clk = clock_after_expiry();   // doesn't matter — empty bypasses
+  m.channel.expires_at.clear();           // freshness check disabled
+  const auto clk = clock_after_expiry();  // doesn't matter — empty bypasses
   expect_apply(apply_gate(m, base_install(), clk));
 }
 
 TEST(UpdateApplyGate, MandatoryFlagFlowsThrough) {
-  auto m       = base_manifest();
+  auto m = base_manifest();
   m.release.mandatory = true;
   const auto& a = expect_apply(apply_gate(m, base_install(), clock_before_expiry()));
   EXPECT_TRUE(a.mandatory);
@@ -223,7 +216,7 @@ TEST(UpdateApplyGate, MandatoryFlagFlowsThrough) {
 // ===========================================================================
 
 TEST(UpdateApplyGate, RefusesMalformedOfferedVersion) {
-  auto m       = base_manifest();
+  auto m = base_manifest();
   m.release.version = "v0.9.0";
   expect_refusal(apply_gate(m, base_install(), clock_before_expiry()),
                  RefusalReason::MalformedOfferedVersion);
@@ -255,8 +248,7 @@ TEST(UpdateApplyGate, RefusesAlreadyOnOrAheadOfOffered) {
 }
 
 TEST(UpdateApplyGate, RefusesExpiredManifest) {
-  expect_refusal(apply_gate(base_manifest(), base_install(),
-                            clock_after_expiry()),
+  expect_refusal(apply_gate(base_manifest(), base_install(), clock_after_expiry()),
                  RefusalReason::Expired);
 }
 
@@ -269,16 +261,16 @@ TEST(UpdateApplyGate, RefusesMalformedExpiresAt) {
 
 TEST(UpdateApplyGate, RefusesBelowMinPrevious) {
   auto install = base_install();
-  install.current_version       = "0.7.0";   // < min_previous_version 0.8.0
-  install.max_version_ever_seen = "0.7.0";   // satisfy replay step
+  install.current_version = "0.7.0";        // < min_previous_version 0.8.0
+  install.max_version_ever_seen = "0.7.0";  // satisfy replay step
   expect_refusal(apply_gate(base_manifest(), install, clock_before_expiry()),
                  RefusalReason::BelowMinPrevious);
 }
 
 TEST(UpdateApplyGate, RefusesReplayDowngrade) {
   auto install = base_install();
-  install.current_version       = "0.8.5";
-  install.max_version_ever_seen = "1.2.0";   // > offered 0.9.0
+  install.current_version = "0.8.5";
+  install.max_version_ever_seen = "1.2.0";  // > offered 0.9.0
   expect_refusal(apply_gate(base_manifest(), install, clock_before_expiry()),
                  RefusalReason::ReplayDowngrade);
 }
@@ -300,12 +292,12 @@ TEST(UpdateApplyGate, RefusesNoArtifactForPlatform) {
 // ===========================================================================
 
 TEST(UpdateApplyGate, MalformedOfferedBeatsEverythingElse) {
-  auto m       = base_manifest();
-  m.release.version    = "garbage";          // step 1 fails
-  m.channel.expires_at = "also-garbage";     // step 5 would fail
+  auto m = base_manifest();
+  m.release.version = "garbage";          // step 1 fails
+  m.channel.expires_at = "also-garbage";  // step 5 would fail
   auto install = base_install();
-  install.current_version       = "garbage"; // step 2 would fail
-  install.max_version_ever_seen = "garbage"; // step 3 would fail
+  install.current_version = "garbage";        // step 2 would fail
+  install.max_version_ever_seen = "garbage";  // step 3 would fail
   expect_refusal(apply_gate(m, install, clock_after_expiry()),
                  RefusalReason::MalformedOfferedVersion);
 }
@@ -315,8 +307,7 @@ TEST(UpdateApplyGate, AlreadyUpToDateBeatsExpiryCheck) {
   // says step 4 fires before step 5/6 — locks that in.
   auto install = base_install();
   install.current_version = "1.0.0";
-  expect_refusal(apply_gate(base_manifest(), install,
-                            clock_after_expiry()),
+  expect_refusal(apply_gate(base_manifest(), install, clock_after_expiry()),
                  RefusalReason::AlreadyOnOrAheadOfOffered);
 }
 
@@ -324,10 +315,9 @@ TEST(UpdateApplyGate, ExpiryBeatsMinPreviousAndReplay) {
   // Construct: current way below min_previous, max_seen way above
   // offered, but manifest expired. Step 5/6 fires before 7/8.
   auto install = base_install();
-  install.current_version       = "0.0.1";
+  install.current_version = "0.0.1";
   install.max_version_ever_seen = "9.9.9";
-  expect_refusal(apply_gate(base_manifest(), install,
-                            clock_after_expiry()),
+  expect_refusal(apply_gate(base_manifest(), install, clock_after_expiry()),
                  RefusalReason::Expired);
 }
 
@@ -335,10 +325,9 @@ TEST(UpdateApplyGate, MinPreviousBeatsReplay) {
   // current < min_previous, AND max_seen > offered. Step 7 before
   // step 8.
   auto install = base_install();
-  install.current_version       = "0.7.0";   // < min_previous 0.8.0
-  install.max_version_ever_seen = "9.9.9";   // would trip replay
-  expect_refusal(apply_gate(base_manifest(), install,
-                            clock_before_expiry()),
+  install.current_version = "0.7.0";        // < min_previous 0.8.0
+  install.max_version_ever_seen = "9.9.9";  // would trip replay
+  expect_refusal(apply_gate(base_manifest(), install, clock_before_expiry()),
                  RefusalReason::BelowMinPrevious);
 }
 
@@ -347,9 +336,8 @@ TEST(UpdateApplyGate, ReplayBeatsArtifactMissing) {
   // before step 9.
   auto install = base_install();
   install.max_version_ever_seen = "9.9.9";
-  install.platform              = HostPlatform{Os::Windows, Arch::X86_64};
-  expect_refusal(apply_gate(base_manifest(), install,
-                            clock_before_expiry()),
+  install.platform = HostPlatform{Os::Windows, Arch::X86_64};
+  expect_refusal(apply_gate(base_manifest(), install, clock_before_expiry()),
                  RefusalReason::ReplayDowngrade);
 }
 
@@ -358,14 +346,13 @@ TEST(UpdateApplyGate, ReplayBeatsArtifactMissing) {
 // ===========================================================================
 
 TEST(UpdateRefusalReason, StringRoundtrip) {
-  EXPECT_EQ(to_string(RefusalReason::AlreadyOnOrAheadOfOffered),
-            "already-on-or-ahead-of-offered");
-  EXPECT_EQ(to_string(RefusalReason::Expired),                   "expired");
-  EXPECT_EQ(to_string(RefusalReason::ExpiredInvalidTime),        "expired-invalid-time");
-  EXPECT_EQ(to_string(RefusalReason::BelowMinPrevious),          "below-min-previous");
-  EXPECT_EQ(to_string(RefusalReason::ReplayDowngrade),           "replay-downgrade");
-  EXPECT_EQ(to_string(RefusalReason::NoArtifactForPlatform),     "no-artifact-for-platform");
-  EXPECT_EQ(to_string(RefusalReason::MalformedOfferedVersion),   "malformed-offered-version");
-  EXPECT_EQ(to_string(RefusalReason::MalformedCurrentVersion),   "malformed-current-version");
-  EXPECT_EQ(to_string(RefusalReason::MalformedReplayFloor),      "malformed-replay-floor");
+  EXPECT_EQ(to_string(RefusalReason::AlreadyOnOrAheadOfOffered), "already-on-or-ahead-of-offered");
+  EXPECT_EQ(to_string(RefusalReason::Expired), "expired");
+  EXPECT_EQ(to_string(RefusalReason::ExpiredInvalidTime), "expired-invalid-time");
+  EXPECT_EQ(to_string(RefusalReason::BelowMinPrevious), "below-min-previous");
+  EXPECT_EQ(to_string(RefusalReason::ReplayDowngrade), "replay-downgrade");
+  EXPECT_EQ(to_string(RefusalReason::NoArtifactForPlatform), "no-artifact-for-platform");
+  EXPECT_EQ(to_string(RefusalReason::MalformedOfferedVersion), "malformed-offered-version");
+  EXPECT_EQ(to_string(RefusalReason::MalformedCurrentVersion), "malformed-current-version");
+  EXPECT_EQ(to_string(RefusalReason::MalformedReplayFloor), "malformed-replay-floor");
 }

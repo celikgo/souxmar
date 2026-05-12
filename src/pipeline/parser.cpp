@@ -13,30 +13,33 @@ namespace souxmar::pipeline {
 
 namespace {
 
-ParseError make_error(std::string                msg,
-                      std::optional<std::size_t> line   = std::nullopt,
+ParseError make_error(std::string msg,
+                      std::optional<std::size_t> line = std::nullopt,
                       std::optional<std::size_t> column = std::nullopt) {
   return ParseError{std::move(msg), line, column};
 }
 
 ParseError from_mark(std::string msg, const YAML::Mark& mark) {
   // yaml-cpp uses 0-based lines/columns; expose as 1-based to humans.
-  std::optional<std::size_t> line   = mark.line   >= 0
-      ? std::optional<std::size_t>(static_cast<std::size_t>(mark.line + 1))
-      : std::nullopt;
-  std::optional<std::size_t> column = mark.column >= 0
-      ? std::optional<std::size_t>(static_cast<std::size_t>(mark.column + 1))
-      : std::nullopt;
+  std::optional<std::size_t> line =
+      mark.line >= 0 ? std::optional<std::size_t>(static_cast<std::size_t>(mark.line + 1))
+                     : std::nullopt;
+  std::optional<std::size_t> column =
+      mark.column >= 0 ? std::optional<std::size_t>(static_cast<std::size_t>(mark.column + 1))
+                       : std::nullopt;
   return make_error(std::move(msg), line, column);
 }
 
 // Recognise the StageRef shorthand `{ from: stage_id }`.
 // Returns std::nullopt if the node is not a StageRef in disguise.
 std::optional<StageRef> recognise_stage_ref(const YAML::Node& node) {
-  if (!node.IsMap() || node.size() != 1) return std::nullopt;
-  if (!node["from"]) return std::nullopt;
+  if (!node.IsMap() || node.size() != 1)
+    return std::nullopt;
+  if (!node["from"])
+    return std::nullopt;
   const auto& from = node["from"];
-  if (!from.IsScalar()) return std::nullopt;
+  if (!from.IsScalar())
+    return std::nullopt;
   return StageRef{from.as<std::string>()};
 }
 
@@ -56,8 +59,10 @@ std::variant<Value, ParseError> to_value(const YAML::Node& node) {
     case YAML::NodeType::Scalar: {
       // yaml-cpp does not carry a typed scalar back; we sniff bool/number/string.
       const auto raw = node.Scalar();
-      if (raw == "true"  || raw == "True")  return Value::boolean(true);
-      if (raw == "false" || raw == "False") return Value::boolean(false);
+      if (raw == "true" || raw == "True")
+        return Value::boolean(true);
+      if (raw == "false" || raw == "False")
+        return Value::boolean(false);
       try {
         // yaml-cpp's converter handles integer + scientific notation.
         const auto d = node.as<double>();
@@ -81,7 +86,8 @@ std::variant<Value, ParseError> to_value(const YAML::Node& node) {
       items.reserve(node.size());
       for (const auto& child : node) {
         auto child_val = to_value(child);
-        if (auto* err = std::get_if<ParseError>(&child_val)) return *err;
+        if (auto* err = std::get_if<ParseError>(&child_val))
+          return *err;
         items.push_back(std::move(std::get<Value>(child_val)));
       }
       return Value::list(std::move(items));
@@ -95,7 +101,8 @@ std::variant<Value, ParseError> to_value(const YAML::Node& node) {
         }
         auto key = it->first.as<std::string>();
         auto val = to_value(it->second);
-        if (auto* err = std::get_if<ParseError>(&val)) return *err;
+        if (auto* err = std::get_if<ParseError>(&val))
+          return *err;
         fields.emplace(std::move(key), std::move(std::get<Value>(val)));
       }
       return Value::map(std::move(fields));
@@ -122,8 +129,7 @@ ParseResult parse_yaml_root(const YAML::Node& root) {
     try {
       const auto n = v.as<int64_t>();
       if (n < 1 || n > std::numeric_limits<std::int32_t>::max()) {
-        return from_mark(
-            fmt::format("`version` out of range (got {})", n), v.Mark());
+        return from_mark(fmt::format("`version` out of range (got {})", n), v.Mark());
       }
       p.version = static_cast<std::int32_t>(n);
     } catch (const YAML::TypedBadConversion<int64_t>&) {
@@ -135,8 +141,7 @@ ParseResult parse_yaml_root(const YAML::Node& root) {
 
   if (p.version != 1) {
     return make_error(fmt::format(
-        "pipeline `version` = {} not supported by this parser (only v1 known)",
-        p.version));
+        "pipeline `version` = {} not supported by this parser (only v1 known)", p.version));
   }
 
   // `stages` is required and must be a sequence.
@@ -173,8 +178,7 @@ ParseResult parse_yaml_root(const YAML::Node& root) {
     }
 
     if (!seen_ids.insert(stage.id).second) {
-      return from_mark(fmt::format("duplicate stage id '{}'", stage.id),
-                       stage_node.Mark());
+      return from_mark(fmt::format("duplicate stage id '{}'", stage.id), stage_node.Mark());
     }
 
     if (auto plug = stage_node["plugin"]) {
@@ -192,11 +196,11 @@ ParseResult parse_yaml_root(const YAML::Node& root) {
 
     if (auto input = stage_node["input"]) {
       auto v = to_value(input);
-      if (auto* err = std::get_if<ParseError>(&v)) return *err;
+      if (auto* err = std::get_if<ParseError>(&v))
+        return *err;
       stage.input = std::move(std::get<Value>(v));
       if (stage.input.kind() != Value::Kind::Map) {
-        return from_mark(fmt::format("stage '{}' input must be a mapping", stage.id),
-                         input.Mark());
+        return from_mark(fmt::format("stage '{}' input must be a mapping", stage.id), input.Mark());
       }
     } else {
       // Empty input — produce an empty map so downstream code can treat input

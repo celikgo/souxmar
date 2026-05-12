@@ -9,26 +9,26 @@
 
 #pragma once
 
+#include "souxmar/core/tag.h"
+
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 
-#include "souxmar/core/tag.h"
-
 namespace souxmar::core {
 
 enum class TopologyKind : std::uint8_t {
   Vertex = 0,
-  Edge   = 1,
-  Face   = 2,
+  Edge = 1,
+  Face = 2,
   Region = 3,
 };
 
 struct TopologyRef {
-  TopologyKind   kind;
-  std::uint32_t  index;
+  TopologyKind kind;
+  std::uint32_t index;
 
   [[nodiscard]] constexpr bool operator==(const TopologyRef&) const noexcept = default;
 };
@@ -41,7 +41,7 @@ class Topology {
   Topology(Topology&&) noexcept;
   Topology& operator=(Topology&&) noexcept;
 
-  Topology(const Topology&)            = delete;
+  Topology(const Topology&) = delete;
   Topology& operator=(const Topology&) = delete;
 
   [[nodiscard]] std::size_t count(TopologyKind kind) const noexcept;
@@ -50,8 +50,8 @@ class Topology {
   [[nodiscard]] std::optional<std::string_view> name(TopologyRef ref) const;
 
   std::uint32_t add_entity(TopologyKind kind);
-  void          set_tag(TopologyRef ref, EntityTag tag);
-  void          set_name(TopologyRef ref, std::string name);
+  void set_tag(TopologyRef ref, EntityTag tag);
+  void set_name(TopologyRef ref, std::string name);
 
   [[nodiscard]] bool empty() const noexcept;
 

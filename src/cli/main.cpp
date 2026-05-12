@@ -17,6 +17,19 @@
 //   65 input data error (parse / validate failure)
 //   70 internal error (plugin load / dispatch failure)
 
+#include "souxmar/ai/audit_log.h"
+#include "souxmar/ai/budget_config.h"  // Sprint 6 push 6
+#include "souxmar/ai/tool.h"
+#include "souxmar/pipeline/cache.h"
+#include "souxmar/pipeline/parser.h"
+#include "souxmar/pipeline/registry_dispatcher.h"
+#include "souxmar/pipeline/runner.h"
+#include "souxmar/pipeline/value.h"
+#include "souxmar/plugin/discovery.h"
+#include "souxmar/plugin/index.h"
+#include "souxmar/plugin/loader.h"
+#include "souxmar/plugin/registry.h"
+
 #include <fmt/core.h>
 
 #include <algorithm>
@@ -31,19 +44,6 @@
 #include <string_view>
 #include <utility>
 #include <vector>
-
-#include "souxmar/ai/audit_log.h"
-#include "souxmar/ai/budget_config.h"   // Sprint 6 push 6
-#include "souxmar/ai/tool.h"
-#include "souxmar/pipeline/cache.h"
-#include "souxmar/pipeline/parser.h"
-#include "souxmar/pipeline/registry_dispatcher.h"
-#include "souxmar/pipeline/runner.h"
-#include "souxmar/pipeline/value.h"
-#include "souxmar/plugin/discovery.h"
-#include "souxmar/plugin/index.h"
-#include "souxmar/plugin/loader.h"
-#include "souxmar/plugin/registry.h"
 // Sprint 10 push 6 — `souxmar update check` / `apply` subcommands.
 // Push 7 adds install_layout / rollback_log / apply / rollback.
 // Push 8 adds the embedded release trust store.
@@ -62,19 +62,20 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr int kExitOk        = 0;
-constexpr int kExitUsage     = 64;
+constexpr int kExitOk = 0;
+constexpr int kExitUsage = 64;
 constexpr int kExitInputData = 65;
-constexpr int kExitInternal  = 70;
+constexpr int kExitInternal = 70;
 // Sprint 10 push 6 — `souxmar update check` exit codes. The integration
 // test branches on these; the rollback log (push 7) records them
 // alongside the structured refusal reason. Picked from the 75–79 range
 // to stay clear of sysexits.h's EX_NOPERM=77 / EX_CONFIG=78.
-constexpr int kExitUpdateRefused  = 75;
-constexpr int kExitSignatureBad   = 76;
+constexpr int kExitUpdateRefused = 75;
+constexpr int kExitSignatureBad = 76;
 
 void print_usage() {
-  fmt::print(stderr,
+  fmt::print(
+      stderr,
       "souxmar {} — open-source CAE pipeline runner\n"
       "\n"
       "Usage:\n"
@@ -112,8 +113,8 @@ void print_usage() {
 // Pop one argument from `args`, asserting the next token is `--flag`'s value.
 // Returns std::nullopt on missing / empty value.
 std::optional<std::string> pop_value(std::vector<std::string>& args,
-                                     std::size_t&              i,
-                                     std::string_view          flag) {
+                                     std::size_t& i,
+                                     std::string_view flag) {
   if (i + 1 >= args.size() || args[i + 1].empty()) {
     fmt::print(stderr, "error: {} requires a value\n", flag);
     return std::nullopt;
@@ -125,13 +126,12 @@ std::optional<std::string> pop_value(std::vector<std::string>& args,
 // Build a discovery report with the user's --plugin-path overrides folded in
 // before the platform defaults. Returns the report; caller decides what to
 // do with rejections.
-souxmar::plugin::DiscoveryReport
-discover_with_overrides(const std::vector<fs::path>& extra_paths) {
+souxmar::plugin::DiscoveryReport discover_with_overrides(const std::vector<fs::path>& extra_paths) {
   souxmar::plugin::DiscoveryOptions opts;
-  opts.include_env_path       = true;
-  opts.include_user_prefix    = true;
+  opts.include_env_path = true;
+  opts.include_user_prefix = true;
   opts.include_install_prefix = false;  // CLI not installed yet — Sprint 4.
-  opts.include_cwd            = false;
+  opts.include_cwd = false;
 
   auto search_paths = souxmar::plugin::default_search_paths(opts);
   // Prepend the explicit overrides so they win priority.
@@ -142,9 +142,7 @@ discover_with_overrides(const std::vector<fs::path>& extra_paths) {
 // ---- Subcommands ---------------------------------------------------------
 
 int cmd_version() {
-  fmt::print("souxmar {} (ABI v{})\n",
-             souxmar::version_string(),
-             souxmar::abi_version());
+  fmt::print("souxmar {} (ABI v{})\n", souxmar::version_string(), souxmar::abi_version());
   return kExitOk;
 }
 
@@ -152,8 +150,7 @@ int cmd_plugin_list(const std::vector<fs::path>& extra_paths) {
   const auto report = discover_with_overrides(extra_paths);
 
   if (report.loaded.empty() && report.rejected.empty()) {
-    fmt::print(stderr,
-        "no plugins found. Set $SOUXMAR_PLUGIN_PATH or pass --plugin-path.\n");
+    fmt::print(stderr, "no plugins found. Set $SOUXMAR_PLUGIN_PATH or pass --plugin-path.\n");
     return kExitOk;
   }
 
@@ -172,8 +169,7 @@ int cmd_plugin_list(const std::vector<fs::path>& extra_paths) {
     if (!d.manifest.tags.empty()) {
       fmt::print("  tags:        ");
       for (std::size_t i = 0; i < d.manifest.tags.size(); ++i) {
-        fmt::print("{}{}", d.manifest.tags[i],
-                   i + 1 == d.manifest.tags.size() ? "" : ", ");
+        fmt::print("{}{}", d.manifest.tags[i], i + 1 == d.manifest.tags.size() ? "" : ", ");
       }
       fmt::print("\n");
     }
@@ -186,13 +182,15 @@ int cmd_plugin_list(const std::vector<fs::path>& extra_paths) {
       // Surface the structured code so log parsers can group rejections
       // by class without grepping the free-form message.
       if (r.manifest_code.has_value()) {
-        fmt::print(stderr, "  - {}: [{}/{}] {}\n",
+        fmt::print(stderr,
+                   "  - {}: [{}/{}] {}\n",
                    r.candidate_path.string(),
                    souxmar::plugin::to_string(r.code),
                    souxmar::plugin::to_string(*r.manifest_code),
                    r.reason);
       } else {
-        fmt::print(stderr, "  - {}: [{}] {}\n",
+        fmt::print(stderr,
+                   "  - {}: [{}] {}\n",
                    r.candidate_path.string(),
                    souxmar::plugin::to_string(r.code),
                    r.reason);
@@ -210,24 +208,26 @@ int cmd_plugin_list(const std::vector<fs::path>& extra_paths) {
 //      install-side hardening; not used in dev).
 // Returns the first existing path; an empty fs::path if none found.
 fs::path resolve_index_path(const fs::path& override_path) {
-  if (!override_path.empty()) return override_path;
+  if (!override_path.empty())
+    return override_path;
   if (const char* env = std::getenv("SOUXMAR_PLUGIN_INDEX"); env && *env) {
     return fs::path{env};
   }
   fs::path cwd_local = fs::current_path() / "docs" / "plugin-index.toml";
-  if (fs::exists(cwd_local)) return cwd_local;
+  if (fs::exists(cwd_local))
+    return cwd_local;
   return {};
 }
 
-int cmd_plugin_search(const std::string&  query,
-                      const std::string&  capability_prefix,
-                      const fs::path&     index_override) {
+int cmd_plugin_search(const std::string& query,
+                      const std::string& capability_prefix,
+                      const fs::path& index_override) {
   const fs::path index_path = resolve_index_path(index_override);
   if (index_path.empty() || !fs::exists(index_path)) {
     fmt::print(stderr,
-        "error: plugin index not found. Set $SOUXMAR_PLUGIN_INDEX or pass "
-        "--index <path>, or run from a souxmar checkout containing "
-        "docs/plugin-index.toml.\n");
+               "error: plugin index not found. Set $SOUXMAR_PLUGIN_INDEX or pass "
+               "--index <path>, or run from a souxmar checkout containing "
+               "docs/plugin-index.toml.\n");
     return kExitUsage;
   }
   auto result = souxmar::plugin::load_index_file(index_path);
@@ -236,11 +236,11 @@ int cmd_plugin_search(const std::string&  query,
     return kExitInternal;
   }
   const auto& entries = std::get<std::vector<souxmar::plugin::IndexEntry>>(result);
-  const auto matches  = souxmar::plugin::search_index(entries, query, capability_prefix);
+  const auto matches = souxmar::plugin::search_index(entries, query, capability_prefix);
   if (matches.empty()) {
     if (!query.empty() || !capability_prefix.empty()) {
-      fmt::print(stderr, "no plugins matched (query='{}', capability='{}')\n",
-                 query, capability_prefix);
+      fmt::print(
+          stderr, "no plugins matched (query='{}', capability='{}')\n", query, capability_prefix);
     } else {
       fmt::print(stderr, "no plugins listed in {}\n", index_path.string());
     }
@@ -252,18 +252,23 @@ int cmd_plugin_search(const std::string&  query,
       fmt::print("  description:  {}\n", e.description);
     }
     fmt::print("  capabilities:");
-    for (const auto& c : e.capabilities) fmt::print(" {}", c);
+    for (const auto& c : e.capabilities)
+      fmt::print(" {}", c);
     fmt::print("\n");
-    if (!e.license.empty())          fmt::print("  license:      {}\n", e.license);
-    if (!e.author.empty())           fmt::print("  author:       {}\n", e.author);
-    if (!e.source.empty())           fmt::print("  source:       {}\n", e.source);
-    if (!e.souxmar_versions.empty()) fmt::print("  souxmar:      {}\n", e.souxmar_versions);
+    if (!e.license.empty())
+      fmt::print("  license:      {}\n", e.license);
+    if (!e.author.empty())
+      fmt::print("  author:       {}\n", e.author);
+    if (!e.source.empty())
+      fmt::print("  source:       {}\n", e.source);
+    if (!e.souxmar_versions.empty())
+      fmt::print("  souxmar:      {}\n", e.souxmar_versions);
     fmt::print("  conformance:  {}", souxmar::plugin::to_string(e.conformance));
-    if (!e.conformance_date.empty()) fmt::print(" ({})", e.conformance_date);
+    if (!e.conformance_date.empty())
+      fmt::print(" ({})", e.conformance_date);
     fmt::print("\n");
-    fmt::print("  status:       {}{}\n",
-               souxmar::plugin::to_string(e.status),
-               e.paid ? "  [paid]" : "");
+    fmt::print(
+        "  status:       {}{}\n", souxmar::plugin::to_string(e.status), e.paid ? "  [paid]" : "");
     fmt::print("\n");
   }
   fmt::print("{} match(es) in {}\n", matches.size(), index_path.string());
@@ -276,15 +281,15 @@ int cmd_plugin_search(const std::string&  query,
 // shell-out per ADR-0022; this command's surface is the contract
 // the desktop client polls against.
 int cmd_plugin_install(const std::string& plugin_id,
-                        const std::string& license_key,
-                        bool               auto_yes,
-                        bool               json_output,
-                        const fs::path&    index_override) {
+                       const std::string& license_key,
+                       bool auto_yes,
+                       bool json_output,
+                       const fs::path& index_override) {
   const fs::path index_path = resolve_index_path(index_override);
   if (index_path.empty() || !fs::exists(index_path)) {
     fmt::print(stderr,
-        "error: plugin index not found. Set $SOUXMAR_PLUGIN_INDEX or pass "
-        "--index <path>.\n");
+               "error: plugin index not found. Set $SOUXMAR_PLUGIN_INDEX or pass "
+               "--index <path>.\n");
     return kExitUsage;
   }
   auto result = souxmar::plugin::load_index_file(index_path);
@@ -296,7 +301,10 @@ int cmd_plugin_install(const std::string& plugin_id,
 
   const souxmar::plugin::IndexEntry* hit = nullptr;
   for (const auto& e : entries) {
-    if (e.id == plugin_id) { hit = &e; break; }
+    if (e.id == plugin_id) {
+      hit = &e;
+      break;
+    }
   }
   if (!hit) {
     if (json_output) {
@@ -321,9 +329,7 @@ int cmd_plugin_install(const std::string& plugin_id,
           "\"id\":\"{}\",\"detail\":\"plugin is paid; pass --license <sxm_lic_...>\"}}\n",
           plugin_id);
     } else {
-      fmt::print(stderr,
-          "error: '{}' is a paid plugin; pass --license <sxm_lic_...>\n",
-          plugin_id);
+      fmt::print(stderr, "error: '{}' is a paid plugin; pass --license <sxm_lic_...>\n", plugin_id);
     }
     return kExitInputData;
   }
@@ -335,8 +341,7 @@ int cmd_plugin_install(const std::string& plugin_id,
           "\"id\":\"{}\"}}\n",
           plugin_id);
     } else {
-      fmt::print(stderr,
-          "error: license key must start with 'sxm_lic_'\n");
+      fmt::print(stderr, "error: license key must start with 'sxm_lic_'\n");
     }
     return kExitInputData;
   }
@@ -358,7 +363,8 @@ int cmd_plugin_install(const std::string& plugin_id,
         "\"paid\":{},\"license_supplied\":{},"
         "\"detail\":\"CLI surface in place; marketplace download + verify "
         "loop lands in Sprint 17.\"}}\n",
-        hit->id, hit->souxmar_versions,
+        hit->id,
+        hit->souxmar_versions,
         hit->paid ? "true" : "false",
         license_key.empty() ? "false" : "true");
   } else {
@@ -390,9 +396,9 @@ int cmd_plugin_validate(const fs::path& index_override) {
   const fs::path index_path = resolve_index_path(index_override);
   if (index_path.empty() || !fs::exists(index_path)) {
     fmt::print(stderr,
-        "error: plugin index not found. Set $SOUXMAR_PLUGIN_INDEX or pass "
-        "--index <path>, or run from a souxmar checkout containing "
-        "docs/plugin-index.toml.\n");
+               "error: plugin index not found. Set $SOUXMAR_PLUGIN_INDEX or pass "
+               "--index <path>, or run from a souxmar checkout containing "
+               "docs/plugin-index.toml.\n");
     return kExitUsage;
   }
   auto result = souxmar::plugin::load_index_file(index_path);
@@ -401,7 +407,7 @@ int cmd_plugin_validate(const fs::path& index_override) {
     return kExitInputData;
   }
   const auto& entries = std::get<std::vector<souxmar::plugin::IndexEntry>>(result);
-  const auto issues   = souxmar::plugin::validate_index(entries);
+  const auto issues = souxmar::plugin::validate_index(entries);
 
   std::size_t errors = 0, warnings = 0;
   for (const auto& iss : issues) {
@@ -417,17 +423,20 @@ int cmd_plugin_validate(const fs::path& index_override) {
     const auto& entry = entries[iss.entry_index];
     auto* stream = (iss.severity == S::Error) ? stderr : stdout;
     fmt::print(stream,
-        "{}: entry #{} (id={}){}{}: {}\n",
-        souxmar::plugin::to_string(iss.severity),
-        iss.entry_index,
-        entry.id,
-        iss.field.empty() ? "" : " ",
-        iss.field,
-        iss.message);
+               "{}: entry #{} (id={}){}{}: {}\n",
+               souxmar::plugin::to_string(iss.severity),
+               iss.entry_index,
+               entry.id,
+               iss.field.empty() ? "" : " ",
+               iss.field,
+               iss.message);
   }
 
   fmt::print("\nValidated {} entries: {} error(s), {} warning(s) in {}\n",
-             entries.size(), errors, warnings, index_path.string());
+             entries.size(),
+             errors,
+             warnings,
+             index_path.string());
   return errors == 0 ? kExitOk : kExitInputData;
 }
 
@@ -436,10 +445,18 @@ void print_stage_line(const souxmar::pipeline::StageRunResult& sr) {
   using Status = souxmar::pipeline::StageRunResult::Status;
   std::string_view tag;
   switch (sr.status) {
-    case Status::Cached:   tag = "CACHED  "; break;
-    case Status::Executed: tag = "OK      "; break;
-    case Status::Failed:   tag = "FAILED  "; break;
-    case Status::Skipped:  tag = "SKIPPED "; break;
+    case Status::Cached:
+      tag = "CACHED  ";
+      break;
+    case Status::Executed:
+      tag = "OK      ";
+      break;
+    case Status::Failed:
+      tag = "FAILED  ";
+      break;
+    case Status::Skipped:
+      tag = "SKIPPED ";
+      break;
   }
   fmt::print("  [{}] {}  hash={}\n", tag, sr.stage_id, sr.content_hash.hex());
   if (sr.status == Status::Failed && sr.error) {
@@ -447,9 +464,9 @@ void print_stage_line(const souxmar::pipeline::StageRunResult& sr) {
   }
 }
 
-int cmd_run(const fs::path&              pipeline_path,
-            bool                         use_cache,
-            const fs::path&              cache_dir_override,
+int cmd_run(const fs::path& pipeline_path,
+            bool use_cache,
+            const fs::path& cache_dir_override,
             const std::vector<fs::path>& extra_paths) {
   if (!fs::exists(pipeline_path)) {
     fmt::print(stderr, "error: pipeline file not found: {}\n", pipeline_path.string());
@@ -460,8 +477,10 @@ int cmd_run(const fs::path&              pipeline_path,
   auto parse_result = souxmar::pipeline::parse_pipeline_file(pipeline_path);
   if (auto* err = std::get_if<souxmar::pipeline::ParseError>(&parse_result)) {
     fmt::print(stderr, "parse error in {}: {}", pipeline_path.string(), err->message);
-    if (err->line)   fmt::print(stderr, " (line {})", *err->line);
-    if (err->column) fmt::print(stderr, ", column {}", *err->column);
+    if (err->line)
+      fmt::print(stderr, " (line {})", *err->line);
+    if (err->column)
+      fmt::print(stderr, ", column {}", *err->column);
     fmt::print(stderr, "\n");
     return kExitInputData;
   }
@@ -470,7 +489,7 @@ int cmd_run(const fs::path&              pipeline_path,
   // 2. Discover + load every available plugin. We load all of them so any
   //    pipeline that names a registered capability resolves; the registry
   //    dispatcher will surface a clear error if a capability is missing.
-  souxmar::plugin::Registry     registry;
+  souxmar::plugin::Registry registry;
   souxmar::plugin::PluginLoader loader(registry, std::string{souxmar::version_string()});
 
   std::vector<souxmar::plugin::LoadedPlugin> live_plugins;
@@ -479,8 +498,7 @@ int cmd_run(const fs::path&              pipeline_path,
   for (const auto& d : report.loaded) {
     auto load_result = loader.load(d);
     if (auto* lerr = std::get_if<souxmar::plugin::LoadError>(&load_result)) {
-      fmt::print(stderr, "warning: failed to load plugin {}: {}\n",
-                 d.manifest.id, lerr->message);
+      fmt::print(stderr, "warning: failed to load plugin {}: {}\n", d.manifest.id, lerr->message);
       continue;
     }
     live_plugins.push_back(std::move(std::get<souxmar::plugin::LoadedPlugin>(load_result)));
@@ -491,8 +509,8 @@ int cmd_run(const fs::path&              pipeline_path,
 
   if (registry.size() == 0) {
     fmt::print(stderr,
-        "error: no plugins registered any capabilities. Did you set "
-        "$SOUXMAR_PLUGIN_PATH or pass --plugin-path?\n");
+               "error: no plugins registered any capabilities. Did you set "
+               "$SOUXMAR_PLUGIN_PATH or pass --plugin-path?\n");
     return kExitInternal;
   }
 
@@ -503,8 +521,8 @@ int cmd_run(const fs::path&              pipeline_path,
              registry.size());
 
   souxmar::pipeline::RegistryDispatcher dispatcher(registry);
-  souxmar::pipeline::Cache              cache;
-  souxmar::pipeline::RunOptions         opts;
+  souxmar::pipeline::Cache cache;
+  souxmar::pipeline::RunOptions opts;
   opts.use_cache = use_cache;
 
   // Wire in the disk-backed cache so reruns of stages with serializable
@@ -515,10 +533,10 @@ int cmd_run(const fs::path&              pipeline_path,
       auto disk = std::make_shared<souxmar::pipeline::DiskCache>(
           souxmar::pipeline::DiskCache::default_dir(cache_dir_override));
       souxmar::pipeline::DiskBacking backing;
-      backing.cache       = std::move(disk);
-      backing.serialize   = &souxmar::pipeline::serialize_stage_output;
+      backing.cache = std::move(disk);
+      backing.serialize = &souxmar::pipeline::serialize_stage_output;
       backing.deserialize = &souxmar::pipeline::deserialize_stage_output;
-      opts.disk_backing   = std::move(backing);
+      opts.disk_backing = std::move(backing);
     } catch (const std::exception& e) {
       fmt::print(stderr, "warning: disk cache disabled ({})\n", e.what());
     }
@@ -534,7 +552,8 @@ int cmd_run(const fs::path&              pipeline_path,
     return kExitInputData;
   }
 
-  for (const auto& sr : run.stage_results) print_stage_line(sr);
+  for (const auto& sr : run.stage_results)
+    print_stage_line(sr);
 
   if (run.status != souxmar::pipeline::RunResult::Status::Success) {
     fmt::print(stderr, "\npipeline failed.\n");
@@ -548,9 +567,12 @@ int cmd_run(const fs::path&              pipeline_path,
 
 std::string_view confirmation_name(souxmar::ai::Confirmation c) {
   switch (c) {
-    case souxmar::ai::Confirmation::Auto:          return "auto";
-    case souxmar::ai::Confirmation::ConfirmOnce:   return "confirm-once";
-    case souxmar::ai::Confirmation::ConfirmAlways: return "confirm-always";
+    case souxmar::ai::Confirmation::Auto:
+      return "auto";
+    case souxmar::ai::Confirmation::ConfirmOnce:
+      return "confirm-once";
+    case souxmar::ai::Confirmation::ConfirmAlways:
+      return "confirm-always";
   }
   return "?";
 }
@@ -565,13 +587,27 @@ std::string json_escape(std::string_view in) {
   out.reserve(in.size() + 2);
   for (char c : in) {
     switch (c) {
-      case '"':  out += "\\\""; break;
-      case '\\': out += "\\\\"; break;
-      case '\b': out += "\\b";  break;
-      case '\f': out += "\\f";  break;
-      case '\n': out += "\\n";  break;
-      case '\r': out += "\\r";  break;
-      case '\t': out += "\\t";  break;
+      case '"':
+        out += "\\\"";
+        break;
+      case '\\':
+        out += "\\\\";
+        break;
+      case '\b':
+        out += "\\b";
+        break;
+      case '\f':
+        out += "\\f";
+        break;
+      case '\n':
+        out += "\\n";
+        break;
+      case '\r':
+        out += "\\r";
+        break;
+      case '\t':
+        out += "\\t";
+        break;
       default:
         if (static_cast<unsigned char>(c) < 0x20) {
           out += fmt::format("\\u{:04x}", static_cast<unsigned>(c));
@@ -603,10 +639,10 @@ int cmd_agent_list(bool json_output) {
       const auto* t = registry.find(names[i]);
       const char* comma = (i + 1 == names.size()) ? "" : ",";
       fmt::print("    {{\n");
-      fmt::print("      \"name\": \"{}\",\n",         json_escape(t->name));
-      fmt::print("      \"category\": \"{}\",\n",     json_escape(t->category));
+      fmt::print("      \"name\": \"{}\",\n", json_escape(t->name));
+      fmt::print("      \"category\": \"{}\",\n", json_escape(t->category));
       fmt::print("      \"confirmation\": \"{}\",\n", confirmation_name(t->confirmation));
-      fmt::print("      \"description\": \"{}\"\n",   json_escape(t->description));
+      fmt::print("      \"description\": \"{}\"\n", json_escape(t->description));
       fmt::print("    }}{}\n", comma);
     }
     fmt::print("  ]\n}}\n");
@@ -616,8 +652,7 @@ int cmd_agent_list(bool json_output) {
   fmt::print("souxmar agent tools (v1, {} total):\n\n", registry.size());
   for (const auto& name : registry.list()) {
     const auto* t = registry.find(name);
-    fmt::print("  {} [{}]  ({})\n",
-               t->name, t->category, confirmation_name(t->confirmation));
+    fmt::print("  {} [{}]  ({})\n", t->name, t->category, confirmation_name(t->confirmation));
     if (!t->description.empty()) {
       fmt::print("    {}\n", t->description);
     }
@@ -626,14 +661,14 @@ int cmd_agent_list(bool json_output) {
   return kExitOk;
 }
 
-int cmd_agent_invoke(const std::string&            tool_name,
-                     const std::string&            input_yaml,
-                     bool                          auto_yes,
-                     bool                          use_cache,
-                     const fs::path&               cache_dir_override,
-                     const fs::path&               audit_log_path,
-                     const fs::path&               budget_config_path,
-                     const std::vector<fs::path>&  extra_paths) {
+int cmd_agent_invoke(const std::string& tool_name,
+                     const std::string& input_yaml,
+                     bool auto_yes,
+                     bool use_cache,
+                     const fs::path& cache_dir_override,
+                     const fs::path& audit_log_path,
+                     const fs::path& budget_config_path,
+                     const std::vector<fs::path>& extra_paths) {
   // 1. Parse the inputs first so an obvious typo fails before we touch
   //    plugins.
   souxmar::pipeline::Value inputs;
@@ -648,7 +683,7 @@ int cmd_agent_invoke(const std::string&            tool_name,
 
   // 2. Discover + load every plugin under the search path. mesh / solve
   //    need a populated registry; other tools tolerate an empty one.
-  souxmar::plugin::Registry     registry;
+  souxmar::plugin::Registry registry;
   souxmar::plugin::PluginLoader loader(registry, std::string{souxmar::version_string()});
 
   std::vector<souxmar::plugin::LoadedPlugin> live_plugins;
@@ -657,8 +692,7 @@ int cmd_agent_invoke(const std::string&            tool_name,
   for (const auto& d : report.loaded) {
     auto load_result = loader.load(d);
     if (auto* lerr = std::get_if<souxmar::plugin::LoadError>(&load_result)) {
-      fmt::print(stderr, "warning: failed to load plugin {}: {}\n",
-                 d.manifest.id, lerr->message);
+      fmt::print(stderr, "warning: failed to load plugin {}: {}\n", d.manifest.id, lerr->message);
       continue;
     }
     live_plugins.push_back(std::move(std::get<souxmar::plugin::LoadedPlugin>(load_result)));
@@ -666,14 +700,13 @@ int cmd_agent_invoke(const std::string&            tool_name,
 
   // 3. Build dispatch context.
   souxmar::pipeline::RegistryDispatcher dispatcher(registry);
-  souxmar::pipeline::Cache              cache;
-  souxmar::pipeline::Value session_state =
-      souxmar::pipeline::Value::map({});
+  souxmar::pipeline::Cache cache;
+  souxmar::pipeline::Value session_state = souxmar::pipeline::Value::map({});
 
   souxmar::ai::ToolContext ctx;
-  ctx.registry      = &registry;
-  ctx.dispatcher    = &dispatcher;
-  ctx.cache         = &cache;
+  ctx.registry = &registry;
+  ctx.dispatcher = &dispatcher;
+  ctx.cache = &cache;
   ctx.session_state = &session_state;
   (void)cache_dir_override;  // disk_cache only relevant to `run` today
   (void)use_cache;
@@ -700,13 +733,16 @@ int cmd_agent_invoke(const std::string&            tool_name,
   fs::path effective_budget_path = budget_config_path;
   if (effective_budget_path.empty()) {
     const auto auto_path = souxmar::ai::default_budget_config_path();
-    if (fs::exists(auto_path)) effective_budget_path = auto_path;
+    if (fs::exists(auto_path))
+      effective_budget_path = auto_path;
   }
   if (!effective_budget_path.empty()) {
     auto r = souxmar::ai::parse_budget_config_file(effective_budget_path);
     if (auto* err = std::get_if<souxmar::ai::BudgetConfigError>(&r)) {
-      fmt::print(stderr, "warning: budget config '{}' not loaded: {}\n",
-                 effective_budget_path.string(), err->message);
+      fmt::print(stderr,
+                 "warning: budget config '{}' not loaded: {}\n",
+                 effective_budget_path.string(),
+                 err->message);
     } else {
       const auto& cfg = std::get<souxmar::ai::BudgetConfig>(r);
       cfg.apply_to(budget);
@@ -716,9 +752,11 @@ int cmd_agent_invoke(const std::string&            tool_name,
   if (budget_loaded) {
     ctx.budget = &budget;
     fmt::print(stderr,
-        "budget: max_input={} max_output={} max_total={} ({})\n",
-        budget.max_input_tokens, budget.max_output_tokens,
-        budget.max_total_tokens, effective_budget_path.string());
+               "budget: max_input={} max_output={} max_total={} ({})\n",
+               budget.max_input_tokens,
+               budget.max_output_tokens,
+               budget.max_total_tokens,
+               effective_budget_path.string());
   }
 
   // 4. Confirmation policy: --yes maps every tool to Auto for this run.
@@ -733,8 +771,7 @@ int cmd_agent_invoke(const std::string&            tool_name,
 
   // 5. Dispatch + print.
   const auto registry_v1 = souxmar::ai::default_v1_tools();
-  const auto result = souxmar::ai::dispatch_tool(registry_v1, tool_name,
-                                                 inputs, ctx, policy);
+  const auto result = souxmar::ai::dispatch_tool(registry_v1, tool_name, inputs, ctx, policy);
   if (result.error) {
     fmt::print(stderr, "{} [{}]\n", result.error->message, result.error->code);
     if (!result.error->suggestion.empty()) {
@@ -766,22 +803,22 @@ int cmd_agent_invoke(const std::string&            tool_name,
 // downloads `<channel>.toml` + `<channel>.toml.sig` from the CDN.
 
 struct UpdateFlags {
-  fs::path                                   manifest_path;
-  fs::path                                   signature_path;
-  fs::path                                   state_path_override;
-  std::vector<std::pair<std::string, std::string>>  trusted_keys;  // (id, hex)
-  std::string                                current_version_override;
-  std::string                                platform_override;
-  std::string                                as_of_override;
-  bool                                       json    = false;
-  bool                                       dry_run = false;
+  fs::path manifest_path;
+  fs::path signature_path;
+  fs::path state_path_override;
+  std::vector<std::pair<std::string, std::string>> trusted_keys;  // (id, hex)
+  std::string current_version_override;
+  std::string platform_override;
+  std::string as_of_override;
+  bool json = false;
+  bool dry_run = false;
   // Sprint 10 push 7 — apply / rollback specific.
-  fs::path                                   artifact_path;
-  fs::path                                   target_root;
+  fs::path artifact_path;
+  fs::path target_root;
   // Sprint 11 push 2 — fetch specific.
-  std::string                                manifest_url;
-  fs::path                                   out_dir;
-  bool                                       insecure = false;
+  std::string manifest_url;
+  fs::path out_dir;
+  bool insecure = false;
 };
 
 std::string read_file_to_string(const fs::path& p, std::string& err) {
@@ -801,23 +838,21 @@ std::string read_file_to_string(const fs::path& p, std::string& err) {
 // valid sig.
 std::string strip_ascii_ws(std::string_view s) {
   std::size_t b = 0;
-  while (b < s.size() &&
-         (s[b] == ' ' || s[b] == '\t' || s[b] == '\n' || s[b] == '\r'))
+  while (b < s.size() && (s[b] == ' ' || s[b] == '\t' || s[b] == '\n' || s[b] == '\r'))
     ++b;
   std::size_t e = s.size();
-  while (e > b &&
-         (s[e - 1] == ' ' || s[e - 1] == '\t' || s[e - 1] == '\n' || s[e - 1] == '\r'))
+  while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\t' || s[e - 1] == '\n' || s[e - 1] == '\r'))
     --e;
   return std::string(s.substr(b, e - b));
 }
 
 // Splits a "<id>=<hex>" CLI argument into its two halves. Empty id or
 // missing '=' returns false; the caller surfaces a usage error.
-bool parse_trusted_key_flag(std::string_view              raw,
-                            std::pair<std::string, std::string>& out) {
+bool parse_trusted_key_flag(std::string_view raw, std::pair<std::string, std::string>& out) {
   const auto eq = raw.find('=');
-  if (eq == std::string_view::npos) return false;
-  out.first  = std::string(raw.substr(0, eq));
+  if (eq == std::string_view::npos)
+    return false;
+  out.first = std::string(raw.substr(0, eq));
   out.second = std::string(raw.substr(eq + 1));
   return !out.first.empty() && !out.second.empty();
 }
@@ -830,15 +865,15 @@ bool parse_trusted_key_flag(std::string_view              raw,
 // caller turns into a gate decision / apply call.
 struct UpdatePreflight {
   // Inputs preserved so the caller can also pass them to apply_update.
-  std::string                        manifest_text;
-  std::vector<std::uint8_t>          signature_bytes;
-  souxmar::update::Manifest          manifest;
-  souxmar::update::TrustStore        trust;
+  std::string manifest_text;
+  std::vector<std::uint8_t> signature_bytes;
+  souxmar::update::Manifest manifest;
+  souxmar::update::TrustStore trust;
   // Resolved state.
-  souxmar::update::UpdateState       state;        // loaded; "" fields on fresh install
-  fs::path                           state_path;
-  std::string                        current_version;
-  souxmar::update::HostPlatform      host{};
+  souxmar::update::UpdateState state;  // loaded; "" fields on fresh install
+  fs::path state_path;
+  std::string current_version;
+  souxmar::update::HostPlatform host{};
   std::unique_ptr<souxmar::update::TimeSource> clock;
 };
 
@@ -849,9 +884,9 @@ int update_preflight(const UpdateFlags& f, UpdatePreflight* out) {
 
   if (f.manifest_path.empty() || f.signature_path.empty()) {
     fmt::print(stderr,
-        "error: this `souxmar update` subcommand requires --manifest "
-        "and --signature; pass --trusted-key <id>=<hex> to override "
-        "the embedded release trust store\n");
+               "error: this `souxmar update` subcommand requires --manifest "
+               "and --signature; pass --trusted-key <id>=<hex> to override "
+               "the embedded release trust store\n");
     return kExitUsage;
   }
 
@@ -861,8 +896,7 @@ int update_preflight(const UpdateFlags& f, UpdatePreflight* out) {
     fmt::print(stderr, "error: {}\n", err);
     return kExitInputData;
   }
-  const std::string signature_text =
-      read_file_to_string(f.signature_path, err);
+  const std::string signature_text = read_file_to_string(f.signature_path, err);
   if (!err.empty()) {
     fmt::print(stderr, "error: {}\n", err);
     return kExitInputData;
@@ -870,8 +904,8 @@ int update_preflight(const UpdateFlags& f, UpdatePreflight* out) {
   const std::string sig_hex = strip_ascii_ws(signature_text);
   if (!hex_decode(sig_hex, out->signature_bytes)) {
     fmt::print(stderr,
-        "error: signature file '{}' is not valid lowercase hex\n",
-        f.signature_path.string());
+               "error: signature file '{}' is not valid lowercase hex\n",
+               f.signature_path.string());
     return kExitInputData;
   }
 
@@ -891,7 +925,8 @@ int update_preflight(const UpdateFlags& f, UpdatePreflight* out) {
       fmt::print(stderr, "manifest warning: {}: {}\n", i.field, i.message);
     }
   }
-  if (any_error) return kExitInputData;
+  if (any_error)
+    return kExitInputData;
 
   if (f.trusted_keys.empty()) {
     // Fall back to the embedded release trust store. Dev / unsigned
@@ -901,37 +936,36 @@ int update_preflight(const UpdateFlags& f, UpdatePreflight* out) {
     out->trust = embedded_trust_store();
     if (build_uses_dev_key()) {
       fmt::print(stderr,
-          "note: using the in-tree development trust key "
-          "(souxmar-dev-key); pass --trusted-key to override or rebuild "
-          "with -DSOUXMAR_RELEASE_PUBKEY_ID=... for a release-trust "
-          "configuration\n");
+                 "note: using the in-tree development trust key "
+                 "(souxmar-dev-key); pass --trusted-key to override or rebuild "
+                 "with -DSOUXMAR_RELEASE_PUBKEY_ID=... for a release-trust "
+                 "configuration\n");
     }
   } else {
     for (const auto& [id, hex] : f.trusted_keys) {
       if (!out->trust.add_hex(id, hex)) {
         fmt::print(stderr,
-            "error: --trusted-key {}=... rejected (id empty or hex pubkey "
-            "is not 32 bytes / not lowercase hex)\n", id);
+                   "error: --trusted-key {}=... rejected (id empty or hex pubkey "
+                   "is not 32 bytes / not lowercase hex)\n",
+                   id);
         return kExitUsage;
       }
     }
   }
 
   const std::span<const std::uint8_t> message_span{
-      reinterpret_cast<const std::uint8_t*>(out->manifest_text.data()),
-      out->manifest_text.size()};
+      reinterpret_cast<const std::uint8_t*>(out->manifest_text.data()), out->manifest_text.size()};
   const auto sig_status = verify_manifest_signature(
-      message_span, out->signature_bytes,
-      out->manifest.signing.public_key_id, out->trust);
+      message_span, out->signature_bytes, out->manifest.signing.public_key_id, out->trust);
   if (sig_status != SignatureStatus::Ok) {
     if (f.json) {
-      fmt::print("{{\"status\":\"signature-failed\",\"reason\":\"{}\"}}\n",
-                 to_string(sig_status));
+      fmt::print("{{\"status\":\"signature-failed\",\"reason\":\"{}\"}}\n", to_string(sig_status));
     } else {
       fmt::print(stderr,
-          "signature verification failed: {} (manifest signed by "
-          "public_key_id={})\n",
-          to_string(sig_status), out->manifest.signing.public_key_id);
+                 "signature verification failed: {} (manifest signed by "
+                 "public_key_id={})\n",
+                 to_string(sig_status),
+                 out->manifest.signing.public_key_id);
     }
     return kExitSignatureBad;
   }
@@ -939,22 +973,21 @@ int update_preflight(const UpdateFlags& f, UpdatePreflight* out) {
   // State + current_version. Precedence: --current-version flag > state
   // file > running CLI's version.
   out->current_version = !f.current_version_override.empty()
-      ? f.current_version_override
-      : std::string(souxmar::version_string());
-  out->state_path = f.state_path_override.empty()
-      ? default_update_state_path()
-      : f.state_path_override;
+                             ? f.current_version_override
+                             : std::string(souxmar::version_string());
+  out->state_path =
+      f.state_path_override.empty() ? default_update_state_path() : f.state_path_override;
   {
     auto loaded = load_update_state(out->state_path);
     if (auto* lerr = std::get_if<UpdateStateLoadError>(&loaded)) {
       fmt::print(stderr,
-          "warning: update-state file '{}' could not be read ({}); "
-          "treating as fresh install\n",
-          out->state_path.string(), lerr->message);
+                 "warning: update-state file '{}' could not be read ({}); "
+                 "treating as fresh install\n",
+                 out->state_path.string(),
+                 lerr->message);
     } else {
       out->state = std::get<UpdateState>(std::move(loaded));
-      if (!out->state.current_installed_version.empty() &&
-          f.current_version_override.empty()) {
+      if (!out->state.current_installed_version.empty() && f.current_version_override.empty()) {
         out->current_version = out->state.current_installed_version;
       }
     }
@@ -965,9 +998,9 @@ int update_preflight(const UpdateFlags& f, UpdatePreflight* out) {
     auto p = parse_host_platform(f.platform_override);
     if (!p) {
       fmt::print(stderr,
-          "error: --platform '{}' is not <os>/<arch> "
-          "(os in linux|macos|windows; arch in x86_64|aarch64)\n",
-          f.platform_override);
+                 "error: --platform '{}' is not <os>/<arch> "
+                 "(os in linux|macos|windows; arch in x86_64|aarch64)\n",
+                 f.platform_override);
       return kExitUsage;
     }
     out->host = *p;
@@ -977,8 +1010,9 @@ int update_preflight(const UpdateFlags& f, UpdatePreflight* out) {
     auto tp = parse_rfc3339_utc(f.as_of_override);
     if (!tp) {
       fmt::print(stderr,
-          "error: --as-of '{}' is not canonical RFC-3339 UTC "
-          "(YYYY-MM-DDTHH:MM:SSZ)\n", f.as_of_override);
+                 "error: --as-of '{}' is not canonical RFC-3339 UTC "
+                 "(YYYY-MM-DDTHH:MM:SSZ)\n",
+                 f.as_of_override);
       return kExitUsage;
     }
     out->clock = std::make_unique<FixedTimeSource>(*tp);
@@ -992,11 +1026,10 @@ int cmd_update_check(const UpdateFlags& f) {
   using namespace souxmar::update;
 
   UpdatePreflight pf;
-  if (const int rc = update_preflight(f, &pf); rc != 0) return rc;
+  if (const int rc = update_preflight(f, &pf); rc != 0)
+    return rc;
 
-  CurrentInstall install{pf.current_version,
-                         pf.state.max_version_ever_seen,
-                         pf.host};
+  CurrentInstall install{pf.current_version, pf.state.max_version_ever_seen, pf.host};
   const auto decision = apply_gate(pf.manifest, install, *pf.clock);
 
   // Push 7 closes the replay-defence gap noted in push 6's commit: on
@@ -1008,8 +1041,7 @@ int cmd_update_check(const UpdateFlags& f) {
     if (pf.state.max_version_ever_seen.empty()) {
       pf.state.max_version_ever_seen = apply->version;
     } else {
-      const auto cmp = compare_versions(apply->version,
-                                        pf.state.max_version_ever_seen);
+      const auto cmp = compare_versions(apply->version, pf.state.max_version_ever_seen);
       if (cmp && *cmp > 0) {
         pf.state.max_version_ever_seen = apply->version;
       }
@@ -1017,9 +1049,9 @@ int cmd_update_check(const UpdateFlags& f) {
   }
   if (!save_update_state(pf.state_path, pf.state)) {
     fmt::print(stderr,
-        "warning: failed to persist update-state to '{}' — replay "
-        "defence is degraded until the next successful write\n",
-        pf.state_path.string());
+               "warning: failed to persist update-state to '{}' — replay "
+               "defence is degraded until the next successful write\n",
+               pf.state_path.string());
   }
 
   if (auto* apply = std::get_if<UpdateApply>(&decision)) {
@@ -1028,21 +1060,22 @@ int cmd_update_check(const UpdateFlags& f) {
           "{{\"status\":\"apply\",\"version\":\"{}\",\"url\":\"{}\","
           "\"sha256\":\"{}\",\"size\":{},\"os\":\"{}\",\"arch\":\"{}\","
           "\"mandatory\":{}}}\n",
-          apply->version, apply->artifact.url, apply->artifact.sha256,
-          apply->artifact.size, to_string(apply->artifact.os),
+          apply->version,
+          apply->artifact.url,
+          apply->artifact.sha256,
+          apply->artifact.size,
+          to_string(apply->artifact.os),
           to_string(apply->artifact.arch),
           apply->mandatory ? "true" : "false");
     } else {
       fmt::print("update available: {} -> {}\n",
-                 pf.current_version.empty() ? "(fresh install)"
-                                            : pf.current_version,
+                 pf.current_version.empty() ? "(fresh install)" : pf.current_version,
                  apply->version);
       fmt::print("  url:       {}\n", apply->artifact.url);
       fmt::print("  sha256:    {}\n", apply->artifact.sha256);
       fmt::print("  size:      {} bytes\n", apply->artifact.size);
-      fmt::print("  platform:  {}/{}\n",
-                 to_string(apply->artifact.os),
-                 to_string(apply->artifact.arch));
+      fmt::print(
+          "  platform:  {}/{}\n", to_string(apply->artifact.os), to_string(apply->artifact.arch));
       fmt::print("  mandatory: {}\n", apply->mandatory ? "yes" : "no");
     }
     return kExitOk;
@@ -1051,8 +1084,7 @@ int cmd_update_check(const UpdateFlags& f) {
   const auto& refusal = std::get<UpdateRefusal>(decision);
   if (refusal.reason == RefusalReason::AlreadyOnOrAheadOfOffered) {
     if (f.json) {
-      fmt::print("{{\"status\":\"up-to-date\",\"version\":\"{}\"}}\n",
-                 pf.current_version);
+      fmt::print("{{\"status\":\"up-to-date\",\"version\":\"{}\"}}\n", pf.current_version);
     } else {
       fmt::print("already up-to-date ({})\n", refusal.detail);
     }
@@ -1060,17 +1092,16 @@ int cmd_update_check(const UpdateFlags& f) {
   }
   if (f.json) {
     fmt::print("{{\"status\":\"refused\",\"reason\":\"{}\",\"detail\":\"{}\"}}\n",
-               to_string(refusal.reason), refusal.detail);
+               to_string(refusal.reason),
+               refusal.detail);
   } else {
-    fmt::print(stderr, "update refused: {} ({})\n",
-               to_string(refusal.reason), refusal.detail);
+    fmt::print(stderr, "update refused: {} ({})\n", to_string(refusal.reason), refusal.detail);
   }
   return kExitUpdateRefused;
 }
 
 // Read a file into bytes. Returns empty vector + sets err on failure.
-std::vector<std::uint8_t> read_file_bytes(const fs::path& p,
-                                          std::string&    err) {
+std::vector<std::uint8_t> read_file_bytes(const fs::path& p, std::string& err) {
   std::ifstream src(p, std::ios::binary);
   if (!src.is_open()) {
     err = "cannot open '" + p.string() + "'";
@@ -1087,20 +1118,22 @@ int cmd_update_apply(const UpdateFlags& f) {
   using namespace souxmar::update;
 
   // --dry-run path: same as check.
-  if (f.dry_run) return cmd_update_check(f);
+  if (f.dry_run)
+    return cmd_update_check(f);
 
   if (f.target_root.empty() || f.artifact_path.empty()) {
     fmt::print(stderr,
-        "error: `souxmar update apply` (without --dry-run) requires "
-        "--target-root <dir> and --artifact <path>; the artifact bytes "
-        "are read from --artifact, verified against the manifest's "
-        "sha256, staged under <target-root>/versions/<version>/, and "
-        "the swap is recorded in <target-root>/rollback.log.\n");
+               "error: `souxmar update apply` (without --dry-run) requires "
+               "--target-root <dir> and --artifact <path>; the artifact bytes "
+               "are read from --artifact, verified against the manifest's "
+               "sha256, staged under <target-root>/versions/<version>/, and "
+               "the swap is recorded in <target-root>/rollback.log.\n");
     return kExitUsage;
   }
 
   UpdatePreflight pf;
-  if (const int rc = update_preflight(f, &pf); rc != 0) return rc;
+  if (const int rc = update_preflight(f, &pf); rc != 0)
+    return rc;
 
   std::string err;
   const auto artifact_bytes = read_file_bytes(f.artifact_path, err);
@@ -1110,13 +1143,13 @@ int cmd_update_apply(const UpdateFlags& f) {
   }
 
   InstallLayout layout(f.target_root);
-  ApplyContext  actx;
-  actx.manifest       = &pf.manifest;
+  ApplyContext actx;
+  actx.manifest = &pf.manifest;
   actx.artifact_bytes = artifact_bytes;
-  actx.layout         = &layout;
-  actx.state          = &pf.state;
-  actx.clock          = pf.clock.get();
-  actx.platform       = pf.host;
+  actx.layout = &layout;
+  actx.state = &pf.state;
+  actx.clock = pf.clock.get();
+  actx.platform = pf.host;
   actx.current_version = pf.current_version;
 
   const auto result = apply_update(actx);
@@ -1127,9 +1160,7 @@ int cmd_update_apply(const UpdateFlags& f) {
   // operation will retry the rename via save_update_state's tmp+rename
   // path).
   if (!save_update_state(pf.state_path, pf.state)) {
-    fmt::print(stderr,
-        "warning: failed to persist update-state to '{}'\n",
-        pf.state_path.string());
+    fmt::print(stderr, "warning: failed to persist update-state to '{}'\n", pf.state_path.string());
   }
 
   if (f.json) {
@@ -1138,12 +1169,10 @@ int cmd_update_apply(const UpdateFlags& f) {
         "\"detail\":\"{}\"}}\n",
         to_string(result.outcome),
         result.applied_version,
-        result.outcome == ApplyOutcome::RefusedByGate
-            ? to_string(result.refusal) : "",
+        result.outcome == ApplyOutcome::RefusedByGate ? to_string(result.refusal) : "",
         result.detail);
   } else {
-    fmt::print("apply: {} ({})\n",
-               to_string(result.outcome), result.detail);
+    fmt::print("apply: {} ({})\n", to_string(result.outcome), result.detail);
     if (!result.applied_version.empty()) {
       fmt::print("  version:  {}\n", result.applied_version);
       fmt::print("  root:     {}\n", layout.root().string());
@@ -1187,8 +1216,7 @@ int cmd_update_apply(const UpdateFlags& f) {
 int cmd_update_fetch(const UpdateFlags& f) {
   using namespace souxmar::update;
   if (f.manifest_url.empty()) {
-    fmt::print(stderr,
-        "error: `souxmar update fetch` requires --manifest-url <https-url>\n");
+    fmt::print(stderr, "error: `souxmar update fetch` requires --manifest-url <https-url>\n");
     return kExitUsage;
   }
   const fs::path out_dir = f.out_dir.empty() ? fs::current_path() : f.out_dir;
@@ -1200,8 +1228,7 @@ int cmd_update_fetch(const UpdateFlags& f) {
 
   const auto man_result = fetch_to_memory(f.manifest_url, opts);
   if (auto* err = std::get_if<FetchError>(&man_result)) {
-    fmt::print(stderr, "fetch manifest failed: {} ({})\n",
-               to_string(err->kind), err->message);
+    fmt::print(stderr, "fetch manifest failed: {} ({})\n", to_string(err->kind), err->message);
     return kExitInputData;
   }
   const auto& man = std::get<FetchedBytes>(man_result);
@@ -1212,12 +1239,13 @@ int cmd_update_fetch(const UpdateFlags& f) {
                static_cast<std::streamsize>(man.bytes.size()));
   }
   fmt::print("fetched manifest: {} ({} bytes, {}ms)\n",
-             man_path.string(), man.bytes.size(), man.duration.count());
+             man_path.string(),
+             man.bytes.size(),
+             man.duration.count());
 
   const auto sig_result = fetch_to_memory(f.manifest_url + ".sig", opts);
   if (auto* err = std::get_if<FetchError>(&sig_result)) {
-    fmt::print(stderr, "fetch signature failed: {} ({})\n",
-               to_string(err->kind), err->message);
+    fmt::print(stderr, "fetch signature failed: {} ({})\n", to_string(err->kind), err->message);
     return kExitInputData;
   }
   const auto& sig = std::get<FetchedBytes>(sig_result);
@@ -1228,15 +1256,19 @@ int cmd_update_fetch(const UpdateFlags& f) {
                static_cast<std::streamsize>(sig.bytes.size()));
   }
   fmt::print("fetched signature: {} ({} bytes, {}ms)\n",
-             sig_path.string(), sig.bytes.size(), sig.duration.count());
+             sig_path.string(),
+             sig.bytes.size(),
+             sig.duration.count());
 
   // Print the suggested follow-up so the user has a copy-paste path
   // from `fetch` to `apply`. The artifact URL lives in the
   // manifest; we don't parse it here (parsing happens during
   // apply / check), but the user knows what to do.
-  fmt::print("next: souxmar update check "
-             "--manifest {} --signature {}\n",
-             man_path.string(), sig_path.string());
+  fmt::print(
+      "next: souxmar update check "
+      "--manifest {} --signature {}\n",
+      man_path.string(),
+      sig_path.string());
   return kExitOk;
 }
 
@@ -1244,8 +1276,7 @@ int cmd_update_rollback(const UpdateFlags& f) {
   using namespace souxmar::update;
 
   if (f.target_root.empty()) {
-    fmt::print(stderr,
-        "error: `souxmar update rollback` requires --target-root <dir>\n");
+    fmt::print(stderr, "error: `souxmar update rollback` requires --target-root <dir>\n");
     return kExitUsage;
   }
 
@@ -1253,17 +1284,17 @@ int cmd_update_rollback(const UpdateFlags& f) {
   // previous version's bytes are already on disk and were verified
   // when they were originally applied. We still load the per-user
   // state so current_installed_version + last_apply_at get bumped.
-  const fs::path state_path = f.state_path_override.empty()
-      ? default_update_state_path()
-      : f.state_path_override;
+  const fs::path state_path =
+      f.state_path_override.empty() ? default_update_state_path() : f.state_path_override;
   UpdateState state;
   {
     auto loaded = load_update_state(state_path);
     if (auto* lerr = std::get_if<UpdateStateLoadError>(&loaded)) {
       fmt::print(stderr,
-          "warning: update-state file '{}' could not be read ({}); "
-          "rollback proceeds against on-disk install layout only\n",
-          state_path.string(), lerr->message);
+                 "warning: update-state file '{}' could not be read ({}); "
+                 "rollback proceeds against on-disk install layout only\n",
+                 state_path.string(),
+                 lerr->message);
     } else {
       state = std::get<UpdateState>(std::move(loaded));
     }
@@ -1273,9 +1304,7 @@ int cmd_update_rollback(const UpdateFlags& f) {
   if (!f.as_of_override.empty()) {
     auto tp = parse_rfc3339_utc(f.as_of_override);
     if (!tp) {
-      fmt::print(stderr,
-          "error: --as-of '{}' is not canonical RFC-3339 UTC\n",
-          f.as_of_override);
+      fmt::print(stderr, "error: --as-of '{}' is not canonical RFC-3339 UTC\n", f.as_of_override);
       return kExitUsage;
     }
     clock = std::make_unique<FixedTimeSource>(*tp);
@@ -1288,20 +1317,19 @@ int cmd_update_rollback(const UpdateFlags& f) {
   const auto result = rollback(rctx);
 
   if (!save_update_state(state_path, state)) {
-    fmt::print(stderr,
-        "warning: failed to persist update-state to '{}'\n",
-        state_path.string());
+    fmt::print(stderr, "warning: failed to persist update-state to '{}'\n", state_path.string());
   }
 
   if (f.json) {
     fmt::print(
         "{{\"status\":\"{}\",\"from\":\"{}\",\"to\":\"{}\","
         "\"detail\":\"{}\"}}\n",
-        to_string(result.outcome), result.from_version,
-        result.to_version, result.detail);
+        to_string(result.outcome),
+        result.from_version,
+        result.to_version,
+        result.detail);
   } else {
-    fmt::print("rollback: {} ({})\n",
-               to_string(result.outcome), result.detail);
+    fmt::print("rollback: {} ({})\n", to_string(result.outcome), result.detail);
     if (!result.to_version.empty()) {
       fmt::print("  from: {}\n", result.from_version);
       fmt::print("  to:   {}\n", result.to_version);
@@ -1333,42 +1361,46 @@ int main(int argc, char** argv) {
   const std::string& sub = args[0];
 
   // Common: collect --plugin-path flags from anywhere in the tail.
-  std::vector<fs::path>    extra_paths;
-  fs::path                 cache_dir_override;
-  fs::path                 audit_log_path;
-  fs::path                 budget_config_path;
-  fs::path                 index_path_override;     // --index <path>
-  std::string              capability_prefix;       // --capability <prefix>
+  std::vector<fs::path> extra_paths;
+  fs::path cache_dir_override;
+  fs::path audit_log_path;
+  fs::path budget_config_path;
+  fs::path index_path_override;   // --index <path>
+  std::string capability_prefix;  // --capability <prefix>
   // Sprint 16 push 4 — `souxmar plugin install` flags.
-  std::string              plugin_install_id;       // --id <plugin-id>
-  std::string              plugin_install_license;  // --license <sxm_lic_...>
-  bool                     use_cache = true;
-  bool                     auto_yes  = false;
-  std::string              input_yaml;
+  std::string plugin_install_id;       // --id <plugin-id>
+  std::string plugin_install_license;  // --license <sxm_lic_...>
+  bool use_cache = true;
+  bool auto_yes = false;
+  std::string input_yaml;
   std::vector<std::string> positionals;
   // Sprint 10 push 6 — `souxmar update` flags. Hoisted into the shared
   // parse loop so the order of flags doesn't depend on the position
   // of the subcommand keyword.
-  UpdateFlags              update_flags;
+  UpdateFlags update_flags;
 
   for (std::size_t i = 1; i < args.size(); ++i) {
     if (args[i] == "--plugin-path") {
       auto v = pop_value(args, i, "--plugin-path");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       extra_paths.emplace_back(*v);
     } else if (args[i] == "--no-cache") {
       use_cache = false;
     } else if (args[i] == "--cache-dir") {
       auto v = pop_value(args, i, "--cache-dir");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       cache_dir_override = *v;
     } else if (args[i] == "--input") {
       auto v = pop_value(args, i, "--input");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       input_yaml = *v;
     } else if (args[i] == "--input-file") {
       auto v = pop_value(args, i, "--input-file");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       try {
         std::ifstream src(*v);
         if (!src.is_open()) {
@@ -1386,61 +1418,73 @@ int main(int argc, char** argv) {
       auto_yes = true;
     } else if (args[i] == "--audit-log") {
       auto v = pop_value(args, i, "--audit-log");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       audit_log_path = *v;
     } else if (args[i] == "--budget-config") {
       auto v = pop_value(args, i, "--budget-config");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       budget_config_path = *v;
     } else if (args[i] == "--index") {
       auto v = pop_value(args, i, "--index");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       index_path_override = *v;
     } else if (args[i] == "--capability") {
       auto v = pop_value(args, i, "--capability");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       capability_prefix = *v;
     } else if (args[i] == "--id") {
       auto v = pop_value(args, i, "--id");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       plugin_install_id = *v;
     } else if (args[i] == "--license") {
       auto v = pop_value(args, i, "--license");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       plugin_install_license = *v;
     } else if (args[i] == "--manifest") {
       auto v = pop_value(args, i, "--manifest");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       update_flags.manifest_path = *v;
     } else if (args[i] == "--signature") {
       auto v = pop_value(args, i, "--signature");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       update_flags.signature_path = *v;
     } else if (args[i] == "--trusted-key") {
       auto v = pop_value(args, i, "--trusted-key");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       std::pair<std::string, std::string> kv;
       if (!parse_trusted_key_flag(*v, kv)) {
-        fmt::print(stderr,
-            "error: --trusted-key must be <id>=<hex> (got '{}')\n", *v);
+        fmt::print(stderr, "error: --trusted-key must be <id>=<hex> (got '{}')\n", *v);
         return kExitUsage;
       }
       update_flags.trusted_keys.push_back(std::move(kv));
     } else if (args[i] == "--current-version") {
       auto v = pop_value(args, i, "--current-version");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       update_flags.current_version_override = *v;
     } else if (args[i] == "--state") {
       auto v = pop_value(args, i, "--state");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       update_flags.state_path_override = *v;
     } else if (args[i] == "--platform") {
       auto v = pop_value(args, i, "--platform");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       update_flags.platform_override = *v;
     } else if (args[i] == "--as-of") {
       auto v = pop_value(args, i, "--as-of");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       update_flags.as_of_override = *v;
     } else if (args[i] == "--json") {
       update_flags.json = true;
@@ -1448,19 +1492,23 @@ int main(int argc, char** argv) {
       update_flags.dry_run = true;
     } else if (args[i] == "--artifact") {
       auto v = pop_value(args, i, "--artifact");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       update_flags.artifact_path = *v;
     } else if (args[i] == "--target-root") {
       auto v = pop_value(args, i, "--target-root");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       update_flags.target_root = *v;
     } else if (args[i] == "--manifest-url") {
       auto v = pop_value(args, i, "--manifest-url");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       update_flags.manifest_url = *v;
     } else if (args[i] == "--out-dir") {
       auto v = pop_value(args, i, "--out-dir");
-      if (!v) return kExitUsage;
+      if (!v)
+        return kExitUsage;
       update_flags.out_dir = *v;
     } else if (args[i] == "--insecure") {
       update_flags.insecure = true;
@@ -1478,8 +1526,7 @@ int main(int argc, char** argv) {
   }
   if (sub == "plugin") {
     if (positionals.empty()) {
-      fmt::print(stderr,
-          "error: `souxmar plugin` requires a sub-action (list | search)\n");
+      fmt::print(stderr, "error: `souxmar plugin` requires a sub-action (list | search)\n");
       return kExitUsage;
     }
     if (positionals[0] == "list") {
@@ -1492,7 +1539,8 @@ int main(int argc, char** argv) {
       // how shells naturally tokenise a multi-word query.
       std::string query;
       for (std::size_t i = 1; i < positionals.size(); ++i) {
-        if (i > 1) query += ' ';
+        if (i > 1)
+          query += ' ';
         query += positionals[i];
       }
       return cmd_plugin_search(query, capability_prefix, index_path_override);
@@ -1505,15 +1553,16 @@ int main(int argc, char** argv) {
       // id is accepted as a shorthand (`souxmar plugin install
       // <id>` is equivalent to `--id <id>`).
       std::string id = plugin_install_id;
-      if (id.empty() && positionals.size() >= 2) id = positionals[1];
+      if (id.empty() && positionals.size() >= 2)
+        id = positionals[1];
       if (id.empty()) {
-        fmt::print(stderr,
+        fmt::print(
+            stderr,
             "error: `souxmar plugin install` requires --id <plugin-id> or a positional id\n");
         return kExitUsage;
       }
-      return cmd_plugin_install(id, plugin_install_license,
-                                auto_yes, update_flags.json,
-                                index_path_override);
+      return cmd_plugin_install(
+          id, plugin_install_license, auto_yes, update_flags.json, index_path_override);
     }
     fmt::print(stderr, "error: unknown plugin action '{}'\n", positionals[0]);
     return kExitUsage;
@@ -1529,8 +1578,8 @@ int main(int argc, char** argv) {
   if (sub == "update") {
     if (positionals.empty()) {
       fmt::print(stderr,
-          "error: `souxmar update` requires a sub-action "
-          "(check | apply)\n");
+                 "error: `souxmar update` requires a sub-action "
+                 "(check | apply)\n");
       return kExitUsage;
     }
     if (positionals[0] == "check") {
@@ -1545,8 +1594,7 @@ int main(int argc, char** argv) {
     if (positionals[0] == "fetch") {
       return cmd_update_fetch(update_flags);
     }
-    fmt::print(stderr, "error: unknown update action '{}'\n",
-               positionals[0]);
+    fmt::print(stderr, "error: unknown update action '{}'\n", positionals[0]);
     return kExitUsage;
   }
   if (sub == "agent") {
@@ -1566,9 +1614,13 @@ int main(int argc, char** argv) {
         fmt::print(stderr, "error: `souxmar agent invoke` requires a tool name\n");
         return kExitUsage;
       }
-      return cmd_agent_invoke(positionals[1], input_yaml, auto_yes,
-                              use_cache, cache_dir_override,
-                              audit_log_path, budget_config_path,
+      return cmd_agent_invoke(positionals[1],
+                              input_yaml,
+                              auto_yes,
+                              use_cache,
+                              cache_dir_override,
+                              audit_log_path,
+                              budget_config_path,
                               extra_paths);
     }
     fmt::print(stderr, "error: unknown agent action '{}'\n", positionals[0]);

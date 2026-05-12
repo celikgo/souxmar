@@ -14,6 +14,15 @@
 // Asserts: parse, validation, dispatch, all three stages Executed,
 // field handle threading through mesh→heat→mag preserves shape.
 
+#include "souxmar/pipeline/cache.h"
+#include "souxmar/pipeline/parser.h"
+#include "souxmar/pipeline/registry_dispatcher.h"
+#include "souxmar/pipeline/runner.h"
+#include "souxmar/plugin/discovery.h"
+#include "souxmar/plugin/loader.h"
+#include "souxmar/plugin/registry.h"
+
+#include "test_config.h"
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -25,26 +34,17 @@
 #include <variant>
 #include <vector>
 
-#include "souxmar/pipeline/cache.h"
-#include "souxmar/pipeline/parser.h"
-#include "souxmar/pipeline/registry_dispatcher.h"
-#include "souxmar/pipeline/runner.h"
-#include "souxmar/plugin/discovery.h"
-#include "souxmar/plugin/loader.h"
-#include "souxmar/plugin/registry.h"
-
-#include "test_config.h"
-
 namespace fs = std::filesystem;
 using namespace souxmar;
 
 namespace {
 
-plugin::LoadedPlugin load_by_id(plugin::PluginLoader&             loader,
-                                const plugin::DiscoveryReport&    report,
-                                const std::string&                want_id) {
+plugin::LoadedPlugin load_by_id(plugin::PluginLoader& loader,
+                                const plugin::DiscoveryReport& report,
+                                const std::string& want_id) {
   for (const auto& d : report.loaded) {
-    if (d.manifest.id != want_id) continue;
+    if (d.manifest.id != want_id)
+      continue;
     auto r = loader.load(d);
     if (auto* e = std::get_if<plugin::LoadError>(&r)) {
       throw std::runtime_error("load failed for " + want_id + ": " + e->message);
@@ -56,20 +56,19 @@ plugin::LoadedPlugin load_by_id(plugin::PluginLoader&             loader,
 
 TEST(PostprocEndToEnd, MesherHeatScalarMagnitudeChain) {
   // Discovery root is the shared parent of every in-tree plugin's build dir.
-  const fs::path plugins_root =
-      fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
+  const fs::path plugins_root = fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
   const auto discovery = plugin::discover_plugins({plugins_root});
   ASSERT_FALSE(discovery.loaded.empty()) << plugins_root;
 
-  plugin::Registry      registry;
-  plugin::PluginLoader  loader(registry, "test-host/0.0.0");
+  plugin::Registry registry;
+  plugin::PluginLoader loader(registry, "test-host/0.0.0");
 
   auto _mesher = load_by_id(loader, discovery, "dev.souxmar.examples.hello-mesher");
-  auto _heat   = load_by_id(loader, discovery, "dev.souxmar.examples.heat-solver");
-  auto _mag    = load_by_id(loader, discovery, "dev.souxmar.examples.scalar-magnitude");
+  auto _heat = load_by_id(loader, discovery, "dev.souxmar.examples.heat-solver");
+  auto _mag = load_by_id(loader, discovery, "dev.souxmar.examples.scalar-magnitude");
 
-  ASSERT_NE(registry.find_mesher("mesher.tetra.hello"),     nullptr);
-  ASSERT_NE(registry.find_solver("solver.heat.linear"),     nullptr);
+  ASSERT_NE(registry.find_mesher("mesher.tetra.hello"), nullptr);
+  ASSERT_NE(registry.find_solver("solver.heat.linear"), nullptr);
   ASSERT_NE(registry.find_postproc("postproc.scalar_magnitude"), nullptr);
 
   // Pipeline:
@@ -100,7 +99,7 @@ TEST(PostprocEndToEnd, MesherHeatScalarMagnitudeChain) {
   const auto& p = std::get<pipeline::Pipeline>(parse_result);
 
   pipeline::RegistryDispatcher dispatcher(registry);
-  pipeline::Cache              cache;
+  pipeline::Cache cache;
   auto run = pipeline::run_pipeline(p, dispatcher, cache);
 
   ASSERT_EQ(run.status, pipeline::RunResult::Status::Success)
@@ -108,15 +107,14 @@ TEST(PostprocEndToEnd, MesherHeatScalarMagnitudeChain) {
   ASSERT_EQ(run.stage_results.size(), 3u);
   for (const auto& sr : run.stage_results) {
     EXPECT_EQ(sr.status, pipeline::StageRunResult::Status::Executed)
-        << "stage '" << sr.stage_id << "' did not execute: "
-        << (sr.error ? sr.error->message : std::string{"(no error)"});
+        << "stage '" << sr.stage_id
+        << "' did not execute: " << (sr.error ? sr.error->message : std::string{"(no error)"});
   }
 
   // Inspect the postproc output: it should be a Field StageOutput with
   // num_time_steps == 3 (same as the heat solver produced).
   ASSERT_NE(run.outputs.find("mag"), run.outputs.end());
-  const auto* mag_out = static_cast<const pipeline::StageOutput*>(
-      run.outputs["mag"].get());
+  const auto* mag_out = static_cast<const pipeline::StageOutput*>(run.outputs["mag"].get());
   ASSERT_NE(mag_out, nullptr);
   EXPECT_EQ(mag_out->kind, pipeline::StageOutput::Kind::Field);
   ASSERT_NE(mag_out->field, nullptr);
@@ -131,14 +129,13 @@ TEST(PostprocEndToEnd, MesherHeatScalarMagnitudeChain) {
 TEST(PostprocEndToEnd, MissingFieldUpstreamRejectedAtPostprocStage) {
   // Build a registry with just the postproc plugin loaded; run a
   // pipeline that names postproc.* but omits the required field upstream.
-  const fs::path plugins_root =
-      fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
+  const fs::path plugins_root = fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
   const auto discovery = plugin::discover_plugins({plugins_root});
 
-  plugin::Registry      registry;
-  plugin::PluginLoader  loader(registry, "test-host/0.0.0");
+  plugin::Registry registry;
+  plugin::PluginLoader loader(registry, "test-host/0.0.0");
   auto _mesher = load_by_id(loader, discovery, "dev.souxmar.examples.hello-mesher");
-  auto _mag    = load_by_id(loader, discovery, "dev.souxmar.examples.scalar-magnitude");
+  auto _mag = load_by_id(loader, discovery, "dev.souxmar.examples.scalar-magnitude");
 
   std::string yaml = R"yaml(
 version: 1
@@ -158,8 +155,8 @@ stages:
   EXPECT_EQ(run.status, pipeline::RunResult::Status::StageFailed);
   bool saw_field_error = false;
   for (const auto& sr : run.stage_results) {
-    if (sr.status == pipeline::StageRunResult::Status::Failed &&
-        sr.error && sr.error->message.find("field") != std::string::npos) {
+    if (sr.status == pipeline::StageRunResult::Status::Failed && sr.error
+        && sr.error->message.find("field") != std::string::npos) {
       saw_field_error = true;
     }
   }

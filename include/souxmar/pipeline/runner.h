@@ -10,6 +10,11 @@
 
 #pragma once
 
+#include "souxmar/pipeline/cache.h"
+#include "souxmar/pipeline/pipeline.h"
+#include "souxmar/pipeline/value.h"
+#include "souxmar/plugin/manifest.h"  // ThreadingModel — referenced by IDispatcher
+
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -20,11 +25,6 @@
 #include <variant>
 #include <vector>
 
-#include "souxmar/pipeline/cache.h"
-#include "souxmar/pipeline/pipeline.h"
-#include "souxmar/pipeline/value.h"
-#include "souxmar/plugin/manifest.h"  // ThreadingModel — referenced by IDispatcher
-
 namespace souxmar::pipeline {
 
 struct DispatchError {
@@ -33,9 +33,9 @@ struct DispatchError {
 
 // What an IDispatcher receives for a single stage.
 struct DispatchContext {
-  std::string_view                                              capability_id;
-  const Value&                                                  inputs;          // the Stage's input tree (with StageRefs intact)
-  const std::map<std::string, std::shared_ptr<void>>&           upstream_outputs; // by upstream stage id
+  std::string_view capability_id;
+  const Value& inputs;  // the Stage's input tree (with StageRefs intact)
+  const std::map<std::string, std::shared_ptr<void>>& upstream_outputs;  // by upstream stage id
 };
 
 // What an IDispatcher returns. shared_ptr<void> with appropriate deleter is
@@ -43,7 +43,7 @@ struct DispatchContext {
 // file path, anything. Type-routing happens inside the dispatcher based on
 // the capability namespace.
 using DispatchSuccess = std::shared_ptr<void>;
-using DispatchResult  = std::variant<DispatchSuccess, DispatchError>;
+using DispatchResult = std::variant<DispatchSuccess, DispatchError>;
 
 class IDispatcher {
  public:
@@ -72,8 +72,7 @@ class IDispatcher {
   //   * InternalParallel  — externally serialized; plugin uses internal threads.
   // Defaulting to SingleThreaded is the safe choice for dispatchers that
   // don't know — at worst it under-parallelizes; it cannot corrupt state.
-  virtual ::souxmar::plugin::ThreadingModel
-  plugin_threading(std::string_view /*capability_id*/) {
+  virtual ::souxmar::plugin::ThreadingModel plugin_threading(std::string_view /*capability_id*/) {
     return ::souxmar::plugin::ThreadingModel::SingleThreaded;
   }
 };
@@ -82,20 +81,20 @@ class IDispatcher {
 struct StageRunResult {
   enum class Status { Cached, Executed, Failed, Skipped };
 
-  std::string                       stage_id;
-  Status                            status;
-  ContentHash                       content_hash;
-  std::optional<DispatchError>      error;
+  std::string stage_id;
+  Status status;
+  ContentHash content_hash;
+  std::optional<DispatchError> error;
 };
 
 // Aggregate run result.
 struct RunResult {
   enum class Status { Success, ValidationFailed, StageFailed };
 
-  Status                                          status;
-  std::vector<std::string>                        validation_errors;  // populated when status == ValidationFailed
-  std::vector<StageRunResult>                     stage_results;
-  std::map<std::string, std::shared_ptr<void>>    outputs;            // by stage id (executed and cached stages)
+  Status status;
+  std::vector<std::string> validation_errors;  // populated when status == ValidationFailed
+  std::vector<StageRunResult> stage_results;
+  std::map<std::string, std::shared_ptr<void>> outputs;  // by stage id (executed and cached stages)
 };
 
 // Optional disk-cache wiring. When set on RunOptions, the runner will:
@@ -109,36 +108,34 @@ struct RunResult {
 // the CLI plugs in StageOutput-aware (de)serializers from the pipeline
 // dispatcher. Plugins never see this layer.
 struct DiskBacking {
-  std::shared_ptr<DiskCache>                                                       cache;
-  std::function<std::optional<std::vector<std::uint8_t>>(const std::shared_ptr<void>&)>
-                                                                                   serialize;
-  std::function<std::shared_ptr<void>(std::span<const std::uint8_t>)>              deserialize;
+  std::shared_ptr<DiskCache> cache;
+  std::function<std::optional<std::vector<std::uint8_t>>(const std::shared_ptr<void>&)> serialize;
+  std::function<std::shared_ptr<void>(std::span<const std::uint8_t>)> deserialize;
 };
 
 // Run options.
 struct RunOptions {
-  bool                          use_cache    = true;
-  bool                          stop_on_first_failure = true;
+  bool use_cache = true;
+  bool stop_on_first_failure = true;
 
   // 0 or 1 → sequential (original Sprint 3 behaviour).
   // > 1 → up to that many worker threads dispatch independent DAG branches
   //       concurrently. Reentrancy enforcement comes from each capability's
   //       declared ThreadingModel: SingleThreaded / InternalParallel plugins
   //       serialize across stages; Reentrant plugins overlap freely.
-  std::size_t                   max_workers  = 1;
+  std::size_t max_workers = 1;
 
   // When std::nullopt the runner stays purely in-memory (the Sprint 3
   // push 1/push 2 behaviour, preserved for tests and library callers).
-  std::optional<DiskBacking>    disk_backing{};
+  std::optional<DiskBacking> disk_backing{};
 };
 
 // Sequential runner. Walks pipeline.stages in topological order, dispatching
 // each through the supplied IDispatcher and threading outputs into downstream
 // stages.
-[[nodiscard]] RunResult
-run_pipeline(const Pipeline&    pipeline,
-             IDispatcher&       dispatcher,
-             Cache&             cache,
-             const RunOptions&  options = {});
+[[nodiscard]] RunResult run_pipeline(const Pipeline& pipeline,
+                                     IDispatcher& dispatcher,
+                                     Cache& cache,
+                                     const RunOptions& options = {});
 
 }  // namespace souxmar::pipeline

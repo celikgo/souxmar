@@ -9,14 +9,13 @@
 // credentials; Sprint 15 push 1's per-project provider lookup
 // is exercised by a separate integration test once it lands.
 
+#include "souxmar-c-bridge/pipeline.h"
+#include "souxmar-c-bridge/provider.h"
 #include <gtest/gtest.h>
 
 #include <cstdlib>
 #include <cstring>
 #include <string>
-
-#include "souxmar-c-bridge/pipeline.h"
-#include "souxmar-c-bridge/provider.h"
 
 TEST(CBridgeProvider, AbiVersionBumpedToV2) {
   // Sprint 14 push 4 grew the bridge surface — ABI byte bumps
@@ -25,12 +24,10 @@ TEST(CBridgeProvider, AbiVersionBumpedToV2) {
 }
 
 TEST(CBridgeProvider, StubChatRequestReturnsResponse) {
-  const char* json =
-      R"({"model":"stub-model","messages":[{"role":"user","content":"hello"}]})";
+  const char* json = R"({"model":"stub-model","messages":[{"role":"user","content":"hello"}]})";
   char* err = nullptr;
   auto* r = souxmar_bridge_chat_send(json, "project-1", &err);
-  ASSERT_NE(r, nullptr)
-      << "chat_send failed: " << (err ? err : "<no error>");
+  ASSERT_NE(r, nullptr) << "chat_send failed: " << (err ? err : "<no error>");
   EXPECT_EQ(err, nullptr);
 
   // StubProvider returns OK by default for any request — the
@@ -38,14 +35,14 @@ TEST(CBridgeProvider, StubChatRequestReturnsResponse) {
   // path. If a future StubProvider change tightens this, the
   // test updates alongside.
   EXPECT_EQ(souxmar_bridge_chat_error_kind(r), SOUXMAR_BRIDGE_PE_OK);
-  EXPECT_EQ(souxmar_bridge_chat_provider(r),   SOUXMAR_BRIDGE_PROVIDER_STUB);
+  EXPECT_EQ(souxmar_bridge_chat_provider(r), SOUXMAR_BRIDGE_PROVIDER_STUB);
 
   const char* reply = souxmar_bridge_chat_reply_text(r);
   EXPECT_NE(reply, nullptr);
   EXPECT_GT(std::strlen(reply), 0u) << "stub reply was empty";
 
   // Token counts are 0 on the stub (provider.h documents this).
-  EXPECT_EQ(souxmar_bridge_chat_tokens_in(r),  0);
+  EXPECT_EQ(souxmar_bridge_chat_tokens_in(r), 0);
   EXPECT_EQ(souxmar_bridge_chat_tokens_out(r), 0);
 
   souxmar_bridge_chat_response_free(r);
@@ -64,8 +61,8 @@ TEST(CBridgeProvider, NullHandleAccessorsReturnSafeDefaults) {
   // Contract: NULL handle is safe, not UB. Mirrors pipeline.h's
   // NULL-safety: every accessor returns a sentinel for NULL.
   EXPECT_EQ(souxmar_bridge_chat_error_kind(nullptr), SOUXMAR_BRIDGE_PE_INTERNAL);
-  EXPECT_EQ(souxmar_bridge_chat_provider(nullptr),   SOUXMAR_BRIDGE_PROVIDER_UNKNOWN);
-  EXPECT_EQ(souxmar_bridge_chat_tokens_in(nullptr),  0);
+  EXPECT_EQ(souxmar_bridge_chat_provider(nullptr), SOUXMAR_BRIDGE_PROVIDER_UNKNOWN);
+  EXPECT_EQ(souxmar_bridge_chat_tokens_in(nullptr), 0);
   EXPECT_EQ(souxmar_bridge_chat_tokens_out(nullptr), 0);
   // String accessors return an empty C-string (never NULL) so
   // callers can `strlen()` without a guard.

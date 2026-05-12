@@ -2,11 +2,11 @@
 
 #include "souxmar/plugin/registry.h"
 
-#include <gtest/gtest.h>
-
 #include "souxmar-c/abi.h"
 #include "souxmar-c/mesher.h"
 #include "souxmar-c/status.h"
+
+#include <gtest/gtest.h>
 
 using namespace souxmar::plugin;
 
@@ -42,8 +42,7 @@ TEST(Registry, DuplicateCapabilityRejected) {
       r.add_mesher("mesher.tetra.x", "com.a", &kValidVtable, nullptr)));
   auto rc = r.add_mesher("mesher.tetra.x", "com.b", &kValidVtable, nullptr);
   ASSERT_TRUE(std::holds_alternative<RegistryError>(rc));
-  EXPECT_NE(std::get<RegistryError>(rc).message.find("already registered"),
-            std::string::npos);
+  EXPECT_NE(std::get<RegistryError>(rc).message.find("already registered"), std::string::npos);
 }
 
 TEST(Registry, EmptyCapabilityIdRejected) {
@@ -63,8 +62,7 @@ TEST(Registry, AbiMismatchRejected) {
   Registry r;
   auto rc = r.add_mesher("mesher.tetra.x", "com.a", &bad, nullptr);
   ASSERT_TRUE(std::holds_alternative<RegistryError>(rc));
-  EXPECT_NE(std::get<RegistryError>(rc).message.find("abi_version"),
-            std::string::npos);
+  EXPECT_NE(std::get<RegistryError>(rc).message.find("abi_version"), std::string::npos);
 }
 
 TEST(Registry, NullMeshFnRejected) {
@@ -72,8 +70,7 @@ TEST(Registry, NullMeshFnRejected) {
   Registry r;
   auto rc = r.add_mesher("mesher.tetra.x", "com.a", &bad, nullptr);
   ASSERT_TRUE(std::holds_alternative<RegistryError>(rc));
-  EXPECT_NE(std::get<RegistryError>(rc).message.find("mesh_fn"),
-            std::string::npos);
+  EXPECT_NE(std::get<RegistryError>(rc).message.find("mesh_fn"), std::string::npos);
 }
 
 TEST(Registry, ListByNamespace) {
@@ -97,9 +94,9 @@ TEST(Registry, FindReturnsEntry) {
   r.add_mesher("mesher.tetra.x", "com.example", &kValidVtable, nullptr);
   const auto* entry = r.find("mesher.tetra.x");
   ASSERT_NE(entry, nullptr);
-  EXPECT_EQ(entry->id,        "mesher.tetra.x");
+  EXPECT_EQ(entry->id, "mesher.tetra.x");
   EXPECT_EQ(entry->plugin_id, "com.example");
-  EXPECT_EQ(entry->kind,      CapabilityKind::Mesher);
+  EXPECT_EQ(entry->kind, CapabilityKind::Mesher);
 
   const auto* mesher = r.find_mesher("mesher.tetra.x");
   ASSERT_NE(mesher, nullptr);

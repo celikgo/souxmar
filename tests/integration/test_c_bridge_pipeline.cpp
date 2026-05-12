@@ -9,13 +9,12 @@
 // signature lands a corresponding test edit here so the contract
 // stays nameable.
 
+#include "souxmar-c-bridge/pipeline.h"
 #include <gtest/gtest.h>
 
 #include <cstdlib>
 #include <cstring>
 #include <string>
-
-#include "souxmar-c-bridge/pipeline.h"
 
 namespace {
 
@@ -44,21 +43,20 @@ TEST(CBridge, AbiVersionMatchesExpected) {
 TEST(CBridge, ParseCantileverReturnsTwoStages) {
   char* err = nullptr;
   auto* p = souxmar_bridge_pipeline_parse(kCantileverYaml, &err);
-  ASSERT_NE(p, nullptr)
-      << "parse failed: " << (err ? err : "<no error message>");
+  ASSERT_NE(p, nullptr) << "parse failed: " << (err ? err : "<no error message>");
   EXPECT_EQ(err, nullptr);
 
   EXPECT_EQ(souxmar_bridge_pipeline_stage_count(p), 2u);
 
-  const char* id     = nullptr;
+  const char* id = nullptr;
   const char* plugin = nullptr;
 
   EXPECT_EQ(souxmar_bridge_pipeline_stage_at(p, 0, &id, &plugin), 0);
-  EXPECT_STREQ(id,     "mesh");
+  EXPECT_STREQ(id, "mesh");
   EXPECT_STREQ(plugin, "mesher.tetra.hello");
 
   EXPECT_EQ(souxmar_bridge_pipeline_stage_at(p, 1, &id, &plugin), 0);
-  EXPECT_STREQ(id,     "write");
+  EXPECT_STREQ(id, "write");
   EXPECT_STREQ(plugin, "writer.vtu");
 
   // Out-of-range index is rejected, not undefined behaviour.
@@ -69,8 +67,7 @@ TEST(CBridge, ParseCantileverReturnsTwoStages) {
 
 TEST(CBridge, ParseGarbageReportsError) {
   char* err = nullptr;
-  auto* p = souxmar_bridge_pipeline_parse(
-      "this is not valid yaml: {[\n", &err);
+  auto* p = souxmar_bridge_pipeline_parse("this is not valid yaml: {[\n", &err);
   EXPECT_EQ(p, nullptr);
   ASSERT_NE(err, nullptr) << "parse error must populate out_err";
   // The error message is the parser's — don't pin its exact text,
@@ -93,7 +90,7 @@ TEST(CBridge, NullHandleStageCountReturnsZero) {
   // wrapper doesn't pass NULL but defensive C consumers might.
   EXPECT_EQ(souxmar_bridge_pipeline_stage_count(nullptr), 0u);
 
-  const char* id     = nullptr;
+  const char* id = nullptr;
   const char* plugin = nullptr;
   EXPECT_EQ(souxmar_bridge_pipeline_stage_at(nullptr, 0, &id, &plugin), -1);
 }

@@ -37,6 +37,11 @@
 
 #include "souxmar/core/surface_stream.h"
 
+#include "souxmar/core/element_type.h"
+#include "souxmar/core/face_topology.h"
+#include "souxmar/core/mesh.h"
+#include "souxmar/core/tag.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -46,11 +51,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "souxmar/core/element_type.h"
-#include "souxmar/core/face_topology.h"
-#include "souxmar/core/mesh.h"
-#include "souxmar/core/tag.h"
-
 namespace souxmar::core {
 
 namespace {
@@ -58,13 +58,11 @@ namespace {
 // ---------- Canonical face key for dedup ----------
 
 struct FaceKey {
-  std::uint8_t                 size{};
+  std::uint8_t size{};
   std::array<std::uint64_t, 4> v{{0, 0, 0, 0}};
 
   bool operator==(const FaceKey& o) const noexcept {
-    return size == o.size &&
-           v[0] == o.v[0] && v[1] == o.v[1] &&
-           v[2] == o.v[2] && v[3] == o.v[3];
+    return size == o.size && v[0] == o.v[0] && v[1] == o.v[1] && v[2] == o.v[2] && v[3] == o.v[3];
   }
 };
 
@@ -72,15 +70,14 @@ struct FaceKeyHash {
   std::size_t operator()(const FaceKey& k) const noexcept {
     std::size_t h = std::hash<std::uint8_t>{}(k.size);
     for (std::uint8_t i = 0; i < k.size; ++i) {
-      h ^= std::hash<std::uint64_t>{}(k.v[i]) +
-           0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+      h ^= std::hash<std::uint64_t>{}(k.v[i]) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
     }
     return h;
   }
 };
 
 struct BoundaryFace {
-  std::uint8_t                 vertex_count = 0;
+  std::uint8_t vertex_count = 0;
   std::array<std::uint64_t, 4> verts{{0, 0, 0, 0}};  // outward-CCW order
 };
 
@@ -90,13 +87,13 @@ struct BoundaryFace {
 
 class SurfaceStream::Impl {
  public:
-  std::vector<float>         positions;
-  std::vector<float>         normals;
+  std::vector<float> positions;
+  std::vector<float> normals;
   std::vector<std::uint32_t> indices;
   std::vector<std::uint32_t> face_ids;
   std::vector<std::uint64_t> vertex_ids;
-  std::array<double, 3>      bounds_min{{0.0, 0.0, 0.0}};
-  std::array<double, 3>      bounds_max{{0.0, 0.0, 0.0}};
+  std::array<double, 3> bounds_min{{0.0, 0.0, 0.0}};
+  std::array<double, 3> bounds_max{{0.0, 0.0, 0.0}};
 
   explicit Impl(const Mesh& mesh) {
     build(mesh);
@@ -118,8 +115,8 @@ class SurfaceStream::Impl {
     for (const auto& bf : boundary) {
       for (std::uint8_t i = 0; i < bf.vertex_count; ++i) {
         const std::uint64_t node = bf.verts[i];
-        auto [it, inserted] = node_to_compact.try_emplace(
-            node, static_cast<std::uint32_t>(vertex_ids.size()));
+        auto [it, inserted] =
+            node_to_compact.try_emplace(node, static_cast<std::uint32_t>(vertex_ids.size()));
         if (inserted) {
           vertex_ids.push_back(node);
         }
@@ -128,12 +125,12 @@ class SurfaceStream::Impl {
 
     // Positions buffer + bounds.
     positions.resize(vertex_ids.size() * 3);
-    bounds_min = {{ std::numeric_limits<double>::infinity(),
-                    std::numeric_limits<double>::infinity(),
-                    std::numeric_limits<double>::infinity() }};
-    bounds_max = {{ -std::numeric_limits<double>::infinity(),
-                    -std::numeric_limits<double>::infinity(),
-                    -std::numeric_limits<double>::infinity() }};
+    bounds_min = {{std::numeric_limits<double>::infinity(),
+                   std::numeric_limits<double>::infinity(),
+                   std::numeric_limits<double>::infinity()}};
+    bounds_max = {{-std::numeric_limits<double>::infinity(),
+                   -std::numeric_limits<double>::infinity(),
+                   -std::numeric_limits<double>::infinity()}};
 
     for (std::size_t i = 0; i < vertex_ids.size(); ++i) {
       const auto p = mesh.node(NodeIndex{vertex_ids[i]});
@@ -141,8 +138,10 @@ class SurfaceStream::Impl {
       positions[3 * i + 1] = static_cast<float>(p[1]);
       positions[3 * i + 2] = static_cast<float>(p[2]);
       for (int d = 0; d < 3; ++d) {
-        if (p[d] < bounds_min[d]) bounds_min[d] = p[d];
-        if (p[d] > bounds_max[d]) bounds_max[d] = p[d];
+        if (p[d] < bounds_min[d])
+          bounds_min[d] = p[d];
+        if (p[d] > bounds_max[d])
+          bounds_max[d] = p[d];
       }
     }
 
@@ -182,8 +181,7 @@ class SurfaceStream::Impl {
     }
   }
 
-  void emit_triangle(std::uint32_t a, std::uint32_t b, std::uint32_t c,
-                     std::uint32_t face_id) {
+  void emit_triangle(std::uint32_t a, std::uint32_t b, std::uint32_t c, std::uint32_t face_id) {
     indices.push_back(a);
     indices.push_back(b);
     indices.push_back(c);
@@ -213,12 +211,11 @@ class SurfaceStream::Impl {
     }
   }
 
-  static void extract_boundary_faces(const Mesh& mesh,
-                                     std::vector<BoundaryFace>& out) {
+  static void extract_boundary_faces(const Mesh& mesh, std::vector<BoundaryFace>& out) {
     struct FaceEntry {
       std::array<std::uint64_t, 4> verts_owner{{0, 0, 0, 0}};
-      std::uint8_t                 vertex_count = 0;
-      std::int64_t                 neighbour    = -1;
+      std::uint8_t vertex_count = 0;
+      std::int64_t neighbour = -1;
     };
 
     std::unordered_map<FaceKey, FaceEntry, FaceKeyHash> face_map;
@@ -249,7 +246,8 @@ class SurfaceStream::Impl {
         if (nodes.size() >= 4) {
           BoundaryFace bf;
           bf.vertex_count = 4;
-          for (std::uint8_t i = 0; i < 4; ++i) bf.verts[i] = nodes[i].value;
+          for (std::uint8_t i = 0; i < 4; ++i)
+            bf.verts[i] = nodes[i].value;
           out.push_back(bf);
         }
         continue;
@@ -272,13 +270,13 @@ class SurfaceStream::Impl {
 
         FaceKey key;
         key.size = lf.vertex_count;
-        key.v    = face_verts;
+        key.v = face_verts;
         std::sort(key.v.begin(), key.v.begin() + key.size);
 
         auto it = face_map.find(key);
         if (it == face_map.end()) {
           FaceEntry e;
-          e.verts_owner  = face_verts;
+          e.verts_owner = face_verts;
           e.vertex_count = lf.vertex_count;
           face_map.emplace(key, e);
         } else {
@@ -292,7 +290,7 @@ class SurfaceStream::Impl {
       if (fe.neighbour < 0) {
         BoundaryFace bf;
         bf.vertex_count = fe.vertex_count;
-        bf.verts        = fe.verts_owner;
+        bf.verts = fe.verts_owner;
         out.push_back(bf);
       }
     }
@@ -301,8 +299,7 @@ class SurfaceStream::Impl {
 
 // ---------- SurfaceStream public API ----------
 
-SurfaceStream::SurfaceStream(const Mesh& mesh)
-    : impl_(std::make_unique<Impl>(mesh)) {}
+SurfaceStream::SurfaceStream(const Mesh& mesh) : impl_(std::make_unique<Impl>(mesh)) {}
 
 SurfaceStream::~SurfaceStream() = default;
 SurfaceStream::SurfaceStream(SurfaceStream&&) noexcept = default;

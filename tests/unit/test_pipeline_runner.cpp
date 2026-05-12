@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include "souxmar/pipeline/parser.h"
 #include "souxmar/pipeline/runner.h"
 
 #include <gtest/gtest.h>
@@ -7,8 +8,6 @@
 #include <map>
 #include <memory>
 #include <string>
-
-#include "souxmar/pipeline/parser.h"
 
 using namespace souxmar::pipeline;
 
@@ -20,8 +19,8 @@ namespace {
 class MockDispatcher : public IDispatcher {
  public:
   struct Call {
-    std::string                                  capability_id;
-    std::vector<std::string>                     upstream_ids;
+    std::string capability_id;
+    std::vector<std::string> upstream_ids;
   };
 
   std::vector<Call> calls;
@@ -40,7 +39,8 @@ class MockDispatcher : public IDispatcher {
   DispatchResult dispatch(const DispatchContext& ctx) override {
     Call c;
     c.capability_id = std::string(ctx.capability_id);
-    for (const auto& [id, _] : ctx.upstream_outputs) c.upstream_ids.push_back(id);
+    for (const auto& [id, _] : ctx.upstream_outputs)
+      c.upstream_ids.push_back(id);
     calls.push_back(c);
 
     for (const auto& f : fail_for) {
@@ -223,7 +223,7 @@ stages:
   run_pipeline(p, d, c, opts);
   run_pipeline(p, d, c, opts);
   EXPECT_EQ(d.calls.size(), 2u);  // no caching in either run
-  EXPECT_EQ(c.size(),       0u);  // cache untouched
+  EXPECT_EQ(c.size(), 0u);        // cache untouched
 }
 
 }  // namespace

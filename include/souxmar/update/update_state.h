@@ -43,16 +43,16 @@ struct UpdateState {
   std::uint32_t schema = kUpdateStateSchemaV1;
   // SemVer of the currently-installed build. Empty on a fresh
   // install (the desktop app hasn't run a successful check yet).
-  std::string   current_installed_version;
+  std::string current_installed_version;
   // Highest manifest version this client has ever applied OR seen
   // offered. The gate's replay-downgrade check reads this. Empty
   // means "no floor" — the gate treats it as "haven't seen anything
   // yet".
-  std::string   max_version_ever_seen;
+  std::string max_version_ever_seen;
   // RFC-3339 UTC. Empty on a fresh install. Informational.
-  std::string   last_check_at;
+  std::string last_check_at;
   // RFC-3339 UTC. Empty until the first successful apply.
-  std::string   last_apply_at;
+  std::string last_apply_at;
 };
 
 // Load-error diagnostic. Same shape the parser modules elsewhere in
@@ -61,25 +61,21 @@ struct UpdateStateLoadError {
   std::string message;
 };
 
-using UpdateStateLoadResult =
-    std::variant<UpdateState, UpdateStateLoadError>;
+using UpdateStateLoadResult = std::variant<UpdateState, UpdateStateLoadError>;
 
 // Load the state file at `path`. If the file does not exist, returns
 // a default-constructed UpdateState (fresh install). If it exists
 // but is malformed (bad TOML, schema mismatch, unparseable version),
 // returns UpdateStateLoadError; the caller decides whether to reset
 // or refuse. Never throws.
-[[nodiscard]] UpdateStateLoadResult
-load_update_state(const std::filesystem::path& path);
+[[nodiscard]] UpdateStateLoadResult load_update_state(const std::filesystem::path& path);
 
 // Save atomically: write to <path>.tmp, fsync the file, rename. The
 // directory is created if missing. Returns false on any I/O failure;
 // the caller logs and proceeds — failure to persist state is not a
 // reason to refuse a successful update, but the audit log (push 7)
 // will record the discrepancy.
-[[nodiscard]] bool
-save_update_state(const std::filesystem::path& path,
-                  const UpdateState&            s);
+[[nodiscard]] bool save_update_state(const std::filesystem::path& path, const UpdateState& s);
 
 // Render the state to its canonical TOML string. Split out so unit
 // tests can roundtrip without touching the filesystem.

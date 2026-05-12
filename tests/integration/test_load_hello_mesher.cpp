@@ -14,12 +14,11 @@
 #include "souxmar/plugin/loader.h"
 #include "souxmar/plugin/registry.h"
 
+#include "test_config.h"
 #include <gtest/gtest.h>
 
 #include <filesystem>
 #include <variant>
-
-#include "test_config.h"
 
 namespace fs = std::filesystem;
 using namespace souxmar::plugin;
@@ -36,12 +35,13 @@ TEST(LoadHelloMesher, DiscoveryFindsTheBuiltPlugin) {
 
   const auto report = discover_plugins({plugin_dir.parent_path()});
   ASSERT_FALSE(report.loaded.empty())
-      << "discovery rejected: " << (report.rejected.empty()
-            ? std::string{"<no rejections>"} : report.rejected[0].reason);
+      << "discovery rejected: "
+      << (report.rejected.empty() ? std::string{"<no rejections>"} : report.rejected[0].reason);
   // The built plugin's directory is the only one we expect to find.
   bool found = false;
   for (const auto& p : report.loaded) {
-    if (p.manifest.id == "dev.souxmar.examples.hello-mesher") found = true;
+    if (p.manifest.id == "dev.souxmar.examples.hello-mesher")
+      found = true;
   }
   EXPECT_TRUE(found);
 }
@@ -53,7 +53,8 @@ TEST(LoadHelloMesher, LoadAndRegisterRoundtrip) {
 
   const DiscoveredPlugin* hello = nullptr;
   for (const auto& p : report.loaded) {
-    if (p.manifest.id == "dev.souxmar.examples.hello-mesher") hello = &p;
+    if (p.manifest.id == "dev.souxmar.examples.hello-mesher")
+      hello = &p;
   }
   ASSERT_NE(hello, nullptr);
 
@@ -84,7 +85,8 @@ TEST(LoadHelloMesher, DroppingLoadedPluginEmptiesRegistry) {
   ASSERT_FALSE(report.loaded.empty());
   const DiscoveredPlugin* hello = nullptr;
   for (const auto& p : report.loaded) {
-    if (p.manifest.id == "dev.souxmar.examples.hello-mesher") hello = &p;
+    if (p.manifest.id == "dev.souxmar.examples.hello-mesher")
+      hello = &p;
   }
   ASSERT_NE(hello, nullptr);
 

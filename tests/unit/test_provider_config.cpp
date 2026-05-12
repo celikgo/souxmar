@@ -2,6 +2,8 @@
 //
 // provider_config loader tests. Sprint 15 push 2 (ADR-0020).
 
+#include "souxmar/ai/provider_config.h"
+
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -9,8 +11,6 @@
 #include <random>
 #include <string>
 #include <variant>
-
-#include "souxmar/ai/provider_config.h"
 
 namespace fs = std::filesystem;
 using souxmar::ai::load_provider_config;
@@ -23,9 +23,8 @@ namespace {
 
 fs::path scratch_dir(std::string_view tag) {
   std::random_device rd;
-  fs::path dir = fs::temp_directory_path() /
-                 ("souxmar-pc-" + std::string(tag) + "-" +
-                  std::to_string(rd()));
+  fs::path dir =
+      fs::temp_directory_path() / ("souxmar-pc-" + std::string(tag) + "-" + std::to_string(rd()));
   fs::create_directories(dir);
   return dir;
 }
@@ -41,8 +40,7 @@ TEST(ProviderConfig, AbsentFileReturnsNotFound) {
   auto dir = scratch_dir("absent");
   auto r = load_provider_config(dir);
   ASSERT_TRUE(std::holds_alternative<ProviderConfigError>(r));
-  EXPECT_EQ(std::get<ProviderConfigError>(r).kind,
-            ProviderConfigErrorKind::NotFound);
+  EXPECT_EQ(std::get<ProviderConfigError>(r).kind, ProviderConfigErrorKind::NotFound);
   fs::remove_all(dir);
 }
 
@@ -53,8 +51,7 @@ provider = "ollama"
 )");
   auto r = load_provider_config(dir);
   ASSERT_TRUE(std::holds_alternative<ProviderConfigError>(r));
-  EXPECT_EQ(std::get<ProviderConfigError>(r).kind,
-            ProviderConfigErrorKind::SchemaMismatch);
+  EXPECT_EQ(std::get<ProviderConfigError>(r).kind, ProviderConfigErrorKind::SchemaMismatch);
   fs::remove_all(dir);
 }
 
@@ -72,7 +69,7 @@ endpoint = "http://localhost:11434"
   ASSERT_TRUE(std::holds_alternative<ProviderConfig>(r));
   const auto& cfg = std::get<ProviderConfig>(r);
   EXPECT_EQ(cfg.provider, ProviderKind::Ollama);
-  EXPECT_EQ(cfg.model,    "llama-3.1:8b");
+  EXPECT_EQ(cfg.model, "llama-3.1:8b");
   EXPECT_EQ(cfg.endpoint, "http://localhost:11434");
   fs::remove_all(dir);
 }
@@ -85,8 +82,7 @@ provider = "byok-anthropic"
 )");
   auto r = load_provider_config(dir);
   ASSERT_TRUE(std::holds_alternative<ProviderConfigError>(r));
-  EXPECT_EQ(std::get<ProviderConfigError>(r).kind,
-            ProviderConfigErrorKind::MissingField);
+  EXPECT_EQ(std::get<ProviderConfigError>(r).kind, ProviderConfigErrorKind::MissingField);
   fs::remove_all(dir);
 }
 
@@ -98,8 +94,7 @@ provider = "groq"
 )");
   auto r = load_provider_config(dir);
   ASSERT_TRUE(std::holds_alternative<ProviderConfigError>(r));
-  EXPECT_EQ(std::get<ProviderConfigError>(r).kind,
-            ProviderConfigErrorKind::ProviderUnknown);
+  EXPECT_EQ(std::get<ProviderConfigError>(r).kind, ProviderConfigErrorKind::ProviderUnknown);
   fs::remove_all(dir);
 }
 
@@ -108,7 +103,6 @@ TEST(ProviderConfig, MalformedTomlIsTypedError) {
   write_toml(dir, "schema = 1\nprovider = \"ollama\nmodel = ");
   auto r = load_provider_config(dir);
   ASSERT_TRUE(std::holds_alternative<ProviderConfigError>(r));
-  EXPECT_EQ(std::get<ProviderConfigError>(r).kind,
-            ProviderConfigErrorKind::MalformedToml);
+  EXPECT_EQ(std::get<ProviderConfigError>(r).kind, ProviderConfigErrorKind::MalformedToml);
   fs::remove_all(dir);
 }

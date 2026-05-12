@@ -33,9 +33,8 @@ namespace {
 
 fs::path tmp_root(std::string_view tag) {
   std::random_device rd;
-  auto base = fs::temp_directory_path() /
-              ("souxmar-install-layout-" + std::string(tag) + "-" +
-               std::to_string(rd()));
+  auto base = fs::temp_directory_path()
+              / ("souxmar-install-layout-" + std::string(tag) + "-" + std::to_string(rd()));
   fs::create_directories(base);
   return base;
 }
@@ -111,12 +110,12 @@ TEST(InstallLayout, AtomicSwitchToFlipsMarkerAndShufflesPrevious) {
 
   // First-install path — no from_version, no previous to record.
   ASSERT_TRUE(l.atomic_switch_to("", "0.8.5"));
-  EXPECT_EQ(l.read_current_version(),  "0.8.5");
+  EXPECT_EQ(l.read_current_version(), "0.8.5");
   EXPECT_TRUE(l.read_previous_version().empty());
 
   // Upgrade — previous gets the outgoing version.
   ASSERT_TRUE(l.atomic_switch_to("0.8.5", "0.9.0"));
-  EXPECT_EQ(l.read_current_version(),  "0.9.0");
+  EXPECT_EQ(l.read_current_version(), "0.9.0");
   EXPECT_EQ(l.read_previous_version(), "0.8.5");
   fs::remove_all(root);
 }
@@ -211,6 +210,5 @@ TEST(Sha256Hex, KnownVector) {
 
 TEST(Sha256Hex, AbcVector) {
   const auto b = bytes_of("abc");
-  EXPECT_EQ(sha256_hex(b),
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+  EXPECT_EQ(sha256_hex(b), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 }

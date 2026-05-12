@@ -64,12 +64,10 @@ typedef struct souxmar_bridge_pipeline_t souxmar_bridge_pipeline_t;
  *
  * The returned handle is owned by the caller and must be freed
  * via souxmar_bridge_pipeline_free(). */
-souxmar_bridge_pipeline_t*
-souxmar_bridge_pipeline_parse(const char* yaml, char** out_err);
+souxmar_bridge_pipeline_t* souxmar_bridge_pipeline_parse(const char* yaml, char** out_err);
 
 /* Number of stages in the parsed pipeline. */
-uint32_t
-souxmar_bridge_pipeline_stage_count(const souxmar_bridge_pipeline_t* p);
+uint32_t souxmar_bridge_pipeline_stage_count(const souxmar_bridge_pipeline_t* p);
 
 /* Retrieve the i-th stage's id + plugin id. The strings are
  * borrowed from the pipeline handle and remain valid until the
@@ -77,23 +75,20 @@ souxmar_bridge_pipeline_stage_count(const souxmar_bridge_pipeline_t* p);
  *
  * Returns 0 on success, -1 if `i` is out of range or `p` is NULL.
  * On failure, `*out_id` and `*out_plugin` are left untouched. */
-int32_t
-souxmar_bridge_pipeline_stage_at(const souxmar_bridge_pipeline_t* p,
-                                 uint32_t                          i,
-                                 const char**                      out_id,
-                                 const char**                      out_plugin);
+int32_t souxmar_bridge_pipeline_stage_at(const souxmar_bridge_pipeline_t* p,
+                                         uint32_t i,
+                                         const char** out_id,
+                                         const char** out_plugin);
 
 /* Release a pipeline handle. Safe to call with NULL. */
-void
-souxmar_bridge_pipeline_free(souxmar_bridge_pipeline_t* p);
+void souxmar_bridge_pipeline_free(souxmar_bridge_pipeline_t* p);
 
 /* Release a string previously returned through `out_err`. Safe to
  * call with NULL. */
-void
-souxmar_bridge_free_string(char* s);
+void souxmar_bridge_free_string(char* s);
 
 #ifdef __cplusplus
-}  /* extern "C" */
+} /* extern "C" */
 #endif
 
-#endif  /* SOUXMAR_C_BRIDGE_PIPELINE_H */
+#endif /* SOUXMAR_C_BRIDGE_PIPELINE_H */

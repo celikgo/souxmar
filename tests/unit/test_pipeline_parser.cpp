@@ -48,10 +48,10 @@ TEST(Parser, CantileverPipelineParses) {
   const auto& p = std::get<Pipeline>(r);
   EXPECT_EQ(p.version, 1);
   ASSERT_EQ(p.stages.size(), 4u);
-  EXPECT_EQ(p.stages[0].id,     "import");
+  EXPECT_EQ(p.stages[0].id, "import");
   EXPECT_EQ(p.stages[0].plugin, "reader.step");
-  EXPECT_EQ(p.stages[1].id,     "mesh");
-  EXPECT_EQ(p.stages[3].id,     "export");
+  EXPECT_EQ(p.stages[1].id, "mesh");
+  EXPECT_EQ(p.stages[3].id, "export");
 }
 
 TEST(Parser, StageRefRecognised) {

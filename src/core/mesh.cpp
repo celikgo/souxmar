@@ -20,8 +20,7 @@ namespace {
 // meshes); local face indices are bounded by 6 (hex family). The pack
 // reserves the low byte for local_face, leaving 56 bits for cell idx —
 // plenty of headroom for the 1.x release series.
-constexpr std::uint64_t pack_face_key(std::uint64_t cell,
-                                      std::uint8_t  local_face) noexcept {
+constexpr std::uint64_t pack_face_key(std::uint64_t cell, std::uint8_t local_face) noexcept {
   return (cell << 8) | static_cast<std::uint64_t>(local_face);
 }
 
@@ -34,13 +33,13 @@ class Mesh::Impl {
 
   // Per-cell type and tag.
   std::vector<ElementType> cell_types;
-  std::vector<EntityTag>   cell_tags;
+  std::vector<EntityTag> cell_tags;
 
   // Cell-node offsets: cell_node_offsets[i] is the start of cell i's
   // node-index run in cell_node_indices; cell_node_offsets has size
   // num_cells + 1 so cell_node_offsets[num_cells] == cell_node_indices.size().
   std::vector<std::uint64_t> cell_node_offsets{0};
-  std::vector<NodeIndex>     cell_node_indices;
+  std::vector<NodeIndex> cell_node_indices;
 
   // Per-face tags (ADR-0012). Sparse: only explicitly-tagged faces
   // materialise. Empty for the default-untagged-everywhere case that
@@ -49,6 +48,7 @@ class Mesh::Impl {
 };
 
 Mesh::Mesh() : impl_(std::make_unique<Impl>()) {}
+
 Mesh::~Mesh() = default;
 Mesh::Mesh(Mesh&&) noexcept = default;
 Mesh& Mesh::operator=(Mesh&&) noexcept = default;
@@ -74,13 +74,10 @@ NodeIndex Mesh::add_node(std::array<double, 3> position) {
   return NodeIndex{idx};
 }
 
-CellIndex Mesh::add_cell(ElementType                       type,
-                         std::span<const NodeIndex>        node_indices,
-                         EntityTag                         tag) {
+CellIndex Mesh::add_cell(ElementType type, std::span<const NodeIndex> node_indices, EntityTag tag) {
   const auto expected = num_nodes(type);
   if (node_indices.size() != expected) {
-    throw std::invalid_argument(
-        "Mesh::add_cell: node count does not match element type");
+    throw std::invalid_argument("Mesh::add_cell: node count does not match element type");
   }
   const auto num_existing_nodes = impl_->nodes.size() / 3;
   for (const auto idx : node_indices) {
@@ -94,8 +91,7 @@ CellIndex Mesh::add_cell(ElementType                       type,
   impl_->cell_tags.push_back(tag);
   impl_->cell_node_indices.insert(
       impl_->cell_node_indices.end(), node_indices.begin(), node_indices.end());
-  impl_->cell_node_offsets.push_back(
-      static_cast<std::uint64_t>(impl_->cell_node_indices.size()));
+  impl_->cell_node_offsets.push_back(static_cast<std::uint64_t>(impl_->cell_node_indices.size()));
   return CellIndex{cell_idx};
 }
 
@@ -120,7 +116,8 @@ std::span<const double> Mesh::nodes_flat() const noexcept {
 }
 
 ElementType Mesh::cell_type(CellIndex index) const noexcept {
-  if (index.value >= num_cells()) return ElementType::Unknown;
+  if (index.value >= num_cells())
+    return ElementType::Unknown;
   return impl_->cell_types[index.value];
 }
 
@@ -129,22 +126,25 @@ std::span<const NodeIndex> Mesh::cell_nodes(CellIndex index) const {
     throw std::out_of_range("Mesh::cell_nodes: cell index out of range");
   }
   const auto begin = impl_->cell_node_offsets[index.value];
-  const auto end   = impl_->cell_node_offsets[index.value + 1];
-  return {impl_->cell_node_indices.data() + begin,
-          static_cast<std::size_t>(end - begin)};
+  const auto end = impl_->cell_node_offsets[index.value + 1];
+  return {impl_->cell_node_indices.data() + begin, static_cast<std::size_t>(end - begin)};
 }
 
 EntityTag Mesh::cell_tag(CellIndex index) const noexcept {
-  if (index.value >= num_cells()) return EntityTag{};
+  if (index.value >= num_cells())
+    return EntityTag{};
   return impl_->cell_tags[index.value];
 }
 
 EntityTag Mesh::face_tag(CellIndex cell, std::uint8_t local_face) const noexcept {
-  if (cell.value >= num_cells()) return EntityTag{-1};
+  if (cell.value >= num_cells())
+    return EntityTag{-1};
   const auto type = impl_->cell_types[cell.value];
-  if (local_face >= num_faces(type)) return EntityTag{-1};
+  if (local_face >= num_faces(type))
+    return EntityTag{-1};
   const auto it = impl_->face_tags.find(pack_face_key(cell.value, local_face));
-  if (it == impl_->face_tags.end()) return EntityTag{-1};
+  if (it == impl_->face_tags.end())
+    return EntityTag{-1};
   return it->second;
 }
 
@@ -154,8 +154,7 @@ void Mesh::set_face_tag(CellIndex cell, std::uint8_t local_face, EntityTag tag) 
   }
   const auto type = impl_->cell_types[cell.value];
   if (local_face >= num_faces(type)) {
-    throw std::invalid_argument(
-        "Mesh::set_face_tag: local_face index exceeds cell's face count");
+    throw std::invalid_argument("Mesh::set_face_tag: local_face index exceeds cell's face count");
   }
   const auto key = pack_face_key(cell.value, local_face);
   if (tag.value == -1) {
@@ -188,7 +187,8 @@ std::vector<std::pair<ElementType, std::size_t>> Mesh::element_histogram() const
 }
 
 std::array<double, 6> Mesh::bounding_box() const {
-  if (impl_->nodes.empty()) return {0, 0, 0, 0, 0, 0};
+  if (impl_->nodes.empty())
+    return {0, 0, 0, 0, 0, 0};
   constexpr double inf = std::numeric_limits<double>::infinity();
   std::array<double, 6> box{inf, inf, inf, -inf, -inf, -inf};
   for (std::size_t i = 0; i < impl_->nodes.size(); i += 3) {

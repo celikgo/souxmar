@@ -24,20 +24,20 @@ namespace souxmar::ai {
 enum class ProviderKind : std::uint8_t {
   // No project.ai.toml found (or schema=1 not satisfied);
   // engine defaults to stub.
-  Default        = 0,
-  Stub           = 1,
-  BYOKAnthropic  = 2,
-  BYOKOpenAI     = 3,
-  Ollama         = 4,
-  Managed        = 5,
+  Default = 0,
+  Stub = 1,
+  BYOKAnthropic = 2,
+  BYOKOpenAI = 3,
+  Ollama = 4,
+  Managed = 5,
 };
 
 [[nodiscard]] std::string_view to_string(ProviderKind) noexcept;
 
 struct ProviderConfig {
-  ProviderKind  provider     = ProviderKind::Default;
-  std::string   model;          // empty when not specified
-  std::string   endpoint;       // populated for ollama / managed when overridden
+  ProviderKind provider = ProviderKind::Default;
+  std::string model;     // empty when not specified
+  std::string endpoint;  // populated for ollama / managed when overridden
 
   // Source file that was parsed. Empty when no file was found.
   // Useful for error messages + the chat panel's "via <provider>"
@@ -55,30 +55,29 @@ enum class ProviderConfigErrorKind : std::uint8_t {
   // caller asked for a project that doesn't ship a config; the
   // bridge treats this as "fall back to default" rather than a
   // hard error.
-  NotFound          = 0,
+  NotFound = 0,
   // Schema discriminator absent or != 1.
-  SchemaMismatch    = 1,
+  SchemaMismatch = 1,
   // File parsed but `provider` value was missing or unknown.
-  ProviderUnknown   = 2,
+  ProviderUnknown = 2,
   // File parsed but a required key for the chosen provider was
   // missing (e.g. byok-anthropic without a model).
-  MissingField      = 3,
+  MissingField = 3,
   // toml++ raised a parse error.
-  MalformedToml     = 4,
+  MalformedToml = 4,
   // I/O error reading the file (perms, disk failure, etc.).
-  IoError           = 5,
+  IoError = 5,
 };
 
 [[nodiscard]] std::string_view to_string(ProviderConfigErrorKind) noexcept;
 
 struct ProviderConfigError {
-  ProviderConfigErrorKind  kind = ProviderConfigErrorKind::NotFound;
-  std::string              message;
-  std::filesystem::path    source;   // file (or directory) the loader looked at
+  ProviderConfigErrorKind kind = ProviderConfigErrorKind::NotFound;
+  std::string message;
+  std::filesystem::path source;  // file (or directory) the loader looked at
 };
 
-using ProviderConfigResult =
-  std::variant<ProviderConfig, ProviderConfigError>;
+using ProviderConfigResult = std::variant<ProviderConfig, ProviderConfigError>;
 
 // Load + parse the project.ai.toml that sits next to a project's
 // pipeline.yaml / project.souxmar.toml.
@@ -92,7 +91,6 @@ using ProviderConfigResult =
 // treat this as "fall back to default" rather than a hard
 // failure. Other ProviderConfigError kinds are real configuration
 // errors that should surface to the user.
-[[nodiscard]] ProviderConfigResult
-load_provider_config(const std::filesystem::path& project_dir);
+[[nodiscard]] ProviderConfigResult load_provider_config(const std::filesystem::path& project_dir);
 
 }  // namespace souxmar::ai

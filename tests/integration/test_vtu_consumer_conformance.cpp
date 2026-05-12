@@ -37,6 +37,15 @@
 // VTK-backed writer will replace the hand-rolled XML — when that swap
 // happens, the same conformance assertions must continue to pass.
 
+#include "souxmar/pipeline/cache.h"
+#include "souxmar/pipeline/parser.h"
+#include "souxmar/pipeline/registry_dispatcher.h"
+#include "souxmar/pipeline/runner.h"
+#include "souxmar/plugin/discovery.h"
+#include "souxmar/plugin/loader.h"
+#include "souxmar/plugin/registry.h"
+
+#include "test_config.h"
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -49,16 +58,6 @@
 #include <sstream>
 #include <string>
 #include <variant>
-
-#include "souxmar/pipeline/cache.h"
-#include "souxmar/pipeline/parser.h"
-#include "souxmar/pipeline/registry_dispatcher.h"
-#include "souxmar/pipeline/runner.h"
-#include "souxmar/plugin/discovery.h"
-#include "souxmar/plugin/loader.h"
-#include "souxmar/plugin/registry.h"
-
-#include "test_config.h"
 
 namespace fs = std::filesystem;
 using namespace souxmar;
@@ -104,24 +103,23 @@ fs::path search_root_for(const fs::path& plugin_build_dir) {
 }
 
 plugin::LoadedPlugin load_plugin(plugin::PluginLoader& loader,
-                                  const fs::path&       plugin_build_dir,
-                                  const std::string&    expected_id) {
+                                 const fs::path& plugin_build_dir,
+                                 const std::string& expected_id) {
   const auto report = plugin::discover_plugins({search_root_for(plugin_build_dir)});
   if (report.loaded.empty()) {
-    throw std::runtime_error(
-        "discovery returned no plugins for " + plugin_build_dir.string());
+    throw std::runtime_error("discovery returned no plugins for " + plugin_build_dir.string());
   }
   const plugin::DiscoveredPlugin* found = nullptr;
   for (const auto& p : report.loaded) {
-    if (p.manifest.id == expected_id) found = &p;
+    if (p.manifest.id == expected_id)
+      found = &p;
   }
   if (!found) {
     throw std::runtime_error("did not find plugin id '" + expected_id + "'");
   }
   auto load_result = loader.load(*found);
   if (!std::holds_alternative<plugin::LoadedPlugin>(load_result)) {
-    throw std::runtime_error(
-        "load failed: " + std::get<plugin::LoadError>(load_result).message);
+    throw std::runtime_error("load failed: " + std::get<plugin::LoadError>(load_result).message);
   }
   return std::move(std::get<plugin::LoadedPlugin>(load_result));
 }
@@ -138,8 +136,7 @@ std::string read_file(const fs::path& p) {
 // so a regex is sufficient — switching to a real XML parser would add
 // a vcpkg dep just for the conformance test; the regex strategy is the
 // same one the upstream ParaView quick-look reader uses.
-std::string extract_tag_text(const std::string& xml,
-                             const std::string& tag) {
+std::string extract_tag_text(const std::string& xml, const std::string& tag) {
   std::regex re("<" + tag + "[^>]*>([\\s\\S]*?)</" + tag + ">");
   std::smatch m;
   if (std::regex_search(xml, m, re)) {
@@ -150,9 +147,7 @@ std::string extract_tag_text(const std::string& xml,
 
 // Extract the value of attribute `attr` from the first opening tag
 // matching `tag`. Returns "" if absent.
-std::string extract_attr(const std::string& xml,
-                         const std::string& tag,
-                         const std::string& attr) {
+std::string extract_attr(const std::string& xml, const std::string& tag, const std::string& attr) {
   std::regex re("<" + tag + "[^>]*\\b" + attr + "=\"([^\"]*)\"");
   std::smatch m;
   if (std::regex_search(xml, m, re)) {
@@ -175,7 +170,8 @@ std::vector<int> split_ints(const std::string& s) {
   std::vector<int> out;
   std::istringstream is(s);
   int v;
-  while (is >> v) out.push_back(v);
+  while (is >> v)
+    out.push_back(v);
   return out;
 }
 
@@ -183,29 +179,29 @@ std::vector<double> split_doubles(const std::string& s) {
   std::vector<double> out;
   std::istringstream is(s);
   double v;
-  while (is >> v) out.push_back(v);
+  while (is >> v)
+    out.push_back(v);
   return out;
 }
 
 }  // namespace
 
 TEST(VtuConsumerConformance, OutputParsesAndCarriesContract) {
-  plugin::Registry      registry;
-  plugin::PluginLoader  loader(registry, "test-host/0.0.0");
+  plugin::Registry registry;
+  plugin::PluginLoader loader(registry, "test-host/0.0.0");
 
   // Mesh comes from the hello-mesher (1 tet, 4 nodes). The writer
   // is the surface under test.
-  auto _mesher = load_plugin(loader,
-                              SOUXMAR_TEST_HELLO_MESHER_DIR,
-                              "dev.souxmar.examples.hello-mesher");
-  auto _writer = load_plugin(loader,
-                              SOUXMAR_TEST_VTU_WRITER_DIR,
-                              "dev.souxmar.examples.vtu-writer");
+  auto _mesher =
+      load_plugin(loader, SOUXMAR_TEST_HELLO_MESHER_DIR, "dev.souxmar.examples.hello-mesher");
+  auto _writer =
+      load_plugin(loader, SOUXMAR_TEST_VTU_WRITER_DIR, "dev.souxmar.examples.vtu-writer");
 
   ASSERT_NE(registry.find_writer("writer.vtu"), nullptr);
 
   const fs::path output = unique_tmp_path("conformance");
-  if (fs::exists(output)) fs::remove(output);
+  if (fs::exists(output))
+    fs::remove(output);
 
   std::ostringstream yaml;
   yaml << "version: 1\n"
@@ -223,7 +219,7 @@ TEST(VtuConsumerConformance, OutputParsesAndCarriesContract) {
   const auto& p = std::get<pipeline::Pipeline>(parse_result);
 
   pipeline::RegistryDispatcher dispatcher(registry);
-  pipeline::Cache              cache;
+  pipeline::Cache cache;
 
   auto run = pipeline::run_pipeline(p, dispatcher, cache);
   ASSERT_EQ(run.status, pipeline::RunResult::Status::Success);
@@ -252,16 +248,15 @@ TEST(VtuConsumerConformance, OutputParsesAndCarriesContract) {
   // ---- Invariant 4: NumberOfPoints/NumberOfCells agree with arrays ----
   const std::string n_pts_str = extract_attr(xml, "Piece", "NumberOfPoints");
   const std::string n_cells_str = extract_attr(xml, "Piece", "NumberOfCells");
-  ASSERT_FALSE(n_pts_str.empty())   << "Piece missing NumberOfPoints";
+  ASSERT_FALSE(n_pts_str.empty()) << "Piece missing NumberOfPoints";
   ASSERT_FALSE(n_cells_str.empty()) << "Piece missing NumberOfCells";
-  const int n_pts   = std::stoi(n_pts_str);
+  const int n_pts = std::stoi(n_pts_str);
   const int n_cells = std::stoi(n_cells_str);
-  EXPECT_EQ(n_pts,   4) << "hello-mesher emits 4 nodes";
+  EXPECT_EQ(n_pts, 4) << "hello-mesher emits 4 nodes";
   EXPECT_EQ(n_cells, 1) << "hello-mesher emits 1 tet";
 
   // <Points> carries 3 floats per node.
-  const std::string points_data =
-      extract_data_array(xml, "Points");
+  const std::string points_data = extract_data_array(xml, "Points");
   // Some writers nest the array under <Points><DataArray>...</DataArray></Points>;
   // grab the inner DataArray directly if needed.
   std::string points_text = points_data;
@@ -280,11 +275,11 @@ TEST(VtuConsumerConformance, OutputParsesAndCarriesContract) {
 
   // ---- Invariant 5: required <DataArray> names under <Cells> ----
   const std::string connectivity = extract_data_array(xml, "connectivity");
-  const std::string offsets      = extract_data_array(xml, "offsets");
-  const std::string types        = extract_data_array(xml, "types");
+  const std::string offsets = extract_data_array(xml, "offsets");
+  const std::string types = extract_data_array(xml, "types");
   EXPECT_FALSE(connectivity.empty()) << "<Cells> missing connectivity array";
-  EXPECT_FALSE(offsets.empty())      << "<Cells> missing offsets array";
-  EXPECT_FALSE(types.empty())        << "<Cells> missing types array";
+  EXPECT_FALSE(offsets.empty()) << "<Cells> missing offsets array";
+  EXPECT_FALSE(types.empty()) << "<Cells> missing types array";
 
   // ---- Invariant 6: every cell-type id is a known VTK number ----
   const auto type_ids = split_ints(types);
@@ -303,7 +298,7 @@ TEST(VtuConsumerConformance, OutputParsesAndCarriesContract) {
   // stoi-via-istream loop would terminate early — assertions on sizes
   // above catch the divergence.)
   const auto conn = split_ints(connectivity);
-  const auto off  = split_ints(offsets);
+  const auto off = split_ints(offsets);
   EXPECT_FALSE(conn.empty());
   EXPECT_FALSE(off.empty());
   EXPECT_EQ(static_cast<int>(off.size()), n_cells);

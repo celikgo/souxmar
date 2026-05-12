@@ -20,14 +20,14 @@
 
 #pragma once
 
+#include "souxmar/pipeline/runner.h"
+#include "souxmar/plugin/manifest.h"
+
 #include <memory>
 #include <mutex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
-
-#include "souxmar/pipeline/runner.h"
-#include "souxmar/plugin/manifest.h"
 
 namespace souxmar::pipeline {
 
@@ -39,30 +39,29 @@ namespace souxmar::pipeline {
 // workers can call acquire() concurrently without external synchronization.
 class ReentrancyGuard {
  public:
-  ReentrancyGuard()  = default;
+  ReentrancyGuard() = default;
   ~ReentrancyGuard() = default;
 
-  ReentrancyGuard(const ReentrancyGuard&)            = delete;
+  ReentrancyGuard(const ReentrancyGuard&) = delete;
   ReentrancyGuard& operator=(const ReentrancyGuard&) = delete;
 
   // Block until the caller may dispatch into the named plugin under the
   // given threading model. Returned lock holds the per-plugin mutex (for
   // SingleThreaded / InternalParallel) or is unlocked / empty (for
   // Reentrant). Drop the lock to release the plugin to the next worker.
-  [[nodiscard]] std::unique_lock<std::mutex>
-  acquire(std::string_view plugin_id, plugin::ThreadingModel threading);
+  [[nodiscard]] std::unique_lock<std::mutex> acquire(std::string_view plugin_id,
+                                                     plugin::ThreadingModel threading);
 
  private:
-  std::mutex                                                    map_mu_;
-  std::unordered_map<std::string, std::unique_ptr<std::mutex>>  plugin_mu_;
+  std::mutex map_mu_;
+  std::unordered_map<std::string, std::unique_ptr<std::mutex>> plugin_mu_;
 };
 
 // Parallel runner implementation. Public for unit tests; user code calls
 // run_pipeline (in runner.h) which dispatches here when max_workers > 1.
-[[nodiscard]] RunResult
-run_pipeline_parallel(const Pipeline&    pipeline,
-                      IDispatcher&       dispatcher,
-                      Cache&             cache,
-                      const RunOptions&  options);
+[[nodiscard]] RunResult run_pipeline_parallel(const Pipeline& pipeline,
+                                              IDispatcher& dispatcher,
+                                              Cache& cache,
+                                              const RunOptions& options);
 
 }  // namespace souxmar::pipeline

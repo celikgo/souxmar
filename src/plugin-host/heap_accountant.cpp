@@ -13,10 +13,10 @@
 // to `int`, which silently misreports anything above ~2 GiB — we
 // explicitly avoid that and treat older / non-glibc Linux as
 // "unsupported" rather than report wrong numbers.
-#if defined(__linux__) && defined(__GLIBC__) && \
-    ((__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 33))
-  #include <malloc.h>
-  #define SOUXMAR_HEAP_ACCOUNTANT_LINUX_MALLINFO2 1
+#if defined(__linux__) && defined(__GLIBC__) \
+    && ((__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 33))
+#include <malloc.h>
+#define SOUXMAR_HEAP_ACCOUNTANT_LINUX_MALLINFO2 1
 #endif
 
 namespace souxmar::plugin {
@@ -38,20 +38,21 @@ HeapAccountant::Sample HeapAccountant::snapshot() noexcept {
   // commits (mi.arena), which would include returnable-but-cached
   // pages and add noise.
   s.in_use_bytes = static_cast<std::size_t>(mi.uordblks);
-  s.supported    = true;
+  s.supported = true;
 #endif
   return s;
 }
 
 std::int64_t HeapAccountant::delta_since(const Sample& start) noexcept {
   const Sample now = snapshot();
-  if (!now.supported || !start.supported) return 0;
+  if (!now.supported || !start.supported)
+    return 0;
   // Compute the signed delta in int64 — heap usage in / out of the
   // accountant can drop (a freeing tool) or grow past int32 on
   // industrial-scale meshes, so int64 is the right width. The cast
   // below preserves sign across the subtraction.
-  return static_cast<std::int64_t>(now.in_use_bytes) -
-         static_cast<std::int64_t>(start.in_use_bytes);
+  return static_cast<std::int64_t>(now.in_use_bytes)
+         - static_cast<std::int64_t>(start.in_use_bytes);
 }
 
 }  // namespace souxmar::plugin

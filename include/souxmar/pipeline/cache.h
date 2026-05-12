@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include "souxmar/pipeline/value.h"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -20,8 +22,6 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
-
-#include "souxmar/pipeline/value.h"
 
 namespace souxmar::pipeline {
 
@@ -45,8 +45,11 @@ class ContentHash {
 
   explicit ContentHash(Bytes bytes) noexcept : bytes_{bytes} {}
 
-  [[nodiscard]] const Bytes& bytes() const noexcept { return bytes_; }
-  [[nodiscard]] std::string  hex()   const;  // 64 lowercase hex chars
+  [[nodiscard]] const Bytes& bytes() const noexcept {
+    return bytes_;
+  }
+
+  [[nodiscard]] std::string hex() const;  // 64 lowercase hex chars
 
   [[nodiscard]] bool operator==(const ContentHash&) const noexcept = default;
 
@@ -57,10 +60,10 @@ class ContentHash {
 // Compute a content hash over a Value tree, threading in a "context" string
 // (typically capability_id + plugin_version) that distinguishes otherwise-
 // identical input trees fed to different plugins.
-[[nodiscard]] ContentHash hash_inputs(std::string_view             context,
-                                      const Value&                 inputs,
-                                      std::span<const std::pair<std::string, ContentHash>>
-                                                                   upstream);
+[[nodiscard]] ContentHash hash_inputs(
+    std::string_view context,
+    const Value& inputs,
+    std::span<const std::pair<std::string, ContentHash>> upstream);
 
 // In-process content-addressed store. Type-erased payloads — the dispatcher
 // knows how to interpret them (Mesh / Field / Path StageOutput).
@@ -72,7 +75,7 @@ class Cache {
   // Move-only.
   Cache(Cache&&) noexcept;
   Cache& operator=(Cache&&) noexcept;
-  Cache(const Cache&)            = delete;
+  Cache(const Cache&) = delete;
   Cache& operator=(const Cache&) = delete;
 
   void put(ContentHash key, std::shared_ptr<void> payload);
@@ -105,12 +108,13 @@ class DiskCache {
   bool put_bytes(ContentHash key, std::span<const std::uint8_t> blob) const;
 
   // Read the blob for `key`, or std::nullopt if no such entry.
-  [[nodiscard]] std::optional<std::vector<std::uint8_t>>
-  get_bytes(ContentHash key) const;
+  [[nodiscard]] std::optional<std::vector<std::uint8_t>> get_bytes(ContentHash key) const;
 
   [[nodiscard]] bool contains(ContentHash key) const;
 
-  [[nodiscard]] const std::filesystem::path& dir() const noexcept { return dir_; }
+  [[nodiscard]] const std::filesystem::path& dir() const noexcept {
+    return dir_;
+  }
 
   // Returns the platform default cache directory if `override_path` is empty,
   // else returns `override_path` unchanged. Resolution order:
@@ -119,8 +123,7 @@ class DiskCache {
   //      ~/Library/Caches/souxmar              (macOS)
   //      %LOCALAPPDATA%\souxmar\cache          (Windows)
   //   3. <tempdir>/souxmar-cache               (last-resort fallback)
-  static std::filesystem::path
-  default_dir(const std::filesystem::path& override_path = {});
+  static std::filesystem::path default_dir(const std::filesystem::path& override_path = {});
 
  private:
   std::filesystem::path dir_;
@@ -137,7 +140,8 @@ struct hash<souxmar::pipeline::ContentHash> {
     // via operator==.
     const auto& b = h.bytes();
     std::uint64_t v = 0;
-    for (int i = 0; i < 8; ++i) v = (v << 8) | b[static_cast<std::size_t>(i)];
+    for (int i = 0; i < 8; ++i)
+      v = (v << 8) | b[static_cast<std::size_t>(i)];
     return static_cast<size_t>(v);
   }
 };

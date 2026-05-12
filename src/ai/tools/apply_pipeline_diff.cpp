@@ -24,7 +24,6 @@
 // (typically by re-adding the missing upstream first).
 
 #include "souxmar/ai/tool.h"
-
 #include "souxmar/pipeline/parser.h"
 #include "souxmar/pipeline/pipeline.h"
 #include "souxmar/pipeline/value.h"
@@ -48,15 +47,18 @@ namespace pl = souxmar::pipeline;
 std::vector<pl::Value> stages_of(const pl::Value& base) {
   std::vector<pl::Value> out;
   if (const auto* s = base.find("stages"); s && s->kind() == pl::Value::Kind::List) {
-    for (const auto& it : s->as_list()) out.push_back(it);
+    for (const auto& it : s->as_list())
+      out.push_back(it);
   }
   return out;
 }
 
 const std::string* stage_id_of(const pl::Value& stage) {
-  if (stage.kind() != pl::Value::Kind::Map) return nullptr;
+  if (stage.kind() != pl::Value::Kind::Map)
+    return nullptr;
   const auto* id = stage.find("id");
-  if (!id || id->kind() != pl::Value::Kind::String) return nullptr;
+  if (!id || id->kind() != pl::Value::Kind::String)
+    return nullptr;
   // Returns a pointer to a string we *would* like to return, but
   // as_string() is string_view. Caller compares as string_view.
   return nullptr;
@@ -64,23 +66,22 @@ const std::string* stage_id_of(const pl::Value& stage) {
 
 std::string_view stage_id_view(const pl::Value& stage) {
   const auto* id = stage.find("id");
-  return (id && id->kind() == pl::Value::Kind::String) ? id->as_string()
-                                                       : std::string_view{};
+  return (id && id->kind() == pl::Value::Kind::String) ? id->as_string() : std::string_view{};
 }
 
-std::size_t index_of_stage(const std::vector<pl::Value>& stages,
-                           std::string_view              id) {
+std::size_t index_of_stage(const std::vector<pl::Value>& stages, std::string_view id) {
   for (std::size_t i = 0; i < stages.size(); ++i) {
-    if (stage_id_view(stages[i]) == id) return i;
+    if (stage_id_view(stages[i]) == id)
+      return i;
   }
   return stages.size();  // not-found sentinel
 }
 
-pl::Value rebuild_pipeline(const pl::Value&             base,
-                           std::vector<pl::Value>       stages) {
+pl::Value rebuild_pipeline(const pl::Value& base, std::vector<pl::Value> stages) {
   std::map<std::string, pl::Value> top;
   for (const auto& [k, v] : base.as_map()) {
-    if (k == "stages") continue;
+    if (k == "stages")
+      continue;
     top.emplace(k, v);
   }
   top.emplace("stages", pl::Value::list(std::move(stages)));
@@ -88,9 +89,7 @@ pl::Value rebuild_pipeline(const pl::Value&             base,
 }
 
 // Apply one op. Returns true on success; on failure populates `err`.
-bool apply_one(std::vector<pl::Value>& stages,
-               const pl::Value&        op,
-               std::string&            err) {
+bool apply_one(std::vector<pl::Value>& stages, const pl::Value& op, std::string& err) {
   if (op.kind() != pl::Value::Kind::Map) {
     err = "op must be a map";
     return false;
@@ -123,8 +122,7 @@ bool apply_one(std::vector<pl::Value>& stages,
         after != nullptr && after->kind() == pl::Value::Kind::String) {
       const auto j = index_of_stage(stages, after->as_string());
       if (j == stages.size()) {
-        err = "add op: `after` references unknown stage '" +
-              std::string(after->as_string()) + "'";
+        err = "add op: `after` references unknown stage '" + std::string(after->as_string()) + "'";
         return false;
       }
       insert_at = j + 1;
@@ -132,8 +130,8 @@ bool apply_one(std::vector<pl::Value>& stages,
                before != nullptr && before->kind() == pl::Value::Kind::String) {
       const auto j = index_of_stage(stages, before->as_string());
       if (j == stages.size()) {
-        err = "add op: `before` references unknown stage '" +
-              std::string(before->as_string()) + "'";
+        err =
+            "add op: `before` references unknown stage '" + std::string(before->as_string()) + "'";
         return false;
       }
       insert_at = j;
@@ -158,12 +156,11 @@ bool apply_one(std::vector<pl::Value>& stages,
   }
 
   if (kind_str == "set_input") {
-    const auto* idp   = op.find("id");
-    const auto* keyp  = op.find("key");
-    const auto* valp  = op.find("value");
-    if (!idp || idp->kind()  != pl::Value::Kind::String ||
-        !keyp || keyp->kind() != pl::Value::Kind::String ||
-        !valp) {
+    const auto* idp = op.find("id");
+    const auto* keyp = op.find("key");
+    const auto* valp = op.find("value");
+    if (!idp || idp->kind() != pl::Value::Kind::String || !keyp
+        || keyp->kind() != pl::Value::Kind::String || !valp) {
       err = "set_input op requires string `id`, string `key`, and any `value`";
       return false;
     }
@@ -173,12 +170,14 @@ bool apply_one(std::vector<pl::Value>& stages,
       return false;
     }
     std::map<std::string, pl::Value> stage_map;
-    for (const auto& [k, v] : stages[j].as_map()) stage_map.emplace(k, v);
+    for (const auto& [k, v] : stages[j].as_map())
+      stage_map.emplace(k, v);
 
     std::map<std::string, pl::Value> input_map;
     if (auto it = stage_map.find("input");
         it != stage_map.end() && it->second.kind() == pl::Value::Kind::Map) {
-      for (const auto& [k, v] : it->second.as_map()) input_map.emplace(k, v);
+      for (const auto& [k, v] : it->second.as_map())
+        input_map.emplace(k, v);
     }
     input_map[std::string(keyp->as_string())] = *valp;
 
@@ -188,10 +187,10 @@ bool apply_one(std::vector<pl::Value>& stages,
   }
 
   if (kind_str == "replace") {
-    const auto* idp   = op.find("id");
+    const auto* idp = op.find("id");
     const auto* stage = op.find("stage");
-    if (!idp || idp->kind()  != pl::Value::Kind::String ||
-        !stage || stage->kind() != pl::Value::Kind::Map) {
+    if (!idp || idp->kind() != pl::Value::Kind::String || !stage
+        || stage->kind() != pl::Value::Kind::Map) {
       err = "replace op requires string `id` and map `stage`";
       return false;
     }
@@ -212,17 +211,18 @@ bool apply_one(std::vector<pl::Value>& stages,
 
 Tool make_apply_pipeline_diff_tool() {
   Tool t;
-  t.name             = "apply_pipeline_diff";
-  t.description      =
+  t.name = "apply_pipeline_diff";
+  t.description =
       "Apply a list of structured edits (add / remove / set_input / "
       "replace) to a pipeline draft. The result is re-emitted as YAML "
       "and round-tripped through the parser, so the returned pipeline "
       "is guaranteed to load at `souxmar run` time. Read-only: produces "
       "a draft, never writes to disk.";
-  t.category         = "Pipeline";
-  t.confirmation     = Confirmation::ConfirmOnce;
+  t.category = "Pipeline";
+  t.confirmation = Confirmation::ConfirmOnce;
   t.input_schema_doc =
-      "{base: <pipeline-spec>,                                       # the same shape propose_pipeline takes\n"
+      "{base: <pipeline-spec>,                                       # the same shape "
+      "propose_pipeline takes\n"
       " ops:  [\n"
       "   {op: 'add',       stage: {id, plugin, input?}, after?: <id>, before?: <id>},\n"
       "   {op: 'remove',    id: <id>},\n"
@@ -239,24 +239,21 @@ Tool make_apply_pipeline_diff_tool() {
       return ToolResult{
           pl::Value::null_value(),
           "input must be a map",
-          ToolError{"INVALID_ARGUMENT",
-              "apply_pipeline_diff input must be {base, ops: [...]}"}};
+          ToolError{"INVALID_ARGUMENT", "apply_pipeline_diff input must be {base, ops: [...]}"}};
     }
     const auto* base = inputs.find("base");
-    const auto* ops  = inputs.find("ops");
+    const auto* ops = inputs.find("ops");
     if (!base || base->kind() != pl::Value::Kind::Map) {
       return ToolResult{
           pl::Value::null_value(),
           "missing or wrong-typed `base`",
-          ToolError{"INVALID_ARGUMENT",
-              "apply_pipeline_diff requires a map `base` pipeline spec"}};
+          ToolError{"INVALID_ARGUMENT", "apply_pipeline_diff requires a map `base` pipeline spec"}};
     }
     if (!ops || ops->kind() != pl::Value::Kind::List) {
-      return ToolResult{
-          pl::Value::null_value(),
-          "missing or wrong-typed `ops`",
-          ToolError{"INVALID_ARGUMENT",
-              "apply_pipeline_diff requires a list `ops` of edit operations"}};
+      return ToolResult{pl::Value::null_value(),
+                        "missing or wrong-typed `ops`",
+                        ToolError{"INVALID_ARGUMENT",
+                                  "apply_pipeline_diff requires a list `ops` of edit operations"}};
     }
 
     auto stages = stages_of(*base);
@@ -264,11 +261,11 @@ Tool make_apply_pipeline_diff_tool() {
     for (const auto& op : ops->as_list()) {
       std::string op_err;
       if (!apply_one(stages, op, op_err)) {
-        return ToolResult{
-            pl::Value::null_value(),
-            "diff failed at op " + std::to_string(applied) + ": " + op_err,
-            ToolError{"INVALID_ARGUMENT", op_err,
-                "fix the op and retry; the pipeline is unchanged on failure"}};
+        return ToolResult{pl::Value::null_value(),
+                          "diff failed at op " + std::to_string(applied) + ": " + op_err,
+                          ToolError{"INVALID_ARGUMENT",
+                                    op_err,
+                                    "fix the op and retry; the pipeline is unchanged on failure"}};
       }
       ++applied;
     }
@@ -280,31 +277,29 @@ Tool make_apply_pipeline_diff_tool() {
     if (auto* err = std::get_if<pl::ParseError>(&parse_result)) {
       std::ostringstream msg;
       msg << err->message;
-      if (err->line)   msg << " (line " << *err->line << ")";
-      if (err->column) msg << ", column " << *err->column;
-      return ToolResult{
-          pl::Value::null_value(),
-          "diffed pipeline failed validation",
-          ToolError{"INVALID_ARGUMENT", msg.str(),
-              "the ops applied cleanly but the result no longer parses as a "
-              "valid pipeline — typically a dangling {from: <id>} reference "
-              "after a remove. Re-add the missing upstream and retry."}};
+      if (err->line)
+        msg << " (line " << *err->line << ")";
+      if (err->column)
+        msg << ", column " << *err->column;
+      return ToolResult{pl::Value::null_value(),
+                        "diffed pipeline failed validation",
+                        ToolError{"INVALID_ARGUMENT",
+                                  msg.str(),
+                                  "the ops applied cleanly but the result no longer parses as a "
+                                  "valid pipeline — typically a dangling {from: <id>} reference "
+                                  "after a remove. Re-add the missing upstream and retry."}};
     }
     const auto& parsed = std::get<pl::Pipeline>(parse_result);
 
     std::map<std::string, pl::Value> out;
-    out.emplace("yaml",           pl::Value::string(yaml));
-    out.emplace("parsed_stages",  pl::Value::number(static_cast<double>(parsed.stages.size())));
-    out.emplace("version",        pl::Value::number(static_cast<double>(parsed.version)));
-    out.emplace("ops_applied",    pl::Value::number(static_cast<double>(applied)));
+    out.emplace("yaml", pl::Value::string(yaml));
+    out.emplace("parsed_stages", pl::Value::number(static_cast<double>(parsed.stages.size())));
+    out.emplace("version", pl::Value::number(static_cast<double>(parsed.version)));
+    out.emplace("ops_applied", pl::Value::number(static_cast<double>(applied)));
 
-    std::string summary = "applied " + std::to_string(applied) +
-                          " op(s); " + std::to_string(parsed.stages.size()) +
-                          " stage(s) in result";
-    return ToolResult{
-        pl::Value::map(std::move(out)),
-        std::move(summary),
-        std::nullopt};
+    std::string summary = "applied " + std::to_string(applied) + " op(s); "
+                          + std::to_string(parsed.stages.size()) + " stage(s) in result";
+    return ToolResult{pl::Value::map(std::move(out)), std::move(summary), std::nullopt};
   };
   return t;
 }

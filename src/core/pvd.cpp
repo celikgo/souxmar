@@ -26,7 +26,7 @@ namespace {
 // the start of "<DataSet" up to and including the next ">"). Returns
 // an empty optional if the attribute isn't present.
 struct AttrFind {
-  bool             found = false;
+  bool found = false;
   std::string_view value;
 };
 
@@ -42,14 +42,15 @@ AttrFind find_attribute(std::string_view tag, std::string_view name) {
   std::size_t pos = 0;
   while (pos < tag.size()) {
     const auto hit = tag.find(needle, pos);
-    if (hit == std::string_view::npos) return {};
+    if (hit == std::string_view::npos)
+      return {};
     // Validate that what's immediately before `name` is whitespace or
     // the start of the tag (so timestep doesn't match into something
     // like "footimestep=").
     if (hit > 0) {
       const char prev = tag[hit - 1];
-      if (prev != ' ' && prev != '\t' && prev != '\n' && prev != '\r' &&
-          prev != '<' && prev != '/') {
+      if (prev != ' ' && prev != '\t' && prev != '\n' && prev != '\r' && prev != '<'
+          && prev != '/') {
         pos = hit + needle.size();
         continue;
       }
@@ -60,7 +61,8 @@ AttrFind find_attribute(std::string_view tag, std::string_view name) {
       continue;
     }
     // Match the opening quote (single or double).
-    if (eq_pos + 1 >= tag.size()) return {};
+    if (eq_pos + 1 >= tag.size())
+      return {};
     const char quote = tag[eq_pos + 1];
     if (quote != '"' && quote != '\'') {
       pos = eq_pos + 1;
@@ -68,7 +70,8 @@ AttrFind find_attribute(std::string_view tag, std::string_view name) {
     }
     const std::size_t value_start = eq_pos + 2;
     const std::size_t value_end = tag.find(quote, value_start);
-    if (value_end == std::string_view::npos) return {};
+    if (value_end == std::string_view::npos)
+      return {};
     return {true, tag.substr(value_start, value_end - value_start)};
   }
   return {};
@@ -82,7 +85,8 @@ bool parse_double(std::string_view s, double& out) noexcept {
   std::string copy{s};
   char* end = nullptr;
   const double v = std::strtod(copy.c_str(), &end);
-  if (end == copy.c_str()) return false;  // no characters consumed
+  if (end == copy.c_str())
+    return false;  // no characters consumed
   out = v;
   return true;
 }
@@ -95,11 +99,13 @@ ParseResult parse(std::string_view xml) {
 
   while (pos < xml.size()) {
     const auto open = xml.find("<DataSet", pos);
-    if (open == std::string_view::npos) break;
+    if (open == std::string_view::npos)
+      break;
     // Validate that the character after "<DataSet" is whitespace or
     // a self-closing slash — protects against "<DataSetX" matches.
     const std::size_t after = open + sizeof("<DataSet") - 1;
-    if (after >= xml.size()) break;
+    if (after >= xml.size())
+      break;
     const char c = xml[after];
     if (c != ' ' && c != '\t' && c != '\n' && c != '\r' && c != '/' && c != '>') {
       pos = open + 1;
@@ -144,7 +150,8 @@ ParseResult parse_file(const std::filesystem::path& pvd_path) {
   std::ostringstream ss;
   ss << in.rdbuf();
   auto r = parse(ss.str());
-  if (!r.error.empty()) return r;
+  if (!r.error.empty())
+    return r;
 
   // Resolve relative file paths against the PVD's directory.
   const auto base = pvd_path.parent_path();

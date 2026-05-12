@@ -35,22 +35,30 @@ namespace {
 // ---- Enum string-roundtrips ------------------------------------------------
 
 std::optional<Channel> parse_channel(std::string_view s) noexcept {
-  if (s == "stable")  return Channel::Stable;
-  if (s == "beta")    return Channel::Beta;
-  if (s == "nightly") return Channel::Nightly;
+  if (s == "stable")
+    return Channel::Stable;
+  if (s == "beta")
+    return Channel::Beta;
+  if (s == "nightly")
+    return Channel::Nightly;
   return std::nullopt;
 }
 
 std::optional<Os> parse_os(std::string_view s) noexcept {
-  if (s == "linux")   return Os::Linux;
-  if (s == "macos")   return Os::Macos;
-  if (s == "windows") return Os::Windows;
+  if (s == "linux")
+    return Os::Linux;
+  if (s == "macos")
+    return Os::Macos;
+  if (s == "windows")
+    return Os::Windows;
   return std::nullopt;
 }
 
 std::optional<Arch> parse_arch(std::string_view s) noexcept {
-  if (s == "x86_64")  return Arch::X86_64;
-  if (s == "aarch64") return Arch::Aarch64;
+  if (s == "x86_64")
+    return Arch::X86_64;
+  if (s == "aarch64")
+    return Arch::Aarch64;
   return std::nullopt;
 }
 
@@ -59,9 +67,7 @@ std::optional<Arch> parse_arch(std::string_view s) noexcept {
 // Pull a required string field from a table; throws std::runtime_error
 // with a human-readable diagnostic if missing or wrong type. The
 // caller wraps the exception into a ManifestParseError.
-std::string required_string(const toml::table& tbl,
-                            const char*        key,
-                            std::string_view   scope) {
+std::string required_string(const toml::table& tbl, const char* key, std::string_view scope) {
   const auto* v = tbl.get(key);
   if (!v) {
     std::ostringstream oss;
@@ -79,21 +85,21 @@ std::string required_string(const toml::table& tbl,
 
 std::string optional_string(const toml::table& tbl, const char* key) {
   const auto* v = tbl.get(key);
-  if (!v) return {};
+  if (!v)
+    return {};
   auto sv = v->value<std::string>();
   return sv ? *sv : std::string{};
 }
 
 bool optional_bool(const toml::table& tbl, const char* key, bool dv) {
   const auto* v = tbl.get(key);
-  if (!v) return dv;
+  if (!v)
+    return dv;
   auto bv = v->value<bool>();
   return bv ? *bv : dv;
 }
 
-std::uint64_t required_uint(const toml::table& tbl,
-                            const char*        key,
-                            std::string_view   scope) {
+std::uint64_t required_uint(const toml::table& tbl, const char* key, std::string_view scope) {
   const auto* v = tbl.get(key);
   if (!v) {
     std::ostringstream oss;
@@ -109,8 +115,7 @@ std::uint64_t required_uint(const toml::table& tbl,
   }
   if (*iv < 0) {
     std::ostringstream oss;
-    oss << scope << ": field '" << key
-        << "' must be non-negative (got " << *iv << ")";
+    oss << scope << ": field '" << key << "' must be non-negative (got " << *iv << ")";
     throw std::runtime_error(oss.str());
   }
   return static_cast<std::uint64_t>(*iv);
@@ -136,7 +141,7 @@ Manifest parse_root(const toml::table& root) {
   }
 
   Manifest out;
-  out.schema       = kManifestSchemaV1;
+  out.schema = kManifestSchemaV1;
   out.generated_at = optional_string(root, "generated_at");
 
   // [channel]
@@ -153,7 +158,7 @@ Manifest parse_root(const toml::table& root) {
           << "' (expected stable, beta, or nightly)";
       throw std::runtime_error(oss.str());
     }
-    out.channel.name       = *parsed;
+    out.channel.name = *parsed;
     out.channel.expires_at = optional_string(*channel_tbl, "expires_at");
   }
 
@@ -162,12 +167,12 @@ Manifest parse_root(const toml::table& root) {
   if (!release_tbl) {
     throw std::runtime_error("missing required table [release]");
   }
-  out.release.version              = required_string(*release_tbl, "version", "[release]");
-  out.release.released_at          = optional_string(*release_tbl, "released_at");
+  out.release.version = required_string(*release_tbl, "version", "[release]");
+  out.release.released_at = optional_string(*release_tbl, "released_at");
   out.release.min_previous_version = optional_string(*release_tbl, "min_previous_version");
-  out.release.rollback_target      = optional_string(*release_tbl, "rollback_target");
-  out.release.notes_url            = optional_string(*release_tbl, "notes_url");
-  out.release.mandatory            = optional_bool(*release_tbl, "mandatory", false);
+  out.release.rollback_target = optional_string(*release_tbl, "rollback_target");
+  out.release.notes_url = optional_string(*release_tbl, "notes_url");
+  out.release.mandatory = optional_bool(*release_tbl, "mandatory", false);
 
   // [[artifact]] — required, at least one entry.
   const auto* art_arr = root.get_as<toml::array>("artifact");
@@ -186,26 +191,25 @@ Manifest parse_root(const toml::table& root) {
       oss << "[[artifact]] entry #" << idx << " is not a table";
       throw std::runtime_error(oss.str());
     }
-    const std::string scope =
-        std::string("[[artifact]] #") + std::to_string(idx);
-    const auto os_str   = required_string(*tbl, "os",   scope);
+    const std::string scope = std::string("[[artifact]] #") + std::to_string(idx);
+    const auto os_str = required_string(*tbl, "os", scope);
     const auto arch_str = required_string(*tbl, "arch", scope);
-    auto os_v   = parse_os(os_str);
+    auto os_v = parse_os(os_str);
     if (!os_v) {
-      throw std::runtime_error(scope + ": unknown os '" + os_str +
-                               "' (expected linux, macos, or windows)");
+      throw std::runtime_error(scope + ": unknown os '" + os_str
+                               + "' (expected linux, macos, or windows)");
     }
     auto arch_v = parse_arch(arch_str);
     if (!arch_v) {
-      throw std::runtime_error(scope + ": unknown arch '" + arch_str +
-                               "' (expected x86_64 or aarch64)");
+      throw std::runtime_error(scope + ": unknown arch '" + arch_str
+                               + "' (expected x86_64 or aarch64)");
     }
     Artifact a;
-    a.os     = *os_v;
-    a.arch   = *arch_v;
-    a.url    = required_string(*tbl, "url",    scope);
+    a.os = *os_v;
+    a.arch = *arch_v;
+    a.url = required_string(*tbl, "url", scope);
     a.sha256 = required_string(*tbl, "sha256", scope);
-    a.size   = required_uint(*tbl,   "size",   scope);
+    a.size = required_uint(*tbl, "size", scope);
     out.artifacts.push_back(std::move(a));
     ++idx;
   }
@@ -215,7 +219,7 @@ Manifest parse_root(const toml::table& root) {
   if (!sig_tbl) {
     throw std::runtime_error("missing required table [signing]");
   }
-  out.signing.algorithm     = required_string(*sig_tbl, "algorithm",     "[signing]");
+  out.signing.algorithm = required_string(*sig_tbl, "algorithm", "[signing]");
   out.signing.public_key_id = required_string(*sig_tbl, "public_key_id", "[signing]");
   return out;
 }
@@ -266,34 +270,44 @@ ManifestLoadResult parse_manifest_string(std::string_view toml_text) {
 
 std::string_view to_string(Channel c) noexcept {
   switch (c) {
-    case Channel::Stable:  return "stable";
-    case Channel::Beta:    return "beta";
-    case Channel::Nightly: return "nightly";
+    case Channel::Stable:
+      return "stable";
+    case Channel::Beta:
+      return "beta";
+    case Channel::Nightly:
+      return "nightly";
   }
   return "unknown";
 }
 
 std::string_view to_string(Os o) noexcept {
   switch (o) {
-    case Os::Linux:   return "linux";
-    case Os::Macos:   return "macos";
-    case Os::Windows: return "windows";
+    case Os::Linux:
+      return "linux";
+    case Os::Macos:
+      return "macos";
+    case Os::Windows:
+      return "windows";
   }
   return "unknown";
 }
 
 std::string_view to_string(Arch a) noexcept {
   switch (a) {
-    case Arch::X86_64:  return "x86_64";
-    case Arch::Aarch64: return "aarch64";
+    case Arch::X86_64:
+      return "x86_64";
+    case Arch::Aarch64:
+      return "aarch64";
   }
   return "unknown";
 }
 
 std::string_view to_string(ManifestIssueSeverity s) noexcept {
   switch (s) {
-    case ManifestIssueSeverity::Error:   return "error";
-    case ManifestIssueSeverity::Warning: return "warning";
+    case ManifestIssueSeverity::Error:
+      return "error";
+    case ManifestIssueSeverity::Warning:
+      return "warning";
   }
   return "unknown";
 }
@@ -305,20 +319,25 @@ std::string_view to_string(ManifestIssueSeverity s) noexcept {
 namespace {
 
 bool looks_like_http_url(std::string_view s) noexcept {
-  if (s.size() < 8) return false;       // "http://x" minimum
+  if (s.size() < 8)
+    return false;  // "http://x" minimum
   const bool https = s.starts_with("https://");
-  const bool http  = s.starts_with("http://");
-  if (!https && !http) return false;
+  const bool http = s.starts_with("http://");
+  if (!https && !http)
+    return false;
   const std::size_t prefix_len = https ? 8 : 7;
-  if (s.size() <= prefix_len) return false;
+  if (s.size() <= prefix_len)
+    return false;
   return s[prefix_len] != '/';
 }
 
 bool is_lowercase_hex_64(std::string_view s) noexcept {
-  if (s.size() != 64) return false;
+  if (s.size() != 64)
+    return false;
   for (char c : s) {
     const bool ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
-    if (!ok) return false;
+    if (!ok)
+      return false;
   }
   return true;
 }
@@ -329,8 +348,7 @@ std::string artifact_field(std::size_t i, const char* field) {
 
 }  // namespace
 
-std::vector<ManifestValidationIssue>
-validate_manifest(const Manifest& m) {
+std::vector<ManifestValidationIssue> validate_manifest(const Manifest& m) {
   std::vector<ManifestValidationIssue> out;
 
   // Signing block: algorithm must be the ed25519 we ship today.
@@ -339,8 +357,8 @@ validate_manifest(const Manifest& m) {
   if (m.signing.algorithm != "ed25519") {
     out.push_back({ManifestIssueSeverity::Error,
                    "signing.algorithm",
-                   "unsupported signing algorithm '" + m.signing.algorithm +
-                       "' (v1 manifest must be 'ed25519')"});
+                   "unsupported signing algorithm '" + m.signing.algorithm
+                       + "' (v1 manifest must be 'ed25519')"});
   }
   if (m.signing.public_key_id.empty()) {
     out.push_back({ManifestIssueSeverity::Error,
@@ -354,11 +372,13 @@ validate_manifest(const Manifest& m) {
   // metadata) — that grammar lives in the version-comparison module
   // (push 6); the validator's job is just to catch outright garbage.
   auto looks_semverish = [](std::string_view v) -> bool {
-    if (v.empty()) return false;
+    if (v.empty())
+      return false;
     int dots = 0;
     for (char c : v) {
       if (c == '.') {
-        if (++dots > 2) return false;
+        if (++dots > 2)
+          return false;
       } else if (!(c >= '0' && c <= '9')) {
         return false;
       }
@@ -369,7 +389,8 @@ validate_manifest(const Manifest& m) {
     out.push_back({ManifestIssueSeverity::Error,
                    "release.version",
                    "version must look like MAJOR.MINOR.PATCH "
-                   "(got: '" + m.release.version + "')"});
+                   "(got: '"
+                       + m.release.version + "')"});
   }
   if (m.release.rollback_target.empty()) {
     out.push_back({ManifestIssueSeverity::Warning,
@@ -400,28 +421,27 @@ validate_manifest(const Manifest& m) {
   for (std::size_t i = 0; i < m.artifacts.size(); ++i) {
     const auto& a = m.artifacts[i];
     const std::uint16_t pair =
-        (static_cast<std::uint16_t>(a.os) << 8) |
-        static_cast<std::uint16_t>(a.arch);
+        (static_cast<std::uint16_t>(a.os) << 8) | static_cast<std::uint16_t>(a.arch);
     if (!seen_pairs.insert(pair).second) {
       out.push_back({ManifestIssueSeverity::Error,
                      artifact_field(i, "os+arch"),
-                     "duplicate (os, arch) pair (" +
-                         std::string(to_string(a.os)) + ", " +
-                         std::string(to_string(a.arch)) +
-                         ") — each platform tuple must appear exactly once"});
+                     "duplicate (os, arch) pair (" + std::string(to_string(a.os)) + ", "
+                         + std::string(to_string(a.arch))
+                         + ") — each platform tuple must appear exactly once"});
     }
     if (!looks_like_http_url(a.url)) {
       out.push_back({ManifestIssueSeverity::Error,
                      artifact_field(i, "url"),
                      "url must start with http:// or https:// "
-                     "(got: '" + a.url + "')"});
+                     "(got: '"
+                         + a.url + "')"});
     }
     if (!is_lowercase_hex_64(a.sha256)) {
       out.push_back({ManifestIssueSeverity::Error,
                      artifact_field(i, "sha256"),
                      "sha256 must be exactly 64 lowercase hex "
-                     "characters (got: '" + a.sha256 + "', " +
-                     std::to_string(a.sha256.size()) + " chars)"});
+                     "characters (got: '"
+                         + a.sha256 + "', " + std::to_string(a.sha256.size()) + " chars)"});
     }
     if (a.size == 0) {
       out.push_back({ManifestIssueSeverity::Error,

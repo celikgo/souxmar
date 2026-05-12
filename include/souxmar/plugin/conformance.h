@@ -31,12 +31,12 @@
 
 #pragma once
 
+#include "souxmar/plugin/discovery.h"
+
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include "souxmar/plugin/discovery.h"
 
 namespace souxmar::plugin {
 
@@ -54,25 +54,25 @@ enum class ConformanceOutcome : std::uint8_t {
 // Catalogue entry — id + short description. The id is the stable key the
 // CI / dashboard pivots on; the description is the human-readable label.
 struct ConformanceCheck {
-  std::string id;          // "C001", "C002", ...
-  std::string description; // "manifest ABI version matches host"
+  std::string id;           // "C001", "C002", ...
+  std::string description;  // "manifest ABI version matches host"
 };
 
 struct ConformanceCheckResult {
-  std::string         check_id;
-  ConformanceOutcome  outcome = ConformanceOutcome::Skip;
-  std::string         detail;       // failure reason or skip predecessor
+  std::string check_id;
+  ConformanceOutcome outcome = ConformanceOutcome::Skip;
+  std::string detail;  // failure reason or skip predecessor
 };
 
 struct ConformanceReport {
-  std::string                          plugin_id;
-  std::filesystem::path                manifest_path;
-  std::vector<ConformanceCheckResult>  results;
+  std::string plugin_id;
+  std::filesystem::path manifest_path;
+  std::vector<ConformanceCheckResult> results;
 
-  [[nodiscard]] bool          all_passed() const noexcept;
-  [[nodiscard]] std::size_t   pass_count() const noexcept;
-  [[nodiscard]] std::size_t   fail_count() const noexcept;
-  [[nodiscard]] std::size_t   skip_count() const noexcept;
+  [[nodiscard]] bool all_passed() const noexcept;
+  [[nodiscard]] std::size_t pass_count() const noexcept;
+  [[nodiscard]] std::size_t fail_count() const noexcept;
+  [[nodiscard]] std::size_t skip_count() const noexcept;
 };
 
 // The v1 check catalogue. Returned in canonical (C001 → C010) order.
@@ -82,8 +82,8 @@ struct ConformanceReport {
 // threaded through the loader as souxmar_host_info_t.host_version, so
 // plugins that look at it during registration see the same value any
 // production host would supply.
-[[nodiscard]] ConformanceReport
-run_conformance(const DiscoveredPlugin& plugin,
-                std::string             host_version = "souxmar-conformance/0.0.0");
+[[nodiscard]] ConformanceReport run_conformance(
+    const DiscoveredPlugin& plugin,
+    std::string host_version = "souxmar-conformance/0.0.0");
 
 }  // namespace souxmar::plugin

@@ -2,18 +2,19 @@
 
 #include "souxmar/pipeline/registry_dispatcher.h"
 
-#include <fmt/core.h>
-
-#include <filesystem>
-#include <system_error>
-#include <utility>
+#include "souxmar/plugin/guard.h"
 
 #include "souxmar-c/mesher.h"
 #include "souxmar-c/postproc.h"
 #include "souxmar-c/reader.h"
 #include "souxmar-c/solver.h"
 #include "souxmar-c/writer.h"
-#include "souxmar/plugin/guard.h"
+
+#include <fmt/core.h>
+
+#include <filesystem>
+#include <system_error>
+#include <utility>
 
 namespace souxmar::pipeline {
 
@@ -21,31 +22,30 @@ namespace {
 
 // Get a typed StageOutput pointer from the upstream map. Returns nullptr
 // if the entry is absent OR its kind doesn't match.
-const StageOutput* upstream_as(
-    const std::map<std::string, std::shared_ptr<void>>& upstream,
-    const std::string&                                  stage_id,
-    StageOutput::Kind                                   expected) {
+const StageOutput* upstream_as(const std::map<std::string, std::shared_ptr<void>>& upstream,
+                               const std::string& stage_id,
+                               StageOutput::Kind expected) {
   auto it = upstream.find(stage_id);
-  if (it == upstream.end()) return nullptr;
+  if (it == upstream.end())
+    return nullptr;
   const auto* so = static_cast<const StageOutput*>(it->second.get());
-  if (!so || so->kind != expected) return nullptr;
+  if (!so || so->kind != expected)
+    return nullptr;
   return so;
 }
 
 // Extract a StageRef from an input map's named key, if present.
-std::optional<std::string>
-extract_stage_ref(const Value& input, std::string_view key) {
+std::optional<std::string> extract_stage_ref(const Value& input, std::string_view key) {
   const auto* v = input.find(key);
-  if (!v || v->kind() != Value::Kind::Stage) return std::nullopt;
+  if (!v || v->kind() != Value::Kind::Stage)
+    return std::nullopt;
   return v->as_stage().stage_id;
 }
 
-DispatchResult dispatch_mesher(plugin::Registry&       registry,
-                               const DispatchContext&  ctx) {
+DispatchResult dispatch_mesher(plugin::Registry& registry, const DispatchContext& ctx) {
   const auto* entry = registry.find_mesher(ctx.capability_id);
   if (!entry) {
-    return DispatchError{fmt::format(
-        "no mesher capability registered as '{}'", ctx.capability_id)};
+    return DispatchError{fmt::format("no mesher capability registered as '{}'", ctx.capability_id)};
   }
 
   // Optional `geometry` upstream handle.
@@ -53,8 +53,8 @@ DispatchResult dispatch_mesher(plugin::Registry&       registry,
   if (auto stage_id = extract_stage_ref(ctx.inputs, "geometry")) {
     const auto* up = upstream_as(ctx.upstream_outputs, *stage_id, StageOutput::Kind::Geometry);
     if (!up) {
-      return DispatchError{fmt::format(
-          "stage referenced by 'geometry' ({}) did not produce a Geometry", *stage_id)};
+      return DispatchError{
+          fmt::format("stage referenced by 'geometry' ({}) did not produce a Geometry", *stage_id)};
     }
     c_geometry = reinterpret_cast<const souxmar_geometry_t*>(up->geometry.get());
   }
@@ -74,23 +74,23 @@ DispatchResult dispatch_mesher(plugin::Registry&       registry,
   souxmar_mesh_t* out_mesh = nullptr;
   souxmar_status_t status{SOUXMAR_E_INTERNAL, "uninitialised", nullptr};
 
-  const auto guard = plugin::guard_call([&] {
-    status = entry->vtable->mesh_fn(c_geometry, &options, &out_mesh, entry->user_data);
-  });
+  const auto guard = plugin::guard_call(
+      [&] { status = entry->vtable->mesh_fn(c_geometry, &options, &out_mesh, entry->user_data); });
   if (guard.outcome != plugin::GuardOutcome::Ok) {
-    if (out_mesh) souxmar_mesh_free(out_mesh);
-    return DispatchError{fmt::format(
-        "mesher '{}' raised: {}", ctx.capability_id, guard.detail)};
+    if (out_mesh)
+      souxmar_mesh_free(out_mesh);
+    return DispatchError{fmt::format("mesher '{}' raised: {}", ctx.capability_id, guard.detail)};
   }
   if (status.code != SOUXMAR_OK) {
-    if (out_mesh) souxmar_mesh_free(out_mesh);
-    return DispatchError{fmt::format(
-        "mesher '{}' returned error {}: {}", ctx.capability_id,
-        status.code, status.message ? status.message : "(no message)")};
+    if (out_mesh)
+      souxmar_mesh_free(out_mesh);
+    return DispatchError{fmt::format("mesher '{}' returned error {}: {}",
+                                     ctx.capability_id,
+                                     status.code,
+                                     status.message ? status.message : "(no message)")};
   }
   if (!out_mesh) {
-    return DispatchError{fmt::format(
-        "mesher '{}' returned OK but no mesh", ctx.capability_id)};
+    return DispatchError{fmt::format("mesher '{}' returned OK but no mesh", ctx.capability_id)};
   }
 
   auto out = std::make_shared<StageOutput>();
@@ -100,30 +100,26 @@ DispatchResult dispatch_mesher(plugin::Registry&       registry,
   // freed through the same path on stage-output destruction.
   out->mesh = std::shared_ptr<souxmar::core::Mesh>(
       reinterpret_cast<souxmar::core::Mesh*>(out_mesh),
-      [](souxmar::core::Mesh* m) {
-        souxmar_mesh_free(reinterpret_cast<souxmar_mesh_t*>(m));
-      });
+      [](souxmar::core::Mesh* m) { souxmar_mesh_free(reinterpret_cast<souxmar_mesh_t*>(m)); });
   return std::static_pointer_cast<void>(out);
 }
 
-DispatchResult dispatch_solver(plugin::Registry&       registry,
-                               const DispatchContext&  ctx) {
+DispatchResult dispatch_solver(plugin::Registry& registry, const DispatchContext& ctx) {
   const auto* entry = registry.find_solver(ctx.capability_id);
   if (!entry) {
-    return DispatchError{fmt::format(
-        "no solver capability registered as '{}'", ctx.capability_id)};
+    return DispatchError{fmt::format("no solver capability registered as '{}'", ctx.capability_id)};
   }
 
   // Required `mesh` upstream handle.
   auto mesh_stage = extract_stage_ref(ctx.inputs, "mesh");
   if (!mesh_stage) {
-    return DispatchError{fmt::format(
-        "solver '{}' input is missing required 'mesh: {{from: ...}}'", ctx.capability_id)};
+    return DispatchError{fmt::format("solver '{}' input is missing required 'mesh: {{from: ...}}'",
+                                     ctx.capability_id)};
   }
   const auto* up = upstream_as(ctx.upstream_outputs, *mesh_stage, StageOutput::Kind::Mesh);
   if (!up) {
-    return DispatchError{fmt::format(
-        "stage referenced by 'mesh' ({}) did not produce a Mesh", *mesh_stage)};
+    return DispatchError{
+        fmt::format("stage referenced by 'mesh' ({}) did not produce a Mesh", *mesh_stage)};
   }
   const auto* c_mesh = reinterpret_cast<const souxmar_mesh_t*>(up->mesh.get());
 
@@ -149,59 +145,57 @@ DispatchResult dispatch_solver(plugin::Registry&       registry,
     status = entry->vtable->solve_fn(c_mesh, c_inputs, &options, &out_field, entry->user_data);
   });
   if (guard.outcome != plugin::GuardOutcome::Ok) {
-    if (out_field) souxmar_field_free(out_field);
-    return DispatchError{fmt::format(
-        "solver '{}' raised: {}", ctx.capability_id, guard.detail)};
+    if (out_field)
+      souxmar_field_free(out_field);
+    return DispatchError{fmt::format("solver '{}' raised: {}", ctx.capability_id, guard.detail)};
   }
   if (status.code != SOUXMAR_OK) {
-    if (out_field) souxmar_field_free(out_field);
-    return DispatchError{fmt::format(
-        "solver '{}' returned error {}: {}", ctx.capability_id,
-        status.code, status.message ? status.message : "(no message)")};
+    if (out_field)
+      souxmar_field_free(out_field);
+    return DispatchError{fmt::format("solver '{}' returned error {}: {}",
+                                     ctx.capability_id,
+                                     status.code,
+                                     status.message ? status.message : "(no message)")};
   }
   if (!out_field) {
-    return DispatchError{fmt::format(
-        "solver '{}' returned OK but no field", ctx.capability_id)};
+    return DispatchError{fmt::format("solver '{}' returned OK but no field", ctx.capability_id)};
   }
 
   auto out = std::make_shared<StageOutput>();
   out->kind = StageOutput::Kind::Field;
   out->field = std::shared_ptr<souxmar::core::Field>(
       reinterpret_cast<souxmar::core::Field*>(out_field),
-      [](souxmar::core::Field* f) {
-        souxmar_field_free(reinterpret_cast<souxmar_field_t*>(f));
-      });
+      [](souxmar::core::Field* f) { souxmar_field_free(reinterpret_cast<souxmar_field_t*>(f)); });
   return std::static_pointer_cast<void>(out);
 }
 
-DispatchResult dispatch_writer(plugin::Registry&       registry,
-                               const DispatchContext&  ctx) {
+DispatchResult dispatch_writer(plugin::Registry& registry, const DispatchContext& ctx) {
   const auto* entry = registry.find_writer(ctx.capability_id);
   if (!entry) {
-    return DispatchError{fmt::format(
-        "no writer capability registered as '{}'", ctx.capability_id)};
+    return DispatchError{fmt::format("no writer capability registered as '{}'", ctx.capability_id)};
   }
 
   // Required `mesh` upstream handle.
   auto mesh_stage = extract_stage_ref(ctx.inputs, "mesh");
   if (!mesh_stage) {
-    return DispatchError{fmt::format(
-        "writer '{}' input is missing required 'mesh: {{from: ...}}'", ctx.capability_id)};
+    return DispatchError{fmt::format("writer '{}' input is missing required 'mesh: {{from: ...}}'",
+                                     ctx.capability_id)};
   }
   const auto* mesh_up = upstream_as(ctx.upstream_outputs, *mesh_stage, StageOutput::Kind::Mesh);
   if (!mesh_up) {
-    return DispatchError{fmt::format(
-        "stage referenced by 'mesh' ({}) did not produce a Mesh", *mesh_stage)};
+    return DispatchError{
+        fmt::format("stage referenced by 'mesh' ({}) did not produce a Mesh", *mesh_stage)};
   }
   const auto* c_mesh = reinterpret_cast<const souxmar_mesh_t*>(mesh_up->mesh.get());
 
   // Optional `field` upstream handle.
   const souxmar_field_t* c_field = nullptr;
   if (auto field_stage = extract_stage_ref(ctx.inputs, "field")) {
-    const auto* field_up = upstream_as(ctx.upstream_outputs, *field_stage, StageOutput::Kind::Field);
+    const auto* field_up =
+        upstream_as(ctx.upstream_outputs, *field_stage, StageOutput::Kind::Field);
     if (!field_up) {
-      return DispatchError{fmt::format(
-          "stage referenced by 'field' ({}) did not produce a Field", *field_stage)};
+      return DispatchError{
+          fmt::format("stage referenced by 'field' ({}) did not produce a Field", *field_stage)};
     }
     c_field = reinterpret_cast<const souxmar_field_t*>(field_up->field.get());
   }
@@ -210,17 +204,16 @@ DispatchResult dispatch_writer(plugin::Registry&       registry,
   const auto* c_inputs = reinterpret_cast<const souxmar_value_t*>(&ctx.inputs);
 
   souxmar_status_t status{SOUXMAR_E_INTERNAL, "uninitialised", nullptr};
-  const auto guard = plugin::guard_call([&] {
-    status = entry->vtable->write_fn(c_mesh, c_field, c_inputs, entry->user_data);
-  });
+  const auto guard = plugin::guard_call(
+      [&] { status = entry->vtable->write_fn(c_mesh, c_field, c_inputs, entry->user_data); });
   if (guard.outcome != plugin::GuardOutcome::Ok) {
-    return DispatchError{fmt::format(
-        "writer '{}' raised: {}", ctx.capability_id, guard.detail)};
+    return DispatchError{fmt::format("writer '{}' raised: {}", ctx.capability_id, guard.detail)};
   }
   if (status.code != SOUXMAR_OK) {
-    return DispatchError{fmt::format(
-        "writer '{}' returned error {}: {}", ctx.capability_id,
-        status.code, status.message ? status.message : "(no message)")};
+    return DispatchError{fmt::format("writer '{}' returned error {}: {}",
+                                     ctx.capability_id,
+                                     status.code,
+                                     status.message ? status.message : "(no message)")};
   }
 
   auto out = std::make_shared<StageOutput>();
@@ -231,12 +224,11 @@ DispatchResult dispatch_writer(plugin::Registry&       registry,
   return std::static_pointer_cast<void>(out);
 }
 
-DispatchResult dispatch_postproc(plugin::Registry&       registry,
-                                 const DispatchContext&  ctx) {
+DispatchResult dispatch_postproc(plugin::Registry& registry, const DispatchContext& ctx) {
   const auto* entry = registry.find_postproc(ctx.capability_id);
   if (!entry) {
-    return DispatchError{fmt::format(
-        "no postproc capability registered as '{}'", ctx.capability_id)};
+    return DispatchError{
+        fmt::format("no postproc capability registered as '{}'", ctx.capability_id)};
   }
 
   // Required `mesh` upstream handle.
@@ -247,8 +239,8 @@ DispatchResult dispatch_postproc(plugin::Registry&       registry,
   }
   const auto* mesh_up = upstream_as(ctx.upstream_outputs, *mesh_stage, StageOutput::Kind::Mesh);
   if (!mesh_up) {
-    return DispatchError{fmt::format(
-        "stage referenced by 'mesh' ({}) did not produce a Mesh", *mesh_stage)};
+    return DispatchError{
+        fmt::format("stage referenced by 'mesh' ({}) did not produce a Mesh", *mesh_stage)};
   }
   const auto* c_mesh = reinterpret_cast<const souxmar_mesh_t*>(mesh_up->mesh.get());
 
@@ -261,8 +253,8 @@ DispatchResult dispatch_postproc(plugin::Registry&       registry,
   }
   const auto* field_up = upstream_as(ctx.upstream_outputs, *field_stage, StageOutput::Kind::Field);
   if (!field_up) {
-    return DispatchError{fmt::format(
-        "stage referenced by 'field' ({}) did not produce a Field", *field_stage)};
+    return DispatchError{
+        fmt::format("stage referenced by 'field' ({}) did not produce a Field", *field_stage)};
   }
   const auto* c_field = reinterpret_cast<const souxmar_field_t*>(field_up->field.get());
 
@@ -284,86 +276,92 @@ DispatchResult dispatch_postproc(plugin::Registry&       registry,
   souxmar_field_t* out_field = nullptr;
   souxmar_status_t status{SOUXMAR_E_INTERNAL, "uninitialised", nullptr};
   const auto guard = plugin::guard_call([&] {
-    status = entry->vtable->compute_fn(c_mesh, c_field, c_inputs, &options,
-                                       &out_field, entry->user_data);
+    status = entry->vtable->compute_fn(
+        c_mesh, c_field, c_inputs, &options, &out_field, entry->user_data);
   });
   if (guard.outcome != plugin::GuardOutcome::Ok) {
-    if (out_field) souxmar_field_free(out_field);
-    return DispatchError{fmt::format(
-        "postproc '{}' raised: {}", ctx.capability_id, guard.detail)};
+    if (out_field)
+      souxmar_field_free(out_field);
+    return DispatchError{fmt::format("postproc '{}' raised: {}", ctx.capability_id, guard.detail)};
   }
   if (status.code != SOUXMAR_OK) {
-    if (out_field) souxmar_field_free(out_field);
-    return DispatchError{fmt::format(
-        "postproc '{}' returned error {}: {}", ctx.capability_id,
-        status.code, status.message ? status.message : "(no message)")};
+    if (out_field)
+      souxmar_field_free(out_field);
+    return DispatchError{fmt::format("postproc '{}' returned error {}: {}",
+                                     ctx.capability_id,
+                                     status.code,
+                                     status.message ? status.message : "(no message)")};
   }
   if (!out_field) {
-    return DispatchError{fmt::format(
-        "postproc '{}' returned OK but no field", ctx.capability_id)};
+    return DispatchError{fmt::format("postproc '{}' returned OK but no field", ctx.capability_id)};
   }
 
   auto out = std::make_shared<StageOutput>();
-  out->kind  = StageOutput::Kind::Field;
+  out->kind = StageOutput::Kind::Field;
   out->field = std::shared_ptr<souxmar::core::Field>(
       reinterpret_cast<souxmar::core::Field*>(out_field),
-      [](souxmar::core::Field* f) {
-        souxmar_field_free(reinterpret_cast<souxmar_field_t*>(f));
-      });
+      [](souxmar::core::Field* f) { souxmar_field_free(reinterpret_cast<souxmar_field_t*>(f)); });
   return std::static_pointer_cast<void>(out);
 }
 
-DispatchResult dispatch_reader(plugin::Registry&       registry,
-                               const DispatchContext&  ctx) {
+DispatchResult dispatch_reader(plugin::Registry& registry, const DispatchContext& ctx) {
   const auto* entry = registry.find_reader(ctx.capability_id);
   if (!entry) {
-    return DispatchError{fmt::format(
-        "no reader capability registered as '{}'", ctx.capability_id)};
+    return DispatchError{fmt::format("no reader capability registered as '{}'", ctx.capability_id)};
   }
 
   // Required `path` input.
   const auto* path_v = ctx.inputs.find("path");
   if (!path_v || path_v->kind() != Value::Kind::String) {
-    return DispatchError{fmt::format(
-        "reader '{}' input is missing required string `path`", ctx.capability_id)};
+    return DispatchError{
+        fmt::format("reader '{}' input is missing required string `path`", ctx.capability_id)};
   }
   const std::string path_str(path_v->as_string());
 
   const auto* c_inputs = reinterpret_cast<const souxmar_value_t*>(&ctx.inputs);
 
-  souxmar_mesh_t*     out_mesh     = nullptr;
+  souxmar_mesh_t* out_mesh = nullptr;
   souxmar_geometry_t* out_geometry = nullptr;
-  souxmar_status_t    status{SOUXMAR_E_INTERNAL, "uninitialised", nullptr};
+  souxmar_status_t status{SOUXMAR_E_INTERNAL, "uninitialised", nullptr};
 
   const auto guard = plugin::guard_call([&] {
-    status = entry->vtable->read_fn(path_str.c_str(), c_inputs,
+    status = entry->vtable->read_fn(path_str.c_str(),
+                                    c_inputs,
                                     /*options=*/nullptr,
-                                    &out_mesh, &out_geometry,
+                                    &out_mesh,
+                                    &out_geometry,
                                     entry->user_data);
   });
   if (guard.outcome != plugin::GuardOutcome::Ok) {
-    if (out_mesh)     souxmar_mesh_free(out_mesh);
-    if (out_geometry) souxmar_geometry_free(out_geometry);
-    return DispatchError{fmt::format(
-        "reader '{}' raised: {}", ctx.capability_id, guard.detail)};
+    if (out_mesh)
+      souxmar_mesh_free(out_mesh);
+    if (out_geometry)
+      souxmar_geometry_free(out_geometry);
+    return DispatchError{fmt::format("reader '{}' raised: {}", ctx.capability_id, guard.detail)};
   }
   if (status.code != SOUXMAR_OK) {
-    if (out_mesh)     souxmar_mesh_free(out_mesh);
-    if (out_geometry) souxmar_geometry_free(out_geometry);
-    return DispatchError{fmt::format(
-        "reader '{}' returned error {}: {}", ctx.capability_id,
-        status.code, status.message ? status.message : "(no message)")};
+    if (out_mesh)
+      souxmar_mesh_free(out_mesh);
+    if (out_geometry)
+      souxmar_geometry_free(out_geometry);
+    return DispatchError{fmt::format("reader '{}' returned error {}: {}",
+                                     ctx.capability_id,
+                                     status.code,
+                                     status.message ? status.message : "(no message)")};
   }
   if ((out_mesh == nullptr) == (out_geometry == nullptr)) {
     // Both NULL → nothing produced; both set → ambiguous. Either is a
     // plugin contract violation; clean up and surface the error.
-    if (out_mesh)     souxmar_mesh_free(out_mesh);
-    if (out_geometry) souxmar_geometry_free(out_geometry);
-    return DispatchError{fmt::format(
-        "reader '{}' must fill exactly one of out_mesh / out_geometry "
-        "(got mesh={}, geometry={})",
-        ctx.capability_id,
-        out_mesh != nullptr, out_geometry != nullptr)};
+    if (out_mesh)
+      souxmar_mesh_free(out_mesh);
+    if (out_geometry)
+      souxmar_geometry_free(out_geometry);
+    return DispatchError{
+        fmt::format("reader '{}' must fill exactly one of out_mesh / out_geometry "
+                    "(got mesh={}, geometry={})",
+                    ctx.capability_id,
+                    out_mesh != nullptr,
+                    out_geometry != nullptr)};
   }
 
   auto out = std::make_shared<StageOutput>();
@@ -371,14 +369,11 @@ DispatchResult dispatch_reader(plugin::Registry&       registry,
     out->kind = StageOutput::Kind::Mesh;
     out->mesh = std::shared_ptr<souxmar::core::Mesh>(
         reinterpret_cast<souxmar::core::Mesh*>(out_mesh),
-        [](souxmar::core::Mesh* m) {
-          souxmar_mesh_free(reinterpret_cast<souxmar_mesh_t*>(m));
-        });
+        [](souxmar::core::Mesh* m) { souxmar_mesh_free(reinterpret_cast<souxmar_mesh_t*>(m)); });
   } else {
-    out->kind     = StageOutput::Kind::Geometry;
+    out->kind = StageOutput::Kind::Geometry;
     out->geometry = std::shared_ptr<souxmar::core::Geometry>(
-        reinterpret_cast<souxmar::core::Geometry*>(out_geometry),
-        [](souxmar::core::Geometry* g) {
+        reinterpret_cast<souxmar::core::Geometry*>(out_geometry), [](souxmar::core::Geometry* g) {
           souxmar_geometry_free(reinterpret_cast<souxmar_geometry_t*>(g));
         });
   }
@@ -387,8 +382,7 @@ DispatchResult dispatch_reader(plugin::Registry&       registry,
 
 }  // namespace
 
-RegistryDispatcher::RegistryDispatcher(plugin::Registry& registry)
-    : registry_(registry) {}
+RegistryDispatcher::RegistryDispatcher(plugin::Registry& registry) : registry_(registry) {}
 
 std::string RegistryDispatcher::plugin_version(std::string_view capability_id) {
   if (const auto* e = registry_.find(capability_id); e) {
@@ -404,8 +398,8 @@ std::string RegistryDispatcher::plugin_id(std::string_view capability_id) {
   return std::string(capability_id);
 }
 
-::souxmar::plugin::ThreadingModel
-RegistryDispatcher::plugin_threading(std::string_view capability_id) {
+::souxmar::plugin::ThreadingModel RegistryDispatcher::plugin_threading(
+    std::string_view capability_id) {
   if (auto m = registry_.find_threading(capability_id); m.has_value()) {
     return *m;
   }
@@ -432,17 +426,18 @@ DispatchResult RegistryDispatcher::dispatch(const DispatchContext& ctx) {
   if (ctx.capability_id.starts_with("reader.")) {
     return dispatch_reader(registry_, ctx);
   }
-  return DispatchError{fmt::format(
-      "unsupported capability namespace for '{}' "
-      "(known namespaces: mesher.*, solver.*, writer.*, postproc.*, reader.*)",
-      ctx.capability_id)};
+  return DispatchError{
+      fmt::format("unsupported capability namespace for '{}' "
+                  "(known namespaces: mesher.*, solver.*, writer.*, postproc.*, reader.*)",
+                  ctx.capability_id)};
 }
 
 // ---- StageOutput on-disk serialization -----------------------------------
 
-std::optional<std::vector<std::uint8_t>>
-serialize_stage_output(const std::shared_ptr<void>& payload) {
-  if (!payload) return std::nullopt;
+std::optional<std::vector<std::uint8_t>> serialize_stage_output(
+    const std::shared_ptr<void>& payload) {
+  if (!payload)
+    return std::nullopt;
   const auto* so = static_cast<const StageOutput*>(payload.get());
   if (so->kind != StageOutput::Kind::Path) {
     // Mesh/Geometry/Field need plugin-side serializers — defer to Sprint 5.
@@ -461,16 +456,18 @@ serialize_stage_output(const std::shared_ptr<void>& payload) {
   return out;
 }
 
-std::shared_ptr<void>
-deserialize_stage_output(std::span<const std::uint8_t> blob) {
-  if (blob.size() < 9) return nullptr;
-  if (blob[0] != static_cast<std::uint8_t>(StageOutput::Kind::Path)) return nullptr;
+std::shared_ptr<void> deserialize_stage_output(std::span<const std::uint8_t> blob) {
+  if (blob.size() < 9)
+    return nullptr;
+  if (blob[0] != static_cast<std::uint8_t>(StageOutput::Kind::Path))
+    return nullptr;
 
   std::uint64_t len = 0;
   for (int i = 0; i < 8; ++i) {
     len |= static_cast<std::uint64_t>(blob[1 + i]) << (8 * i);
   }
-  if (blob.size() != 9 + len) return nullptr;
+  if (blob.size() != 9 + len)
+    return nullptr;
 
   // The on-disk artifact this Path output points at must still exist;
   // otherwise a "cached" hit would resolve to a missing file and confuse

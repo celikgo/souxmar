@@ -23,7 +23,7 @@
 #define SOUXMAR_C_SKETCH_H
 
 #include "souxmar-c/abi.h"
-#include "souxmar-c/brep.h"   /* anchor faces are BREP face IDs */
+#include "souxmar-c/brep.h" /* anchor faces are BREP face IDs */
 #include "souxmar-c/status.h"
 
 SOUXMAR_C_BEGIN
@@ -31,59 +31,58 @@ SOUXMAR_C_BEGIN
 typedef struct souxmar_sketch_t souxmar_sketch_t;
 
 /* ---- Primitive kinds (stable numeric values) ---- */
-#define SOUXMAR_SK_POINT      0
-#define SOUXMAR_SK_LINE       1
-#define SOUXMAR_SK_ARC        2
-#define SOUXMAR_SK_CIRCLE     3
-#define SOUXMAR_SK_POLYLINE   4
-#define SOUXMAR_SK_SPLINE     5   /* cubic Bezier; control points in UV */
+#define SOUXMAR_SK_POINT 0
+#define SOUXMAR_SK_LINE 1
+#define SOUXMAR_SK_ARC 2
+#define SOUXMAR_SK_CIRCLE 3
+#define SOUXMAR_SK_POLYLINE 4
+#define SOUXMAR_SK_SPLINE 5 /* cubic Bezier; control points in UV */
 
 /* ---- Constraint kinds (stable numeric values) ---- */
-#define SOUXMAR_SC_COINCIDENT      10
-#define SOUXMAR_SC_PARALLEL        11
-#define SOUXMAR_SC_PERPENDICULAR   12
-#define SOUXMAR_SC_TANGENT         13
-#define SOUXMAR_SC_EQUAL           14
-#define SOUXMAR_SC_HORIZONTAL      15
-#define SOUXMAR_SC_VERTICAL        16
-#define SOUXMAR_SC_DISTANCE        17   /* dimensional; value carried */
-#define SOUXMAR_SC_ANGLE           18
-#define SOUXMAR_SC_RADIUS          19
-#define SOUXMAR_SC_DIAMETER        20
+#define SOUXMAR_SC_COINCIDENT 10
+#define SOUXMAR_SC_PARALLEL 11
+#define SOUXMAR_SC_PERPENDICULAR 12
+#define SOUXMAR_SC_TANGENT 13
+#define SOUXMAR_SC_EQUAL 14
+#define SOUXMAR_SC_HORIZONTAL 15
+#define SOUXMAR_SC_VERTICAL 16
+#define SOUXMAR_SC_DISTANCE 17 /* dimensional; value carried */
+#define SOUXMAR_SC_ANGLE 18
+#define SOUXMAR_SC_RADIUS 19
+#define SOUXMAR_SC_DIAMETER 20
 
 /* ---- Lifecycle ---- */
 
 souxmar_sketch_t* souxmar_sketch_new(void);
-void              souxmar_sketch_free(souxmar_sketch_t* sketch);
+void souxmar_sketch_free(souxmar_sketch_t* sketch);
 
 /* ---- Anchor (where the sketch lives in 3D) ---- */
 
 /* World-axis-aligned planes: 0 = XY, 1 = XZ, 2 = YZ. */
-souxmar_status_t souxmar_sketch_anchor_world(souxmar_sketch_t* sketch,
-                                              uint8_t            plane);
+souxmar_status_t souxmar_sketch_anchor_world(souxmar_sketch_t* sketch, uint8_t plane);
 
 /* Anchor to a planar face on a BREP session. The face must be planar
  * (kernel rejects non-planar with SOUXMAR_E_INVALID_ARGUMENT). */
-souxmar_status_t souxmar_sketch_anchor_face(souxmar_sketch_t*               sketch,
-                                             const souxmar_brep_session_t*   session,
-                                             uint64_t                         face_id);
+souxmar_status_t souxmar_sketch_anchor_face(souxmar_sketch_t* sketch,
+                                            const souxmar_brep_session_t* session,
+                                            uint64_t face_id);
 
 /* ---- Add primitives (returns a u32 primitive ID, 0 on failure) ---- */
 
 uint32_t souxmar_sketch_add_point(souxmar_sketch_t* sketch, double u, double v);
 
 uint32_t souxmar_sketch_add_line(souxmar_sketch_t* sketch,
-                                  uint32_t           start_point_id,
-                                  uint32_t           end_point_id);
+                                 uint32_t start_point_id,
+                                 uint32_t end_point_id);
 
 uint32_t souxmar_sketch_add_arc(souxmar_sketch_t* sketch,
-                                 uint32_t           start_point_id,
-                                 uint32_t           end_point_id,
-                                 uint32_t           centre_point_id);
+                                uint32_t start_point_id,
+                                uint32_t end_point_id,
+                                uint32_t centre_point_id);
 
 uint32_t souxmar_sketch_add_circle(souxmar_sketch_t* sketch,
-                                    uint32_t           centre_point_id,
-                                    double             radius);
+                                   uint32_t centre_point_id,
+                                   double radius);
 
 /* ---- Add constraints (returns a u32 constraint ID, 0 on failure) ----
  *
@@ -93,10 +92,10 @@ uint32_t souxmar_sketch_add_circle(souxmar_sketch_t* sketch,
  * `value` is the dimensional value (mm/rad/etc.); 0.0 for non-
  * dimensional constraints. */
 uint32_t souxmar_sketch_add_constraint(souxmar_sketch_t* sketch,
-                                        uint8_t            kind,
-                                        const uint32_t*    targets,
-                                        size_t             target_count,
-                                        double             value);
+                                       uint8_t kind,
+                                       const uint32_t* targets,
+                                       size_t target_count,
+                                       double value);
 
 /* ---- Queries ---- */
 
@@ -104,9 +103,9 @@ size_t souxmar_sketch_num_primitives(const souxmar_sketch_t* sketch);
 size_t souxmar_sketch_num_constraints(const souxmar_sketch_t* sketch);
 
 souxmar_status_t souxmar_sketch_point_position(const souxmar_sketch_t* sketch,
-                                                uint32_t                 point_id,
-                                                double*                  out_u,
-                                                double*                  out_v);
+                                               uint32_t point_id,
+                                               double* out_u,
+                                               double* out_v);
 
 /* ---- Solver invocation (handled by the host; dispatches to plugin) ----
  *

@@ -5,16 +5,17 @@
 // surface plugins use; bugs here propagate to every plugin in the
 // ecosystem, so coverage is broad.
 
-#include <gtest/gtest.h>
-
-#include <cstring>
-#include <string>
+#include "souxmar/pipeline/value.h"
 
 #include "souxmar-c/field.h"
 #include "souxmar-c/geometry.h"
 #include "souxmar-c/mesh.h"
 #include "souxmar-c/value.h"
-#include "souxmar/pipeline/value.h"
+
+#include <gtest/gtest.h>
+
+#include <cstring>
+#include <string>
 
 // -------- mesh handle --------
 
@@ -68,7 +69,8 @@ TEST(CAbiMesh, AddCellTetrahedronRoundtrip) {
   uint64_t readback[4] = {0};
   s = souxmar_mesh_cell_nodes(m, 0, readback, 4);
   EXPECT_EQ(s.code, SOUXMAR_OK);
-  for (int i = 0; i < 4; ++i) EXPECT_EQ(readback[i], static_cast<uint64_t>(i));
+  for (int i = 0; i < 4; ++i)
+    EXPECT_EQ(readback[i], static_cast<uint64_t>(i));
 
   souxmar_mesh_free(m);
 }
@@ -226,13 +228,13 @@ TEST(CAbiGeometry, AddAndCount) {
   souxmar_geometry_t* g = souxmar_geometry_new();
   const double pos[3] = {1, 2, 3};
   EXPECT_EQ(souxmar_geometry_add_vertex(g, pos), 0u);
-  EXPECT_EQ(souxmar_geometry_add_edge(g),        0u);
-  EXPECT_EQ(souxmar_geometry_add_face(g),        0u);
-  EXPECT_EQ(souxmar_geometry_add_solid(g),       0u);
+  EXPECT_EQ(souxmar_geometry_add_edge(g), 0u);
+  EXPECT_EQ(souxmar_geometry_add_face(g), 0u);
+  EXPECT_EQ(souxmar_geometry_add_solid(g), 0u);
   EXPECT_EQ(souxmar_geometry_num_vertices(g), 1u);
-  EXPECT_EQ(souxmar_geometry_num_edges(g),    1u);
-  EXPECT_EQ(souxmar_geometry_num_faces(g),    1u);
-  EXPECT_EQ(souxmar_geometry_num_solids(g),   1u);
+  EXPECT_EQ(souxmar_geometry_num_edges(g), 1u);
+  EXPECT_EQ(souxmar_geometry_num_faces(g), 1u);
+  EXPECT_EQ(souxmar_geometry_num_solids(g), 1u);
   souxmar_geometry_free(g);
 }
 
@@ -266,14 +268,14 @@ TEST(CAbiGeometry, OutOfRangeSetReturnsNotFound) {
 TEST(CAbiGeometry, BoundingBox) {
   souxmar_geometry_t* g = souxmar_geometry_new();
   const double p1[3] = {-1, -2, -3};
-  const double p2[3] = { 4,  5,  6};
+  const double p2[3] = {4, 5, 6};
   souxmar_geometry_add_vertex(g, p1);
   souxmar_geometry_add_vertex(g, p2);
   double box[6] = {};
   auto s = souxmar_geometry_bounding_box(g, box);
   EXPECT_EQ(s.code, SOUXMAR_OK);
   EXPECT_DOUBLE_EQ(box[0], -1);
-  EXPECT_DOUBLE_EQ(box[5],  6);
+  EXPECT_DOUBLE_EQ(box[5], 6);
   souxmar_geometry_free(g);
 }
 
@@ -283,12 +285,12 @@ TEST(CAbiField, NewFreeRoundtrip) {
   souxmar_field_t* f = souxmar_field_new("u", SOUXMAR_FL_NODAL, SOUXMAR_FK_VECTOR, 4, 1);
   ASSERT_NE(f, nullptr);
   EXPECT_STREQ(souxmar_field_name(f), "u");
-  EXPECT_EQ(souxmar_field_location(f),       SOUXMAR_FL_NODAL);
-  EXPECT_EQ(souxmar_field_kind(f),           SOUXMAR_FK_VECTOR);
-  EXPECT_EQ(souxmar_field_components(f),     3u);
-  EXPECT_EQ(souxmar_field_count(f),          4u);
+  EXPECT_EQ(souxmar_field_location(f), SOUXMAR_FL_NODAL);
+  EXPECT_EQ(souxmar_field_kind(f), SOUXMAR_FK_VECTOR);
+  EXPECT_EQ(souxmar_field_components(f), 3u);
+  EXPECT_EQ(souxmar_field_count(f), 4u);
   EXPECT_EQ(souxmar_field_num_time_steps(f), 1u);
-  EXPECT_EQ(souxmar_field_data_size(f),      12u);
+  EXPECT_EQ(souxmar_field_data_size(f), 12u);
   souxmar_field_free(f);
 }
 
@@ -301,7 +303,9 @@ TEST(CAbiField, DataReadWrite) {
   souxmar_field_t* f = souxmar_field_new("u", SOUXMAR_FL_NODAL, SOUXMAR_FK_SCALAR, 3, 1);
   double* d = souxmar_field_data(f);
   ASSERT_NE(d, nullptr);
-  d[0] = 1.5; d[1] = 2.5; d[2] = 3.5;
+  d[0] = 1.5;
+  d[1] = 2.5;
+  d[2] = 3.5;
   const double* cd = souxmar_field_data_const(f);
   EXPECT_DOUBLE_EQ(cd[1], 2.5);
   souxmar_field_free(f);
@@ -311,16 +315,14 @@ TEST(CAbiField, DataReadWrite) {
 
 TEST(CAbiValue, KindAndScalars) {
   using souxmar::pipeline::Value;
-  auto null_v   = Value::null_value();
-  auto bool_v   = Value::boolean(true);
-  auto num_v    = Value::number(2.5);
-  auto str_v    = Value::string("hi");
-  auto stage_v  = Value::stage_ref("import");
+  auto null_v = Value::null_value();
+  auto bool_v = Value::boolean(true);
+  auto num_v = Value::number(2.5);
+  auto str_v = Value::string("hi");
+  auto stage_v = Value::stage_ref("import");
 
-  EXPECT_EQ(souxmar_value_kind(reinterpret_cast<const souxmar_value_t*>(&null_v)),
-            SOUXMAR_VK_NULL);
-  EXPECT_EQ(souxmar_value_kind(reinterpret_cast<const souxmar_value_t*>(&bool_v)),
-            SOUXMAR_VK_BOOL);
+  EXPECT_EQ(souxmar_value_kind(reinterpret_cast<const souxmar_value_t*>(&null_v)), SOUXMAR_VK_NULL);
+  EXPECT_EQ(souxmar_value_kind(reinterpret_cast<const souxmar_value_t*>(&bool_v)), SOUXMAR_VK_BOOL);
   EXPECT_EQ(souxmar_value_kind(reinterpret_cast<const souxmar_value_t*>(&num_v)),
             SOUXMAR_VK_NUMBER);
   EXPECT_EQ(souxmar_value_kind(reinterpret_cast<const souxmar_value_t*>(&str_v)),
@@ -328,9 +330,8 @@ TEST(CAbiValue, KindAndScalars) {
   EXPECT_EQ(souxmar_value_kind(reinterpret_cast<const souxmar_value_t*>(&stage_v)),
             SOUXMAR_VK_STAGE);
 
-  EXPECT_EQ(souxmar_value_as_bool(reinterpret_cast<const souxmar_value_t*>(&bool_v)),   1);
-  EXPECT_DOUBLE_EQ(souxmar_value_as_number(reinterpret_cast<const souxmar_value_t*>(&num_v)),
-                   2.5);
+  EXPECT_EQ(souxmar_value_as_bool(reinterpret_cast<const souxmar_value_t*>(&bool_v)), 1);
+  EXPECT_DOUBLE_EQ(souxmar_value_as_number(reinterpret_cast<const souxmar_value_t*>(&num_v)), 2.5);
   EXPECT_STREQ(souxmar_value_as_string(reinterpret_cast<const souxmar_value_t*>(&str_v)), "hi");
   EXPECT_STREQ(souxmar_value_as_stage(reinterpret_cast<const souxmar_value_t*>(&stage_v)),
                "import");
@@ -339,7 +340,7 @@ TEST(CAbiValue, KindAndScalars) {
 TEST(CAbiValue, MapAccess) {
   using souxmar::pipeline::Value;
   auto m = Value::map({
-      {"path",    Value::string("/tmp/out.txt")},
+      {"path", Value::string("/tmp/out.txt")},
       {"verbose", Value::boolean(false)},
   });
   const auto* h = reinterpret_cast<const souxmar_value_t*>(&m);

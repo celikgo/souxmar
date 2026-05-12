@@ -20,8 +20,7 @@
 #include "souxmar/update/rollback_log.h"
 #include "souxmar/update/update_state.h"
 
-#include <sodium.h>
-
+#include "test_config.h"
 #include <gtest/gtest.h>
 
 #include <array>
@@ -35,7 +34,7 @@
 #include <variant>
 #include <vector>
 
-#include "test_config.h"
+#include <sodium.h>
 
 namespace fs = std::filesystem;
 
@@ -55,16 +54,16 @@ int run_cli(const std::string& full_cmd) {
 #if defined(_WIN32)
   return rc;
 #else
-  if (rc < 0) return rc;
+  if (rc < 0)
+    return rc;
   return (rc >> 8) & 0xFF;
 #endif
 }
 
 fs::path tmp_dir(std::string_view tag) {
   std::random_device rd;
-  auto base = fs::temp_directory_path() /
-              ("souxmar-update-apply-test-" + std::string(tag) + "-" +
-               std::to_string(rd()));
+  auto base = fs::temp_directory_path()
+              / ("souxmar-update-apply-test-" + std::string(tag) + "-" + std::to_string(rd()));
   fs::create_directories(base);
   return base;
 }
@@ -75,7 +74,8 @@ struct Keypair {
 };
 
 Keypair make_keypair() {
-  if (sodium_init() < 0) ADD_FAILURE() << "sodium_init failed";
+  if (sodium_init() < 0)
+    ADD_FAILURE() << "sodium_init failed";
   std::array<std::uint8_t, crypto_sign_SEEDBYTES> seed{};
   for (std::size_t i = 0; i < seed.size(); ++i) {
     seed[i] = static_cast<std::uint8_t>(i * 11 + 3);
@@ -91,7 +91,7 @@ std::string hex_encode(const std::uint8_t* p, std::size_t n) {
   out.resize(n * 2);
   for (std::size_t i = 0; i < n; ++i) {
     out[2 * i + 0] = kHex[(p[i] >> 4) & 0x0F];
-    out[2 * i + 1] = kHex[p[i]        & 0x0F];
+    out[2 * i + 1] = kHex[p[i] & 0x0F];
   }
   return out;
 }
@@ -100,24 +100,23 @@ std::string sign_hex(const std::string& message,
                      const std::array<std::uint8_t, crypto_sign_SECRETKEYBYTES>& sk) {
   std::array<std::uint8_t, crypto_sign_BYTES> sig{};
   unsigned long long sig_len = 0;
-  crypto_sign_detached(sig.data(), &sig_len,
+  crypto_sign_detached(sig.data(),
+                       &sig_len,
                        reinterpret_cast<const std::uint8_t*>(message.data()),
-                       message.size(), sk.data());
+                       message.size(),
+                       sk.data());
   return hex_encode(sig.data(), crypto_sign_BYTES);
 }
 
 std::string sha256_hex_of(const std::string& bytes) {
   std::array<std::uint8_t, crypto_hash_sha256_BYTES> d{};
-  crypto_hash_sha256(d.data(),
-                     reinterpret_cast<const std::uint8_t*>(bytes.data()),
-                     bytes.size());
+  crypto_hash_sha256(d.data(), reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size());
   return hex_encode(d.data(), d.size());
 }
 
 void write_file(const fs::path& p, std::string_view content) {
   std::ofstream sink(p, std::ios::binary | std::ios::trunc);
-  sink.write(content.data(),
-             static_cast<std::streamsize>(content.size()));
+  sink.write(content.data(), static_cast<std::streamsize>(content.size()));
 }
 
 std::string read_file(const fs::path& p) {
@@ -155,9 +154,7 @@ algorithm     = "ed25519"
 public_key_id = "release-test"
 )toml";
 
-std::string replace_all(std::string s,
-                        std::string_view needle,
-                        std::string_view repl) {
+std::string replace_all(std::string s, std::string_view needle, std::string_view repl) {
   std::size_t pos = 0;
   while ((pos = s.find(needle, pos)) != std::string::npos) {
     s.replace(pos, needle.size(), repl);
@@ -169,27 +166,32 @@ std::string replace_all(std::string s,
 class UpdateApplyRollbackCli : public ::testing::Test {
  protected:
   void SetUp() override {
-    work_        = tmp_dir("workdir");
+    work_ = tmp_dir("workdir");
     target_root_ = tmp_dir("target-root");
-    state_path_  = work_ / "update-state.toml";
-    kp_          = make_keypair();
-    pubkey_hex_  = hex_encode(kp_.pk.data(), kp_.pk.size());
+    state_path_ = work_ / "update-state.toml";
+    kp_ = make_keypair();
+    pubkey_hex_ = hex_encode(kp_.pk.data(), kp_.pk.size());
   }
+
   void TearDown() override {
     std::error_code ec;
     fs::remove_all(work_, ec);
     fs::remove_all(target_root_, ec);
   }
 
-  struct Bundle { fs::path manifest; fs::path signature; fs::path artifact; };
-  Bundle write_signed(const std::string& version,
-                      const std::string& payload) {
+  struct Bundle {
+    fs::path manifest;
+    fs::path signature;
+    fs::path artifact;
+  };
+
+  Bundle write_signed(const std::string& version, const std::string& payload) {
     const fs::path artifact = work_ / ("artifact-" + version + ".bin");
     write_file(artifact, payload);
 
     std::string mt = replace_all(kManifestTemplate, "{VERSION}", version);
     mt = replace_all(std::move(mt), "{SHA256}", sha256_hex_of(payload));
-    mt = replace_all(std::move(mt), "{SIZE}",   std::to_string(payload.size()));
+    mt = replace_all(std::move(mt), "{SIZE}", std::to_string(payload.size()));
     const fs::path manifest = work_ / ("manifest-" + version + ".toml");
     write_file(manifest, mt);
 
@@ -201,33 +203,24 @@ class UpdateApplyRollbackCli : public ::testing::Test {
   std::string apply_cmd(const Bundle& b,
                         const std::string& current_version,
                         const fs::path& log_out) const {
-    return shell_quote(SOUXMAR_TEST_CLI_BINARY) +
-        " update apply" +
-        " --trusted-key release-test=" + pubkey_hex_ +
-        " --platform linux/x86_64" +
-        " --state "        + shell_quote(state_path_) +
-        " --target-root "  + shell_quote(target_root_) +
-        " --manifest "     + shell_quote(b.manifest) +
-        " --signature "    + shell_quote(b.signature) +
-        " --artifact "     + shell_quote(b.artifact) +
-        " --current-version " + current_version +
-        " --as-of 2026-05-12T00:00:00Z" +
-        " > " + shell_quote(log_out) + " 2>&1";
+    return shell_quote(SOUXMAR_TEST_CLI_BINARY) + " update apply"
+           + " --trusted-key release-test=" + pubkey_hex_ + " --platform linux/x86_64" + " --state "
+           + shell_quote(state_path_) + " --target-root " + shell_quote(target_root_)
+           + " --manifest " + shell_quote(b.manifest) + " --signature " + shell_quote(b.signature)
+           + " --artifact " + shell_quote(b.artifact) + " --current-version " + current_version
+           + " --as-of 2026-05-12T00:00:00Z" + " > " + shell_quote(log_out) + " 2>&1";
   }
 
   std::string rollback_cmd(const fs::path& log_out) const {
-    return shell_quote(SOUXMAR_TEST_CLI_BINARY) +
-        " update rollback" +
-        " --target-root " + shell_quote(target_root_) +
-        " --state "       + shell_quote(state_path_) +
-        " --as-of 2026-05-12T01:00:00Z" +
-        " > " + shell_quote(log_out) + " 2>&1";
+    return shell_quote(SOUXMAR_TEST_CLI_BINARY) + " update rollback" + " --target-root "
+           + shell_quote(target_root_) + " --state " + shell_quote(state_path_)
+           + " --as-of 2026-05-12T01:00:00Z" + " > " + shell_quote(log_out) + " 2>&1";
   }
 
-  fs::path  work_;
-  fs::path  target_root_;
-  fs::path  state_path_;
-  Keypair   kp_{};
+  fs::path work_;
+  fs::path target_root_;
+  fs::path state_path_;
+  Keypair kp_{};
   std::string pubkey_hex_;
 };
 
@@ -250,7 +243,7 @@ TEST_F(UpdateApplyRollbackCli, ApplyThenRollbackFullCycle) {
   //    parsing CLI stdout — the wire-format would lock the test to
   //    text shape, the contracts are what we want to verify).
   InstallLayout layout(target_root_);
-  EXPECT_EQ(layout.read_current_version(),  "0.9.0");
+  EXPECT_EQ(layout.read_current_version(), "0.9.0");
   EXPECT_EQ(layout.read_previous_version(), "0.8.5");
   EXPECT_TRUE(layout.has_version_payload("0.9.0"));
   EXPECT_TRUE(layout.has_version_payload("0.8.5"));
@@ -261,7 +254,7 @@ TEST_F(UpdateApplyRollbackCli, ApplyThenRollbackFullCycle) {
   {
     const auto& s = std::get<UpdateState>(loaded);
     EXPECT_EQ(s.current_installed_version, "0.9.0");
-    EXPECT_EQ(s.max_version_ever_seen,     "0.9.0");
+    EXPECT_EQ(s.max_version_ever_seen, "0.9.0");
     EXPECT_FALSE(s.last_apply_at.empty());
   }
 
@@ -278,8 +271,7 @@ TEST_F(UpdateApplyRollbackCli, ApplyThenRollbackFullCycle) {
   }
 
   // 6. Rollback.
-  ASSERT_EQ(run_cli(rollback_cmd(work_ / "rollback.log")), 0)
-      << read_file(work_ / "rollback.log");
+  ASSERT_EQ(run_cli(rollback_cmd(work_ / "rollback.log")), 0) << read_file(work_ / "rollback.log");
 
   EXPECT_EQ(layout.read_current_version(), "0.8.5");
   loaded = load_update_state(state_path_);
@@ -288,16 +280,16 @@ TEST_F(UpdateApplyRollbackCli, ApplyThenRollbackFullCycle) {
     const auto& s = std::get<UpdateState>(loaded);
     EXPECT_EQ(s.current_installed_version, "0.8.5");
     // Replay-defence floor must *not* drop.
-    EXPECT_EQ(s.max_version_ever_seen,     "0.9.0")
+    EXPECT_EQ(s.max_version_ever_seen, "0.9.0")
         << "rollback must not lower the replay-defence floor";
   }
   auto log = load_rollback_log(layout.rollback_log_path());
   ASSERT_TRUE(std::holds_alternative<std::vector<RollbackEvent>>(log));
   const auto& evs = std::get<std::vector<RollbackEvent>>(log);
   ASSERT_EQ(evs.size(), 3u);
-  EXPECT_EQ(evs[2].type,         RollbackEventType::Rollback);
+  EXPECT_EQ(evs[2].type, RollbackEventType::Rollback);
   EXPECT_EQ(evs[2].from_version, "0.9.0");
-  EXPECT_EQ(evs[2].to_version,   "0.8.5");
+  EXPECT_EQ(evs[2].to_version, "0.8.5");
 }
 
 TEST_F(UpdateApplyRollbackCli, ApplyRejectsArtifactSha256Mismatch) {

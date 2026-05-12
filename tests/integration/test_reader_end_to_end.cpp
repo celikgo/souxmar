@@ -11,16 +11,6 @@
 // produced StageOutput is a Mesh, the downstream postproc + writer
 // stages see it correctly, and the VTU lands on disk.
 
-#include <gtest/gtest.h>
-
-#include <filesystem>
-#include <fstream>
-#include <memory>
-#include <sstream>
-#include <string>
-#include <utility>
-#include <variant>
-
 #include "souxmar/pipeline/cache.h"
 #include "souxmar/pipeline/parser.h"
 #include "souxmar/pipeline/registry_dispatcher.h"
@@ -30,6 +20,15 @@
 #include "souxmar/plugin/registry.h"
 
 #include "test_config.h"
+#include <gtest/gtest.h>
+
+#include <filesystem>
+#include <fstream>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <variant>
 
 namespace fs = std::filesystem;
 using namespace souxmar;
@@ -125,11 +124,12 @@ solid cube
 endsolid cube
 )stl";
 
-plugin::LoadedPlugin load_by_id(plugin::PluginLoader&             loader,
-                                const plugin::DiscoveryReport&    report,
-                                const std::string&                want_id) {
+plugin::LoadedPlugin load_by_id(plugin::PluginLoader& loader,
+                                const plugin::DiscoveryReport& report,
+                                const std::string& want_id) {
   for (const auto& d : report.loaded) {
-    if (d.manifest.id != want_id) continue;
+    if (d.manifest.id != want_id)
+      continue;
     auto r = loader.load(d);
     if (auto* e = std::get_if<plugin::LoadError>(&r)) {
       throw std::runtime_error("load failed for " + want_id + ": " + e->message);
@@ -142,14 +142,13 @@ plugin::LoadedPlugin load_by_id(plugin::PluginLoader&             loader,
 }  // namespace
 
 TEST(ReaderEndToEnd, StlReaderThenWriterProducesVtu) {
-  const fs::path plugins_root =
-      fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
+  const fs::path plugins_root = fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
   const auto discovery = plugin::discover_plugins({plugins_root});
   ASSERT_FALSE(discovery.loaded.empty()) << plugins_root;
 
-  plugin::Registry      registry;
-  plugin::PluginLoader  loader(registry, "test-host/0.0.0");
-  auto _stl    = load_by_id(loader, discovery, "dev.souxmar.examples.stl-reader");
+  plugin::Registry registry;
+  plugin::PluginLoader loader(registry, "test-host/0.0.0");
+  auto _stl = load_by_id(loader, discovery, "dev.souxmar.examples.stl-reader");
   auto _writer = load_by_id(loader, discovery, "dev.souxmar.examples.vtu-writer");
 
   ASSERT_NE(registry.find_reader("reader.stl"), nullptr);
@@ -182,20 +181,19 @@ TEST(ReaderEndToEnd, StlReaderThenWriterProducesVtu) {
   const auto& p = std::get<pipeline::Pipeline>(parse_result);
 
   pipeline::RegistryDispatcher dispatcher(registry);
-  pipeline::Cache              cache;
+  pipeline::Cache cache;
   auto run = pipeline::run_pipeline(p, dispatcher, cache);
   ASSERT_EQ(run.status, pipeline::RunResult::Status::Success);
   ASSERT_EQ(run.stage_results.size(), 2u);
   for (const auto& sr : run.stage_results) {
     EXPECT_EQ(sr.status, pipeline::StageRunResult::Status::Executed)
-        << "stage '" << sr.stage_id << "' did not execute: "
-        << (sr.error ? sr.error->message : std::string{"(no error)"});
+        << "stage '" << sr.stage_id
+        << "' did not execute: " << (sr.error ? sr.error->message : std::string{"(no error)"});
   }
 
   // Reader output is a Mesh; verify it carries the deduplicated cube.
   ASSERT_NE(run.outputs.find("read"), run.outputs.end());
-  const auto* read_out = static_cast<const pipeline::StageOutput*>(
-      run.outputs["read"].get());
+  const auto* read_out = static_cast<const pipeline::StageOutput*>(run.outputs["read"].get());
   ASSERT_NE(read_out, nullptr);
   ASSERT_EQ(read_out->kind, pipeline::StageOutput::Kind::Mesh);
   ASSERT_NE(read_out->mesh, nullptr);
@@ -206,15 +204,14 @@ TEST(ReaderEndToEnd, StlReaderThenWriterProducesVtu) {
   std::error_code ec;
   fs::remove(stl_path, ec);
   fs::remove(vtu_path, ec);
-  fs::remove(tmp,      ec);
+  fs::remove(tmp, ec);
 }
 
 TEST(ReaderEndToEnd, MissingPathInputIsRejected) {
-  const fs::path plugins_root =
-      fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
+  const fs::path plugins_root = fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
   const auto discovery = plugin::discover_plugins({plugins_root});
-  plugin::Registry      registry;
-  plugin::PluginLoader  loader(registry, "test-host/0.0.0");
+  plugin::Registry registry;
+  plugin::PluginLoader loader(registry, "test-host/0.0.0");
   auto _stl = load_by_id(loader, discovery, "dev.souxmar.examples.stl-reader");
 
   // Pipeline references reader.stl but forgets the required `path` input.
@@ -232,11 +229,10 @@ stages:
   EXPECT_EQ(run.status, pipeline::RunResult::Status::StageFailed);
   bool saw_path_error = false;
   for (const auto& sr : run.stage_results) {
-    if (sr.status == pipeline::StageRunResult::Status::Failed &&
-        sr.error && sr.error->message.find("path") != std::string::npos) {
+    if (sr.status == pipeline::StageRunResult::Status::Failed && sr.error
+        && sr.error->message.find("path") != std::string::npos) {
       saw_path_error = true;
     }
   }
-  EXPECT_TRUE(saw_path_error)
-      << "expected reader dispatch to reject the missing `path` input";
+  EXPECT_TRUE(saw_path_error) << "expected reader dispatch to reject the missing `path` input";
 }

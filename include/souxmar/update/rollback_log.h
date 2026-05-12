@@ -48,46 +48,42 @@ namespace souxmar::update {
 inline constexpr std::uint32_t kRollbackLogSchemaV1 = 1;
 
 enum class RollbackEventType : std::uint8_t {
-  Apply    = 0,
+  Apply = 0,
   Rollback = 1,
 };
 
 [[nodiscard]] std::string_view to_string(RollbackEventType) noexcept;
 
 struct RollbackEvent {
-  std::string         timestamp;          // RFC-3339 UTC
-  RollbackEventType   type = RollbackEventType::Apply;
-  std::string         from_version;
-  std::string         to_version;
-  std::string         artifact_sha256;    // empty for rollback events
-  std::string         public_key_id;      // empty for rollback events
+  std::string timestamp;  // RFC-3339 UTC
+  RollbackEventType type = RollbackEventType::Apply;
+  std::string from_version;
+  std::string to_version;
+  std::string artifact_sha256;  // empty for rollback events
+  std::string public_key_id;    // empty for rollback events
 };
 
 struct RollbackLogLoadError {
   std::string message;
 };
 
-using RollbackLogLoadResult =
-    std::variant<std::vector<RollbackEvent>, RollbackLogLoadError>;
+using RollbackLogLoadResult = std::variant<std::vector<RollbackEvent>, RollbackLogLoadError>;
 
 // Load + parse. Missing file => empty vector (not an error). Schema
 // mismatch / malformed TOML => load error.
-[[nodiscard]] RollbackLogLoadResult
-load_rollback_log(const std::filesystem::path& path);
+[[nodiscard]] RollbackLogLoadResult load_rollback_log(const std::filesystem::path& path);
 
 // Render a vector of events to its canonical TOML string. Field
 // order is fixed for diff-friendliness across releases. Exposed for
 // unit tests; production callers use append_rollback_event.
-[[nodiscard]] std::string
-render_rollback_log(const std::vector<RollbackEvent>& events);
+[[nodiscard]] std::string render_rollback_log(const std::vector<RollbackEvent>& events);
 
 // Atomic append: read full file (if exists) + push_back(new_event) +
 // write to <path>.tmp.<rand> + rename. Returns false on any I/O
 // failure; caller logs and proceeds — a failed append is a
 // diagnostic-only loss, the install state itself is fine.
-[[nodiscard]] bool
-append_rollback_event(const std::filesystem::path& path,
-                      const RollbackEvent&          event);
+[[nodiscard]] bool append_rollback_event(const std::filesystem::path& path,
+                                         const RollbackEvent& event);
 
 // Find the most-recent rollback target — used by `souxmar update
 // rollback` to determine which version to revert to. The algorithm
@@ -96,8 +92,7 @@ append_rollback_event(const std::filesystem::path& path,
 // here); the `from_version` of that event is what rollback targets.
 // Returns empty string if no such event is found (nothing to roll
 // back to).
-[[nodiscard]] std::string
-find_rollback_target(const std::vector<RollbackEvent>& events,
-                     const std::string&                current_version);
+[[nodiscard]] std::string find_rollback_target(const std::vector<RollbackEvent>& events,
+                                               const std::string& current_version);
 
 }  // namespace souxmar::update

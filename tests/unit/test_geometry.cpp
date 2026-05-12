@@ -14,9 +14,9 @@ TEST(Geometry, FreshIsEmpty) {
   Geometry g;
   EXPECT_TRUE(g.empty());
   EXPECT_EQ(g.num_vertices(), 0u);
-  EXPECT_EQ(g.num_edges(),    0u);
-  EXPECT_EQ(g.num_faces(),    0u);
-  EXPECT_EQ(g.num_solids(),   0u);
+  EXPECT_EQ(g.num_edges(), 0u);
+  EXPECT_EQ(g.num_faces(), 0u);
+  EXPECT_EQ(g.num_solids(), 0u);
 }
 
 TEST(Geometry, AddVerticesReturnsSequentialIndices) {
@@ -52,8 +52,8 @@ TEST(Geometry, AddNonVertexEntities) {
   EXPECT_EQ(e.value, 0u);
   EXPECT_EQ(f.value, 0u);
   EXPECT_EQ(s.value, 0u);
-  EXPECT_EQ(g.num_edges(),  1u);
-  EXPECT_EQ(g.num_faces(),  1u);
+  EXPECT_EQ(g.num_edges(), 1u);
+  EXPECT_EQ(g.num_faces(), 1u);
   EXPECT_EQ(g.num_solids(), 1u);
 }
 
@@ -75,28 +75,28 @@ TEST(Geometry, TagAndNameRoundtrip) {
 
 TEST(Geometry, SetTagOnMissingRefThrows) {
   Geometry g;
-  EXPECT_THROW(g.set_tag(EntityRef{EntityKind::Face, 0}, EntityTag{1}),
-               std::out_of_range);
+  EXPECT_THROW(g.set_tag(EntityRef{EntityKind::Face, 0}, EntityTag{1}), std::out_of_range);
 }
 
 TEST(Geometry, BoundingBoxOfEmptyIsZero) {
   Geometry g;
   const auto box = g.bounding_box();
-  for (auto v : box) EXPECT_DOUBLE_EQ(v, 0.0);
+  for (auto v : box)
+    EXPECT_DOUBLE_EQ(v, 0.0);
 }
 
 TEST(Geometry, BoundingBoxFromVertices) {
   Geometry g;
   g.add_vertex({-1, -2, -3});
-  g.add_vertex({ 4,  5,  6});
-  g.add_vertex({ 0,  0,  0});
+  g.add_vertex({4, 5, 6});
+  g.add_vertex({0, 0, 0});
   const auto box = g.bounding_box();
   EXPECT_DOUBLE_EQ(box[0], -1);
   EXPECT_DOUBLE_EQ(box[1], -2);
   EXPECT_DOUBLE_EQ(box[2], -3);
-  EXPECT_DOUBLE_EQ(box[3],  4);
-  EXPECT_DOUBLE_EQ(box[4],  5);
-  EXPECT_DOUBLE_EQ(box[5],  6);
+  EXPECT_DOUBLE_EQ(box[3], 4);
+  EXPECT_DOUBLE_EQ(box[4], 5);
+  EXPECT_DOUBLE_EQ(box[5], 6);
 }
 
 TEST(Geometry, MoveTransfersImpl) {
@@ -124,8 +124,14 @@ TEST(Geometry, AdapterDataReplacementFiresOldDeleter) {
   static int delete_count = 0;
   delete_count = 0;
   Geometry g;
-  g.set_adapter_data(new int{1}, [](void* p) { delete static_cast<int*>(p); ++delete_count; });
-  g.set_adapter_data(new int{2}, [](void* p) { delete static_cast<int*>(p); ++delete_count; });
+  g.set_adapter_data(new int{1}, [](void* p) {
+    delete static_cast<int*>(p);
+    ++delete_count;
+  });
+  g.set_adapter_data(new int{2}, [](void* p) {
+    delete static_cast<int*>(p);
+    ++delete_count;
+  });
   EXPECT_EQ(delete_count, 1);  // only the first deleter has fired so far
 }
 

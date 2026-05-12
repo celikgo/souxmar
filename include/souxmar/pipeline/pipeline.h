@@ -9,22 +9,22 @@
 
 #pragma once
 
+#include "souxmar/pipeline/value.h"
+
 #include <cstdint>
 #include <string>
 #include <vector>
 
-#include "souxmar/pipeline/value.h"
-
 namespace souxmar::pipeline {
 
 struct Stage {
-  std::string id;        // unique within the pipeline; used by StageRef
-  std::string plugin;    // capability id, e.g. "mesher.tetra.native"
-  Value       input;     // a Map; per-plugin contract decides keys
+  std::string id;      // unique within the pipeline; used by StageRef
+  std::string plugin;  // capability id, e.g. "mesher.tetra.native"
+  Value input;         // a Map; per-plugin contract decides keys
 };
 
 struct Pipeline {
-  std::int32_t       version = 1;
+  std::int32_t version = 1;
   std::vector<Stage> stages;
 };
 

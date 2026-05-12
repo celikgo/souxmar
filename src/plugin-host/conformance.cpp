@@ -2,6 +2,12 @@
 
 #include "souxmar/plugin/conformance.h"
 
+#include "souxmar/plugin/loader.h"
+#include "souxmar/plugin/manifest.h"
+#include "souxmar/plugin/registry.h"
+
+#include "souxmar-c/abi.h"
+
 #include <fmt/core.h>
 #include <fmt/ranges.h>
 
@@ -14,20 +20,18 @@
 #include <utility>
 #include <variant>
 
-#include "souxmar-c/abi.h"
-#include "souxmar/plugin/loader.h"
-#include "souxmar/plugin/manifest.h"
-#include "souxmar/plugin/registry.h"
-
 namespace souxmar::plugin {
 
 namespace fs = std::filesystem;
 
 std::string_view to_string(ConformanceOutcome o) noexcept {
   switch (o) {
-    case ConformanceOutcome::Pass: return "PASS";
-    case ConformanceOutcome::Fail: return "FAIL";
-    case ConformanceOutcome::Skip: return "SKIP";
+    case ConformanceOutcome::Pass:
+      return "PASS";
+    case ConformanceOutcome::Fail:
+      return "FAIL";
+    case ConformanceOutcome::Skip:
+      return "SKIP";
   }
   return "?";
 }
@@ -60,14 +64,14 @@ struct LoadAttribution {
   std::string c003;  // dlopen / LoadLibrary verdict
   std::string c004;  // symbol resolution verdict
   std::string c005;  // registration verdict
-  bool        loaded = false;
+  bool loaded = false;
 };
 
 LoadAttribution attribute_load_error(const std::string& message) {
   LoadAttribution a;
-  if (message.find("dlopen") != std::string::npos ||
-      message.find("LoadLibraryExW") != std::string::npos ||
-      message.find("LoadLibrary") != std::string::npos) {
+  if (message.find("dlopen") != std::string::npos
+      || message.find("LoadLibraryExW") != std::string::npos
+      || message.find("LoadLibrary") != std::string::npos) {
     a.c003 = message;
     return a;
   }
@@ -97,30 +101,34 @@ std::vector<ConformanceCheck> all_checks() {
 
 bool ConformanceReport::all_passed() const noexcept {
   for (const auto& r : results) {
-    if (r.outcome == ConformanceOutcome::Fail) return false;
+    if (r.outcome == ConformanceOutcome::Fail)
+      return false;
   }
   // A clean run is one where everything Passed (Skips are inconclusive
   // and indicate an earlier failure). Treat any Skip as not-passed too.
   for (const auto& r : results) {
-    if (r.outcome != ConformanceOutcome::Pass) return false;
+    if (r.outcome != ConformanceOutcome::Pass)
+      return false;
   }
   return true;
 }
 
 std::size_t ConformanceReport::pass_count() const noexcept {
-  return static_cast<std::size_t>(std::count_if(
-      results.begin(), results.end(),
-      [](const auto& r) { return r.outcome == ConformanceOutcome::Pass; }));
+  return static_cast<std::size_t>(std::count_if(results.begin(), results.end(), [](const auto& r) {
+    return r.outcome == ConformanceOutcome::Pass;
+  }));
 }
+
 std::size_t ConformanceReport::fail_count() const noexcept {
-  return static_cast<std::size_t>(std::count_if(
-      results.begin(), results.end(),
-      [](const auto& r) { return r.outcome == ConformanceOutcome::Fail; }));
+  return static_cast<std::size_t>(std::count_if(results.begin(), results.end(), [](const auto& r) {
+    return r.outcome == ConformanceOutcome::Fail;
+  }));
 }
+
 std::size_t ConformanceReport::skip_count() const noexcept {
-  return static_cast<std::size_t>(std::count_if(
-      results.begin(), results.end(),
-      [](const auto& r) { return r.outcome == ConformanceOutcome::Skip; }));
+  return static_cast<std::size_t>(std::count_if(results.begin(), results.end(), [](const auto& r) {
+    return r.outcome == ConformanceOutcome::Skip;
+  }));
 }
 
 // ============================================================================
@@ -130,9 +138,9 @@ std::size_t ConformanceReport::skip_count() const noexcept {
 namespace {
 
 void add_result(ConformanceReport& report,
-                std::string_view   id,
+                std::string_view id,
                 ConformanceOutcome outcome,
-                std::string        detail = {}) {
+                std::string detail = {}) {
   report.results.push_back({std::string(id), outcome, std::move(detail)});
 }
 
@@ -141,17 +149,18 @@ void skip_remaining(ConformanceReport& report,
                     std::initializer_list<const char*> ids,
                     std::string_view predecessor) {
   for (const auto* id : ids) {
-    add_result(report, id, ConformanceOutcome::Skip,
+    add_result(report,
+               id,
+               ConformanceOutcome::Skip,
                fmt::format("prior check {} did not pass", predecessor));
   }
 }
 
 }  // namespace
 
-ConformanceReport run_conformance(const DiscoveredPlugin& plugin,
-                                  std::string             host_version) {
+ConformanceReport run_conformance(const DiscoveredPlugin& plugin, std::string host_version) {
   ConformanceReport report;
-  report.plugin_id     = plugin.manifest.id;
+  report.plugin_id = plugin.manifest.id;
   report.manifest_path = plugin.manifest_path;
   report.results.reserve(std::size(kChecks));
 
@@ -159,10 +168,14 @@ ConformanceReport run_conformance(const DiscoveredPlugin& plugin,
   if (plugin.manifest.abi == SOUXMAR_ABI_VERSION_MAJOR) {
     add_result(report, "C001", ConformanceOutcome::Pass);
   } else {
-    add_result(report, "C001", ConformanceOutcome::Fail,
-               fmt::format("manifest abi = {}, host expects {}",
-                           plugin.manifest.abi, SOUXMAR_ABI_VERSION_MAJOR));
-    skip_remaining(report, {"C002","C003","C004","C005","C006","C007","C008","C009","C010"}, "C001");
+    add_result(
+        report,
+        "C001",
+        ConformanceOutcome::Fail,
+        fmt::format(
+            "manifest abi = {}, host expects {}", plugin.manifest.abi, SOUXMAR_ABI_VERSION_MAJOR));
+    skip_remaining(
+        report, {"C002", "C003", "C004", "C005", "C006", "C007", "C008", "C009", "C010"}, "C001");
     return report;
   }
 
@@ -172,9 +185,12 @@ ConformanceReport run_conformance(const DiscoveredPlugin& plugin,
   if (binary_exists) {
     add_result(report, "C002", ConformanceOutcome::Pass);
   } else {
-    add_result(report, "C002", ConformanceOutcome::Fail,
+    add_result(report,
+               "C002",
+               ConformanceOutcome::Fail,
                fmt::format("binary not found at {}", plugin.binary_path.string()));
-    skip_remaining(report, {"C003","C004","C005","C006","C007","C008","C009","C010"}, "C002");
+    skip_remaining(
+        report, {"C003", "C004", "C005", "C006", "C007", "C008", "C009", "C010"}, "C002");
     return report;
   }
 
@@ -185,25 +201,25 @@ ConformanceReport run_conformance(const DiscoveredPlugin& plugin,
   // The downside: a plugin that fails registration cleanly still shows
   // C003 + C004 as Pass — but that's the correct semantics, those
   // checks _did_ pass.
-  Registry      registry;
-  PluginLoader  loader(registry, host_version);
+  Registry registry;
+  PluginLoader loader(registry, host_version);
   auto load_result = loader.load(plugin);
 
   if (auto* err = std::get_if<LoadError>(&load_result)) {
     const auto attr = attribute_load_error(err->message);
     if (!attr.c003.empty()) {
       add_result(report, "C003", ConformanceOutcome::Fail, attr.c003);
-      skip_remaining(report, {"C004","C005","C006","C007","C008","C009","C010"}, "C003");
+      skip_remaining(report, {"C004", "C005", "C006", "C007", "C008", "C009", "C010"}, "C003");
     } else if (!attr.c004.empty()) {
       add_result(report, "C003", ConformanceOutcome::Pass);
       add_result(report, "C004", ConformanceOutcome::Fail, attr.c004);
-      skip_remaining(report, {"C005","C006","C007","C008","C009","C010"}, "C004");
+      skip_remaining(report, {"C005", "C006", "C007", "C008", "C009", "C010"}, "C004");
     } else {
       add_result(report, "C003", ConformanceOutcome::Pass);
       add_result(report, "C004", ConformanceOutcome::Pass);
-      add_result(report, "C005", ConformanceOutcome::Fail,
-                 attr.c005.empty() ? err->message : attr.c005);
-      skip_remaining(report, {"C006","C007","C008","C009","C010"}, "C005");
+      add_result(
+          report, "C005", ConformanceOutcome::Fail, attr.c005.empty() ? err->message : attr.c005);
+      skip_remaining(report, {"C006", "C007", "C008", "C009", "C010"}, "C005");
     }
     return report;
   }
@@ -229,14 +245,17 @@ ConformanceReport run_conformance(const DiscoveredPlugin& plugin,
   {
     std::vector<std::string> missing;
     for (const auto& id : announced) {
-      if (!registered.contains(id)) missing.push_back(id);
+      if (!registered.contains(id))
+        missing.push_back(id);
     }
     if (missing.empty()) {
       add_result(report, "C006", ConformanceOutcome::Pass);
     } else {
-      add_result(report, "C006", ConformanceOutcome::Fail,
-                 "manifest announced capabilities that were not registered: " +
-                     fmt::format("{}", fmt::join(missing, ", ")));
+      add_result(report,
+                 "C006",
+                 ConformanceOutcome::Fail,
+                 "manifest announced capabilities that were not registered: "
+                     + fmt::format("{}", fmt::join(missing, ", ")));
     }
   }
 
@@ -244,14 +263,17 @@ ConformanceReport run_conformance(const DiscoveredPlugin& plugin,
   {
     std::vector<std::string> extras;
     for (const auto& id : registered) {
-      if (!announced.contains(id)) extras.push_back(id);
+      if (!announced.contains(id))
+        extras.push_back(id);
     }
     if (extras.empty()) {
       add_result(report, "C007", ConformanceOutcome::Pass);
     } else {
-      add_result(report, "C007", ConformanceOutcome::Fail,
-                 "registered capabilities not announced in the manifest: " +
-                     fmt::format("{}", fmt::join(extras, ", ")));
+      add_result(report,
+                 "C007",
+                 ConformanceOutcome::Fail,
+                 "registered capabilities not announced in the manifest: "
+                     + fmt::format("{}", fmt::join(extras, ", ")));
     }
   }
 
@@ -268,15 +290,15 @@ ConformanceReport run_conformance(const DiscoveredPlugin& plugin,
       auto m = registry.find_threading(id);
       if (!m.has_value() || *m != plugin.manifest.threading) {
         all_match = false;
-        mismatch_detail = fmt::format(
-            "capability '{}' threading = {}, manifest declared {}",
-            id,
-            m.has_value() ? static_cast<int>(*m) : -1,
-            static_cast<int>(plugin.manifest.threading));
+        mismatch_detail = fmt::format("capability '{}' threading = {}, manifest declared {}",
+                                      id,
+                                      m.has_value() ? static_cast<int>(*m) : -1,
+                                      static_cast<int>(plugin.manifest.threading));
         break;
       }
     }
-    add_result(report, "C008",
+    add_result(report,
+               "C008",
                all_match ? ConformanceOutcome::Pass : ConformanceOutcome::Fail,
                all_match ? "" : mismatch_detail);
   }
@@ -305,7 +327,9 @@ ConformanceReport run_conformance(const DiscoveredPlugin& plugin,
       // tests cover that case.
       add_result(report, "C009", ConformanceOutcome::Pass);
     } else {
-      add_result(report, "C009", ConformanceOutcome::Fail,
+      add_result(report,
+                 "C009",
+                 ConformanceOutcome::Fail,
                  "registry still contains capabilities owned by this plugin "
                  "after LoadedPlugin destruction");
       skip_remaining(report, {"C010"}, "C009");
@@ -322,8 +346,8 @@ ConformanceReport run_conformance(const DiscoveredPlugin& plugin,
     bool all_clean = true;
     std::string detail;
     for (int i = 0; i < 3; ++i) {
-      Registry      r;
-      PluginLoader  l(r, host_version);
+      Registry r;
+      PluginLoader l(r, host_version);
       auto lr = l.load(plugin);
       if (auto* lerr = std::get_if<LoadError>(&lr)) {
         all_clean = false;
@@ -336,24 +360,28 @@ ConformanceReport run_conformance(const DiscoveredPlugin& plugin,
         // cycle — a plugin that has internal state could regress between
         // cycles, and we'd rather catch it here than in production.
         std::set<std::string> reg;
-        for (const auto& id : r.list_capabilities()) reg.insert(id);
+        for (const auto& id : r.list_capabilities())
+          reg.insert(id);
         if (reg != announced) {
           all_clean = false;
           detail = fmt::format(
               "cycle {}/3 registered a different capability set "
-              "({} vs declared {})", i + 1, reg.size(), announced.size());
+              "({} vs declared {})",
+              i + 1,
+              reg.size(),
+              announced.size());
           break;
         }
       }
       if (r.size() != 0) {
         all_clean = false;
         detail = fmt::format(
-            "cycle {}/3 left {} capabilities in the registry after unload",
-            i + 1, r.size());
+            "cycle {}/3 left {} capabilities in the registry after unload", i + 1, r.size());
         break;
       }
     }
-    add_result(report, "C010",
+    add_result(report,
+               "C010",
                all_clean ? ConformanceOutcome::Pass : ConformanceOutcome::Fail,
                all_clean ? "" : detail);
   }

@@ -33,20 +33,19 @@ souxmar       = ">=1.0,<2.0"
 TEST(Manifest, ValidParse) {
   auto result = parse_manifest(kValidManifest);
   ASSERT_TRUE(std::holds_alternative<Manifest>(result))
-      << "expected success but got: "
-      << std::get<ParseError>(result).message;
+      << "expected success but got: " << std::get<ParseError>(result).message;
   const auto& m = std::get<Manifest>(result);
-  EXPECT_EQ(m.id,                       "com.example.netgen-mesher");
-  EXPECT_EQ(m.name,                     "Netgen-backed Tetra Mesher");
-  EXPECT_EQ(m.version,                  "0.3.1");
-  EXPECT_EQ(m.abi,                      1);
-  EXPECT_EQ(m.license,                  "Apache-2.0");
-  EXPECT_EQ(m.homepage,                 "https://example.com/netgen-mesher");
-  EXPECT_EQ(m.binary_file,              "libnetgen_mesher.so");
-  EXPECT_EQ(m.threading,                ThreadingModel::InternalParallel);
+  EXPECT_EQ(m.id, "com.example.netgen-mesher");
+  EXPECT_EQ(m.name, "Netgen-backed Tetra Mesher");
+  EXPECT_EQ(m.version, "0.3.1");
+  EXPECT_EQ(m.abi, 1);
+  EXPECT_EQ(m.license, "Apache-2.0");
+  EXPECT_EQ(m.homepage, "https://example.com/netgen-mesher");
+  EXPECT_EQ(m.binary_file, "libnetgen_mesher.so");
+  EXPECT_EQ(m.threading, ThreadingModel::InternalParallel);
   EXPECT_EQ(m.souxmar_version_constraint, ">=1.0,<2.0");
-  ASSERT_EQ(m.capabilities.size(),      1u);
-  EXPECT_EQ(m.capabilities[0],          "mesher.tetra.netgen");
+  ASSERT_EQ(m.capabilities.size(), 1u);
+  EXPECT_EQ(m.capabilities[0], "mesher.tetra.netgen");
 }
 
 TEST(Manifest, MultipleCapabilities) {
@@ -109,8 +108,7 @@ provides = []
 )";
   auto r = parse_manifest(toml);
   ASSERT_TRUE(std::holds_alternative<ParseError>(r));
-  EXPECT_NE(std::get<ParseError>(r).message.find("at least one"),
-            std::string::npos);
+  EXPECT_NE(std::get<ParseError>(r).message.find("at least one"), std::string::npos);
 }
 
 TEST(Manifest, UnknownThreadingModelRejected) {
@@ -133,8 +131,7 @@ model = "nonsense"
 )";
   auto r = parse_manifest(toml);
   ASSERT_TRUE(std::holds_alternative<ParseError>(r));
-  EXPECT_NE(std::get<ParseError>(r).message.find("threading"),
-            std::string::npos);
+  EXPECT_NE(std::get<ParseError>(r).message.find("threading"), std::string::npos);
 }
 
 TEST(Manifest, AbiVersionMustBeOneInV1xHost) {
@@ -154,8 +151,7 @@ provides = ["mesher.x"]
 )";
   auto r = parse_manifest(toml);
   ASSERT_TRUE(std::holds_alternative<ParseError>(r));
-  EXPECT_NE(std::get<ParseError>(r).message.find("ABI v1"),
-            std::string::npos);
+  EXPECT_NE(std::get<ParseError>(r).message.find("ABI v1"), std::string::npos);
 }
 
 TEST(Manifest, MalformedTomlReportsLine) {
@@ -186,8 +182,8 @@ provides = ["mesher.x"]
 }
 
 TEST(Manifest, ThreadingStringRoundtrip) {
-  EXPECT_EQ(to_string(ThreadingModel::Reentrant),       "reentrant");
-  EXPECT_EQ(to_string(ThreadingModel::SingleThreaded),  "single-threaded");
+  EXPECT_EQ(to_string(ThreadingModel::Reentrant), "reentrant");
+  EXPECT_EQ(to_string(ThreadingModel::SingleThreaded), "single-threaded");
   EXPECT_EQ(to_string(ThreadingModel::InternalParallel), "internal-parallel");
   EXPECT_EQ(threading_from_string("reentrant").value(), ThreadingModel::Reentrant);
   EXPECT_EQ(threading_from_string("single-threaded").value(), ThreadingModel::SingleThreaded);
@@ -201,17 +197,18 @@ TEST(Manifest, ThreadingStringRoundtrip) {
 
 TEST(ManifestRejection, RejectionTokensAreStable) {
   // The audit log + tooling depend on these exact strings.
-  EXPECT_EQ(to_string(ManifestRejection::Ok),                         "ok");
-  EXPECT_EQ(to_string(ManifestRejection::TomlSyntax),                 "toml_syntax");
-  EXPECT_EQ(to_string(ManifestRejection::MissingField),               "missing_field");
-  EXPECT_EQ(to_string(ManifestRejection::WrongType),                  "wrong_type");
-  EXPECT_EQ(to_string(ManifestRejection::AbiUnsupported),             "abi_unsupported");
-  EXPECT_EQ(to_string(ManifestRejection::EmptyCapabilities),          "empty_capabilities");
-  EXPECT_EQ(to_string(ManifestRejection::UnknownThreading),           "unknown_threading");
-  EXPECT_EQ(to_string(ManifestRejection::InvalidCapabilityNamespace), "invalid_capability_namespace");
-  EXPECT_EQ(to_string(ManifestRejection::InvalidPluginId),            "invalid_plugin_id");
-  EXPECT_EQ(to_string(ManifestRejection::InvalidVersion),             "invalid_version");
-  EXPECT_EQ(to_string(ManifestRejection::FileIo),                     "file_io");
+  EXPECT_EQ(to_string(ManifestRejection::Ok), "ok");
+  EXPECT_EQ(to_string(ManifestRejection::TomlSyntax), "toml_syntax");
+  EXPECT_EQ(to_string(ManifestRejection::MissingField), "missing_field");
+  EXPECT_EQ(to_string(ManifestRejection::WrongType), "wrong_type");
+  EXPECT_EQ(to_string(ManifestRejection::AbiUnsupported), "abi_unsupported");
+  EXPECT_EQ(to_string(ManifestRejection::EmptyCapabilities), "empty_capabilities");
+  EXPECT_EQ(to_string(ManifestRejection::UnknownThreading), "unknown_threading");
+  EXPECT_EQ(to_string(ManifestRejection::InvalidCapabilityNamespace),
+            "invalid_capability_namespace");
+  EXPECT_EQ(to_string(ManifestRejection::InvalidPluginId), "invalid_plugin_id");
+  EXPECT_EQ(to_string(ManifestRejection::InvalidVersion), "invalid_version");
+  EXPECT_EQ(to_string(ManifestRejection::FileIo), "file_io");
 }
 
 TEST(ManifestRejection, CodeFlowsThroughMissingField) {
@@ -231,7 +228,7 @@ provides = ["mesher.x"]
   auto r = parse_manifest(toml);
   ASSERT_TRUE(std::holds_alternative<ParseError>(r));
   const auto& e = std::get<ParseError>(r);
-  EXPECT_EQ(e.code,  ManifestRejection::MissingField);
+  EXPECT_EQ(e.code, ManifestRejection::MissingField);
   EXPECT_EQ(e.field, "plugin.id");
 }
 
@@ -253,7 +250,7 @@ provides = ["mesher.x"]
   auto r = parse_manifest(toml);
   ASSERT_TRUE(std::holds_alternative<ParseError>(r));
   const auto& e = std::get<ParseError>(r);
-  EXPECT_EQ(e.code,  ManifestRejection::WrongType);
+  EXPECT_EQ(e.code, ManifestRejection::WrongType);
   EXPECT_EQ(e.field, "plugin.abi");
 }
 
@@ -337,8 +334,7 @@ provides = ["garbage.foo"]
 )";
   auto r = parse_manifest(toml);
   ASSERT_TRUE(std::holds_alternative<ParseError>(r));
-  EXPECT_EQ(std::get<ParseError>(r).code,
-            ManifestRejection::InvalidCapabilityNamespace);
+  EXPECT_EQ(std::get<ParseError>(r).code, ManifestRejection::InvalidCapabilityNamespace);
 }
 
 TEST(ManifestRejection, InvalidPluginIdRejected) {
@@ -416,7 +412,7 @@ provides = ["postproc.scalar_magnitude"]
   ASSERT_TRUE(std::holds_alternative<Manifest>(r))
       << "expected success but got: " << std::get<ParseError>(r).message;
   const auto& m = std::get<Manifest>(r);
-  EXPECT_EQ(m.description,   "Does the thing.");
+  EXPECT_EQ(m.description, "Does the thing.");
   EXPECT_EQ(m.documentation, "https://example.dev/thing");
   ASSERT_EQ(m.tags.size(), 2u);
   EXPECT_EQ(m.tags[0], "mesh");

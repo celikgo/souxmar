@@ -31,9 +31,9 @@
 namespace souxmar::core::pvd {
 
 struct Entry {
-  double      timestep;   // value from the timestep attribute
-  std::string file;       // value from the file attribute (relative path
-                          // as written; caller resolves against pvd dir)
+  double timestep;   // value from the timestep attribute
+  std::string file;  // value from the file attribute (relative path
+                     // as written; caller resolves against pvd dir)
 };
 
 struct ParseResult {
@@ -41,7 +41,7 @@ struct ParseResult {
   // Empty error means success. Diagnostic messages are caller-readable;
   // they intentionally don't carry line numbers because the parser is
   // substring-based.
-  std::string        error;
+  std::string error;
 };
 
 // Parse PVD XML content. Returns ParseResult{entries, ""} on success;

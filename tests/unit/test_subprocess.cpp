@@ -7,12 +7,12 @@
 // the Windows-specific cases on POSIX; an equivalent suite runs on
 // the Windows leg of the CI matrix.
 
+#include "souxmar/plugin/subprocess.h"
+
 #include <gtest/gtest.h>
 
 #include <chrono>
 #include <string>
-
-#include "souxmar/plugin/subprocess.h"
 
 using namespace souxmar::plugin;
 using namespace std::chrono_literals;
@@ -88,7 +88,7 @@ TEST(Subprocess, StdinPassThrough) {
 TEST(Subprocess, EnvOverlay) {
   SubprocessOptions opts;
   opts.argv = {"/bin/sh", "-c", "printf '%s' \"$SOUXMAR_TEST_OVERLAY\""};
-  opts.env  = {{"SOUXMAR_TEST_OVERLAY", "yes-please"}};
+  opts.env = {{"SOUXMAR_TEST_OVERLAY", "yes-please"}};
   const auto r = run_subprocess(opts);
   ASSERT_TRUE(r.succeeded());
   EXPECT_EQ(r.stdout_bytes, "yes-please");
@@ -113,8 +113,7 @@ TEST(Subprocess, FatalSignalSurfacesAsSignal) {
   opts.argv = {"/bin/sh", "-c", "kill -SEGV $$"};
   const auto r = run_subprocess(opts);
   EXPECT_TRUE(r.ok);
-  EXPECT_NE(r.fatal_signal, 0)
-      << "expected SIGSEGV (or similar) to surface via fatal_signal";
+  EXPECT_NE(r.fatal_signal, 0) << "expected SIGSEGV (or similar) to surface via fatal_signal";
   EXPECT_FALSE(r.succeeded());
 }
 
@@ -133,8 +132,7 @@ TEST(FindExecutableOnPath, ResolvesShell) {
 }
 
 TEST(FindExecutableOnPath, MissingProgramReturnsNullopt) {
-  EXPECT_FALSE(
-      find_executable_on_path("this-program-does-not-exist-souxmar-test").has_value());
+  EXPECT_FALSE(find_executable_on_path("this-program-does-not-exist-souxmar-test").has_value());
 }
 
 #endif  // !_WIN32

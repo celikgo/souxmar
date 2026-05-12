@@ -6,6 +6,8 @@
 
 #include "souxmar/pipeline/parallel_runner.h"
 
+#include "souxmar/pipeline/dag.h"
+
 #include <fmt/core.h>
 
 #include <algorithm>
@@ -24,16 +26,14 @@
 #include <utility>
 #include <vector>
 
-#include "souxmar/pipeline/dag.h"
-
 namespace souxmar::pipeline {
 
 // ============================================================================
 // ReentrancyGuard
 // ============================================================================
 
-std::unique_lock<std::mutex>
-ReentrancyGuard::acquire(std::string_view plugin_id, plugin::ThreadingModel threading) {
+std::unique_lock<std::mutex> ReentrancyGuard::acquire(std::string_view plugin_id,
+                                                      plugin::ThreadingModel threading) {
   // Reentrant plugins do not need any lock — the runner can call them
   // concurrently as many times as it has workers.
   if (threading == plugin::ThreadingModel::Reentrant) {
@@ -47,7 +47,8 @@ ReentrancyGuard::acquire(std::string_view plugin_id, plugin::ThreadingModel thre
   {
     std::scoped_lock map_lock(map_mu_);
     auto& slot = plugin_mu_[std::string(plugin_id)];
-    if (!slot) slot = std::make_unique<std::mutex>();
+    if (!slot)
+      slot = std::make_unique<std::mutex>();
     per_plugin_mu = slot.get();
   }
   return std::unique_lock<std::mutex>(*per_plugin_mu);
@@ -62,12 +63,16 @@ namespace {
 // Walk a Value tree collecting every distinct StageRef target id.
 void collect_stage_refs(const Value& v, std::unordered_set<std::string>& out) {
   switch (v.kind()) {
-    case Value::Kind::Stage: out.insert(v.as_stage().stage_id); return;
+    case Value::Kind::Stage:
+      out.insert(v.as_stage().stage_id);
+      return;
     case Value::Kind::List:
-      for (const auto& item : v.as_list()) collect_stage_refs(item, out);
+      for (const auto& item : v.as_list())
+        collect_stage_refs(item, out);
       return;
     case Value::Kind::Map:
-      for (const auto& [_, child] : v.as_map()) collect_stage_refs(child, out);
+      for (const auto& [_, child] : v.as_map())
+        collect_stage_refs(child, out);
       return;
     default:
       return;
@@ -80,41 +85,43 @@ void collect_stage_refs(const Value& v, std::unordered_set<std::string>& out) {
 
 struct ParallelState {
   // Immutable post-setup ----------------------------------------------------
-  const Pipeline*                                              pipeline = nullptr;
-  IDispatcher*                                                 dispatcher = nullptr;
-  Cache*                                                       cache = nullptr;
-  const RunOptions*                                            options = nullptr;
-  std::vector<std::vector<std::string>>                        upstream_ids;   // direct upstream stage ids per stage
-  std::vector<std::vector<std::size_t>>                        dependents;     // downstream stage indices per stage
+  const Pipeline* pipeline = nullptr;
+  IDispatcher* dispatcher = nullptr;
+  Cache* cache = nullptr;
+  const RunOptions* options = nullptr;
+  std::vector<std::vector<std::string>> upstream_ids;  // direct upstream stage ids per stage
+  std::vector<std::vector<std::size_t>> dependents;    // downstream stage indices per stage
 
   // Mutable shared state — protected by mu --------------------------------
-  std::mutex                                                   mu;
-  std::condition_variable                                      cv;
-  std::deque<std::size_t>                                      ready;          // FIFO of stages whose in-degree hit 0
-  std::vector<std::size_t>                                     in_degree;      // remaining upstream count per stage
-  std::vector<std::optional<StageRunResult>>                   results;        // by stage index; nullopt = not started
-  std::vector<ContentHash>                                     stage_hashes;   // by stage index; written before in-degree decrement
-  std::map<std::string, std::shared_ptr<void>>                 outputs;        // by stage id (for downstream upstream_outputs ctx)
-  std::size_t                                                  completed_or_skipped = 0;
-  std::size_t                                                  in_flight = 0;
-  bool                                                         stop_requested = false;
+  std::mutex mu;
+  std::condition_variable cv;
+  std::deque<std::size_t> ready;                       // FIFO of stages whose in-degree hit 0
+  std::vector<std::size_t> in_degree;                  // remaining upstream count per stage
+  std::vector<std::optional<StageRunResult>> results;  // by stage index; nullopt = not started
+  std::vector<ContentHash> stage_hashes;  // by stage index; written before in-degree decrement
+  std::map<std::string, std::shared_ptr<void>>
+      outputs;  // by stage id (for downstream upstream_outputs ctx)
+  std::size_t completed_or_skipped = 0;
+  std::size_t in_flight = 0;
+  bool stop_requested = false;
 
   // Reentrancy guard is its own thread-safe object; lives outside `mu`.
-  ReentrancyGuard                                              guard;
+  ReentrancyGuard guard;
 };
 
 // Build the per-stage upstream hash list from the indices already populated
 // in state.stage_hashes. Reads stage_hashes without locking — see invariant
 // note in the worker loop below.
-std::vector<std::pair<std::string, ContentHash>>
-upstream_hashes_for(const ParallelState&                  state,
-                    const std::vector<std::string>&       upstream_ids,
-                    const std::unordered_map<std::string, std::size_t>& id_to_index) {
+std::vector<std::pair<std::string, ContentHash>> upstream_hashes_for(
+    const ParallelState& state,
+    const std::vector<std::string>& upstream_ids,
+    const std::unordered_map<std::string, std::size_t>& id_to_index) {
   std::vector<std::pair<std::string, ContentHash>> out;
   out.reserve(upstream_ids.size());
   for (const auto& id : upstream_ids) {
     auto it = id_to_index.find(id);
-    if (it == id_to_index.end()) continue;
+    if (it == id_to_index.end())
+      continue;
     out.emplace_back(id, state.stage_hashes[it->second]);
   }
   return out;
@@ -122,9 +129,9 @@ upstream_hashes_for(const ParallelState&                  state,
 
 // One worker iteration on a known-ready stage. Mutates shared state at the
 // end (results, outputs, in_degree, ready, completed_or_skipped, cv).
-void process_stage(ParallelState&                                       state,
-                   std::size_t                                          idx,
-                   const std::unordered_map<std::string, std::size_t>&  id_to_index) {
+void process_stage(ParallelState& state,
+                   std::size_t idx,
+                   const std::unordered_map<std::string, std::size_t>& id_to_index) {
   const Stage& stage = state.pipeline->stages[idx];
   StageRunResult sr{stage.id, StageRunResult::Status::Executed, ContentHash{}, {}};
 
@@ -133,11 +140,8 @@ void process_stage(ParallelState&                                       state,
   // upstream's hash was written BEFORE its in-degree decrement, so by the
   // time we reach this stage every upstream we'll consult is visible.
   auto version = state.dispatcher->plugin_version(stage.plugin);
-  auto context = version.empty()
-                     ? stage.plugin
-                     : fmt::format("{}@{}", stage.plugin, version);
-  const auto upstream_hashes =
-      upstream_hashes_for(state, state.upstream_ids[idx], id_to_index);
+  auto context = version.empty() ? stage.plugin : fmt::format("{}@{}", stage.plugin, version);
+  const auto upstream_hashes = upstream_hashes_for(state, state.upstream_ids[idx], id_to_index);
   sr.content_hash = hash_inputs(context, stage.input, upstream_hashes);
 
   // Cache lookup — in-memory first, then opt-in disk cache. Cache itself
@@ -153,13 +157,14 @@ void process_stage(ParallelState&                                       state,
       state.completed_or_skipped += 1;
       state.in_flight -= 1;
       for (auto dep : state.dependents[idx]) {
-        if (--state.in_degree[dep] == 0) state.ready.push_back(dep);
+        if (--state.in_degree[dep] == 0)
+          state.ready.push_back(dep);
       }
       state.cv.notify_all();
       return;
     }
-    if (state.options->disk_backing && state.options->disk_backing->cache &&
-        state.options->disk_backing->deserialize) {
+    if (state.options->disk_backing && state.options->disk_backing->cache
+        && state.options->disk_backing->deserialize) {
       if (auto blob = state.options->disk_backing->cache->get_bytes(sr.content_hash)) {
         if (auto rehydrated = state.options->disk_backing->deserialize(*blob); rehydrated) {
           state.cache->put(sr.content_hash, rehydrated);
@@ -171,7 +176,8 @@ void process_stage(ParallelState&                                       state,
           state.completed_or_skipped += 1;
           state.in_flight -= 1;
           for (auto dep : state.dependents[idx]) {
-            if (--state.in_degree[dep] == 0) state.ready.push_back(dep);
+            if (--state.in_degree[dep] == 0)
+              state.ready.push_back(dep);
           }
           state.cv.notify_all();
           return;
@@ -192,8 +198,8 @@ void process_stage(ParallelState&                                       state,
   }
 
   // Reentrancy guard: serialize per-plugin if the manifest declared so.
-  const auto plugin_id  = state.dispatcher->plugin_id(stage.plugin);
-  const auto threading  = state.dispatcher->plugin_threading(stage.plugin);
+  const auto plugin_id = state.dispatcher->plugin_id(stage.plugin);
+  const auto threading = state.dispatcher->plugin_threading(stage.plugin);
   auto plugin_lock = state.guard.acquire(plugin_id, threading);
 
   // Dispatch.
@@ -210,7 +216,7 @@ void process_stage(ParallelState&                                       state,
 
   if (auto* err = std::get_if<DispatchError>(&dr)) {
     sr.status = StageRunResult::Status::Failed;
-    sr.error  = *err;
+    sr.error = *err;
     std::scoped_lock lk(state.mu);
     state.stage_hashes[idx] = sr.content_hash;
     state.results[idx] = std::move(sr);
@@ -223,7 +229,8 @@ void process_stage(ParallelState&                                       state,
     // otherwise stay in_flight=0 forever; the runner marks them Skipped at
     // the post-loop sweep.
     for (auto dep : state.dependents[idx]) {
-      if (--state.in_degree[dep] == 0) state.ready.push_back(dep);
+      if (--state.in_degree[dep] == 0)
+        state.ready.push_back(dep);
     }
     state.cv.notify_all();
     return;
@@ -232,8 +239,8 @@ void process_stage(ParallelState&                                       state,
   auto payload = std::move(std::get<DispatchSuccess>(dr));
   if (state.options->use_cache && payload) {
     state.cache->put(sr.content_hash, payload);
-    if (state.options->disk_backing && state.options->disk_backing->cache &&
-        state.options->disk_backing->serialize) {
+    if (state.options->disk_backing && state.options->disk_backing->cache
+        && state.options->disk_backing->serialize) {
       if (auto blob = state.options->disk_backing->serialize(payload); blob) {
         (void)state.options->disk_backing->cache->put_bytes(sr.content_hash, *blob);
       }
@@ -247,7 +254,8 @@ void process_stage(ParallelState&                                       state,
   state.completed_or_skipped += 1;
   state.in_flight -= 1;
   for (auto dep : state.dependents[idx]) {
-    if (--state.in_degree[dep] == 0) state.ready.push_back(dep);
+    if (--state.in_degree[dep] == 0)
+      state.ready.push_back(dep);
   }
   state.cv.notify_all();
 }
@@ -258,10 +266,10 @@ void process_stage(ParallelState&                                       state,
 // Public entry point
 // ============================================================================
 
-RunResult run_pipeline_parallel(const Pipeline&    pipeline,
-                                IDispatcher&       dispatcher,
-                                Cache&             cache,
-                                const RunOptions&  options) {
+RunResult run_pipeline_parallel(const Pipeline& pipeline,
+                                IDispatcher& dispatcher,
+                                Cache& cache,
+                                const RunOptions& options) {
   RunResult result;
 
   // 1. Validate + topo-sort. Same contract + error shape as sequential.
@@ -271,8 +279,7 @@ RunResult run_pipeline_parallel(const Pipeline&    pipeline,
     result.validation_errors.reserve(errors->size());
     for (const auto& e : *errors) {
       result.validation_errors.push_back(
-          e.stage_id.empty() ? e.message
-                             : fmt::format("[{}] {}", e.stage_id, e.message));
+          e.stage_id.empty() ? e.message : fmt::format("[{}] {}", e.stage_id, e.message));
     }
     return result;
   }
@@ -295,10 +302,10 @@ RunResult run_pipeline_parallel(const Pipeline&    pipeline,
   }
 
   ParallelState state;
-  state.pipeline   = &pipeline;
+  state.pipeline = &pipeline;
   state.dispatcher = &dispatcher;
-  state.cache      = &cache;
-  state.options    = &options;
+  state.cache = &cache;
+  state.options = &options;
   state.upstream_ids.assign(n, {});
   state.dependents.assign(n, {});
   state.in_degree.assign(n, 0);
@@ -311,7 +318,8 @@ RunResult run_pipeline_parallel(const Pipeline&    pipeline,
     state.upstream_ids[i].reserve(refs.size());
     for (const auto& ref : refs) {
       auto it = id_to_index.find(ref);
-      if (it == id_to_index.end()) continue;  // dag.cpp validation already caught these
+      if (it == id_to_index.end())
+        continue;  // dag.cpp validation already caught these
       state.upstream_ids[i].push_back(ref);
       state.dependents[it->second].push_back(i);
       state.in_degree[i] += 1;
@@ -320,7 +328,8 @@ RunResult run_pipeline_parallel(const Pipeline&    pipeline,
 
   // 3. Seed the ready queue with stages of zero in-degree.
   for (std::size_t i = 0; i < n; ++i) {
-    if (state.in_degree[i] == 0) state.ready.push_back(i);
+    if (state.in_degree[i] == 0)
+      state.ready.push_back(i);
   }
 
   // 4. Spawn worker threads.
@@ -337,30 +346,33 @@ RunResult run_pipeline_parallel(const Pipeline&    pipeline,
         {
           std::unique_lock lk(state.mu);
           state.cv.wait(lk, [&] {
-            return !state.ready.empty()
-                || state.completed_or_skipped == state.results.size()
-                || (state.stop_requested && state.in_flight == 0);
+            return !state.ready.empty() || state.completed_or_skipped == state.results.size()
+                   || (state.stop_requested && state.in_flight == 0);
           });
           // Termination conditions: all done, OR stop is requested AND no
           // worker is currently running a stage (so picking new work would
           // be wrong).
-          if (state.completed_or_skipped == state.results.size()) return;
-          if (state.stop_requested && state.in_flight == 0)        return;
-          if (state.ready.empty())                                  continue;
+          if (state.completed_or_skipped == state.results.size())
+            return;
+          if (state.stop_requested && state.in_flight == 0)
+            return;
+          if (state.ready.empty())
+            continue;
           if (state.stop_requested) {
             // Stop requested while we still have work in flight: drain the
             // ready queue as Skipped instead of dispatching.
             idx = state.ready.front();
             state.ready.pop_front();
-            state.results[idx] = StageRunResult{
-                state.pipeline->stages[idx].id,
-                StageRunResult::Status::Skipped,
-                ContentHash{}, std::nullopt};
+            state.results[idx] = StageRunResult{state.pipeline->stages[idx].id,
+                                                StageRunResult::Status::Skipped,
+                                                ContentHash{},
+                                                std::nullopt};
             state.completed_or_skipped += 1;
             // No upstream dispatch happened, but downstream in-degree
             // still needs decrementing so we eventually terminate.
             for (auto dep : state.dependents[idx]) {
-              if (--state.in_degree[dep] == 0) state.ready.push_back(dep);
+              if (--state.in_degree[dep] == 0)
+                state.ready.push_back(dep);
             }
             state.cv.notify_all();
             continue;
@@ -373,16 +385,15 @@ RunResult run_pipeline_parallel(const Pipeline&    pipeline,
       }
     });
   }
-  for (auto& t : pool) t.join();
+  for (auto& t : pool)
+    t.join();
 
   // 5. Sweep: any stage that never started (because it was downstream of a
   //    failure that triggered stop_on_first_failure) gets a Skipped marker.
   for (std::size_t i = 0; i < n; ++i) {
     if (!state.results[i]) {
       state.results[i] = StageRunResult{
-          pipeline.stages[i].id,
-          StageRunResult::Status::Skipped,
-          ContentHash{}, std::nullopt};
+          pipeline.stages[i].id, StageRunResult::Status::Skipped, ContentHash{}, std::nullopt};
     }
   }
 
@@ -398,8 +409,7 @@ RunResult run_pipeline_parallel(const Pipeline&    pipeline,
     result.stage_results.push_back(std::move(*state.results[i]));
   }
   result.outputs = std::move(state.outputs);
-  result.status  = encountered_failure ? RunResult::Status::StageFailed
-                                       : RunResult::Status::Success;
+  result.status = encountered_failure ? RunResult::Status::StageFailed : RunResult::Status::Success;
   return result;
 }
 
