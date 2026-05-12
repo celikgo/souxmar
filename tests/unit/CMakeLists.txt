@@ -52,6 +52,8 @@ add_executable(souxmar_unit_tests
   test_crypto_primitives.cpp
   # Sprint 11 push 2.
   test_update_fetcher.cpp
+  # Sprint 15 push 2 — per-project provider config (ADR-0020).
+  test_provider_config.cpp
 )
 
 target_link_libraries(souxmar_unit_tests

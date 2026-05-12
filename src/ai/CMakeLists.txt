@@ -13,6 +13,8 @@ add_library(souxmar_ai
   budget_config.cpp
   # Sprint 10 push 9 — Provider abstraction + Ollama.
   provider.cpp
+  # Sprint 15 push 2 — per-project provider override (ADR-0020).
+  provider_config.cpp
   tools/default_registry.cpp
   tools/read_geometry_summary.cpp
   tools/mesh.cpp

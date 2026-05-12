@@ -31,8 +31,30 @@
 #include <vector>
 
 #include "souxmar/ai/provider.h"
+#include "souxmar/ai/provider_config.h"
+
+#include <filesystem>
 
 namespace {
+
+std::string fmt_provider_not_yet_wired(int32_t kind) {
+  switch (kind) {
+    case SOUXMAR_BRIDGE_PROVIDER_ANTHROPIC:
+      return "BYOK Anthropic not yet wired through the bridge "
+             "(Sprint 15 push 3 lands the forwarder). For now, "
+             "set provider = \"stub\" or \"ollama\" in project.ai.toml.";
+    case SOUXMAR_BRIDGE_PROVIDER_OPENAI:
+      return "BYOK OpenAI not yet wired through the bridge "
+             "(Sprint 16+ lands the forwarder). For now, "
+             "set provider = \"stub\" or \"ollama\" in project.ai.toml.";
+    case SOUXMAR_BRIDGE_PROVIDER_MANAGED:
+      return "Managed-AI proxy not yet reachable through the bridge "
+             "(Sprint 17 wires the account portal). For now, "
+             "set provider = \"stub\" or \"ollama\" in project.ai.toml.";
+    default:
+      return "provider not yet wired";
+  }
+}
 
 int32_t bridge_error_kind_for(souxmar::ai::ProviderErrorKind kind) {
   using K = souxmar::ai::ProviderErrorKind;
@@ -98,10 +120,68 @@ struct souxmar_bridge_chat_response_t {
   int64_t      tokens_out   = 0;
 };
 
+namespace {
+
+// Resolve the per-project provider config. Sprint 15 push 2 reads
+// `<project_dir>/project.ai.toml` per ADR-0020. project_id is
+// interpreted as the project directory path; an empty / missing
+// directory falls back to the default (StubProvider). A malformed
+// config surfaces an error to the caller.
+struct ResolvedProvider {
+  int32_t                              bridge_kind = SOUXMAR_BRIDGE_PROVIDER_STUB;
+  std::string                          model;
+  std::string                          endpoint;
+  // When non-empty, a config-parse error to surface back to the
+  // caller (instead of attempting a stub call as a silent fallback).
+  std::string                          config_error;
+};
+
+ResolvedProvider resolve_provider(const std::string& project_id) {
+  ResolvedProvider rp;
+  if (project_id.empty()) return rp;
+
+  std::filesystem::path dir(project_id);
+  std::error_code ec;
+  if (!std::filesystem::is_directory(dir, ec)) {
+    // The project_id could be a path to a file (e.g. a YAML).
+    // Try its parent dir.
+    if (std::filesystem::exists(dir, ec)) {
+      dir = dir.parent_path();
+    } else {
+      return rp;  // no such project; default
+    }
+  }
+
+  auto r = souxmar::ai::load_provider_config(dir);
+  if (auto* err = std::get_if<souxmar::ai::ProviderConfigError>(&r)) {
+    if (err->kind == souxmar::ai::ProviderConfigErrorKind::NotFound) {
+      return rp;  // absent → default (StubProvider)
+    }
+    rp.config_error = err->message;
+    return rp;
+  }
+
+  const auto& cfg = std::get<souxmar::ai::ProviderConfig>(r);
+  rp.model    = cfg.model;
+  rp.endpoint = cfg.endpoint;
+  using K = souxmar::ai::ProviderKind;
+  switch (cfg.provider) {
+    case K::Stub:          rp.bridge_kind = SOUXMAR_BRIDGE_PROVIDER_STUB;       break;
+    case K::BYOKAnthropic: rp.bridge_kind = SOUXMAR_BRIDGE_PROVIDER_ANTHROPIC;  break;
+    case K::BYOKOpenAI:    rp.bridge_kind = SOUXMAR_BRIDGE_PROVIDER_OPENAI;     break;
+    case K::Ollama:        rp.bridge_kind = SOUXMAR_BRIDGE_PROVIDER_OLLAMA;     break;
+    case K::Managed:       rp.bridge_kind = SOUXMAR_BRIDGE_PROVIDER_MANAGED;    break;
+    default:               rp.bridge_kind = SOUXMAR_BRIDGE_PROVIDER_STUB;       break;
+  }
+  return rp;
+}
+
+}  // namespace
+
 extern "C"
 souxmar_bridge_chat_response_t*
 souxmar_bridge_chat_send(const char* request_json,
-                         const char* /*project_id*/,
+                         const char* project_id_c,
                          char**      out_err) {
   if (out_err) *out_err = nullptr;
   if (request_json == nullptr) {
@@ -114,22 +194,20 @@ souxmar_bridge_chat_send(const char* request_json,
   }
 
   const std::string json(request_json);
+  const std::string project_id = project_id_c ? std::string(project_id_c) : std::string{};
 
-  // Pull the bits we need from the request. The shape matches the
-  // proxy's openapi.yaml ChatRequest, which itself mirrors
-  // souxmar::ai::ChatRequest.
+  // Sprint 15 push 2 — consult per-project config (ADR-0020).
+  const auto resolved = resolve_provider(project_id);
+
+  // Pull the bits we need from the request.
   const std::string model    = extract_string_field(json, "model");
   const auto        messages = extract_messages(json);
 
   souxmar::ai::ChatRequest req;
-  req.model    = model.empty() ? "stub-model" : model;
+  req.model    = !resolved.model.empty()
+                  ? resolved.model
+                  : (model.empty() ? "stub-model" : model);
   req.messages = messages;
-
-  // Sprint 14 push 4 — always StubProvider. Sprint 15 push 1
-  // replaces this with a per-project provider lookup against the
-  // engine's `provider.h` factory; the FFI shape doesn't change.
-  souxmar::ai::StubProvider stub;
-  auto result = stub.chat_completion(req);
 
   auto* out = new (std::nothrow) souxmar_bridge_chat_response_t;
   if (out == nullptr) {
@@ -140,7 +218,40 @@ souxmar_bridge_chat_send(const char* request_json,
     }
     return nullptr;
   }
-  out->provider = SOUXMAR_BRIDGE_PROVIDER_STUB;
+  out->provider = resolved.bridge_kind;
+
+  // Config parse error surfaces directly to the caller — silent
+  // fallback to stub would mislead the user (ADR-0020 § Risks
+  // R-019).
+  if (!resolved.config_error.empty()) {
+    out->error_kind = SOUXMAR_BRIDGE_PE_NOT_CONFIGURED;
+    out->error_text = resolved.config_error;
+    return out;
+  }
+
+  // Pick the provider. Today only Stub + Ollama are implementable
+  // entirely engine-side; Anthropic + OpenAI + Managed need
+  // out-of-process resources Sprint 15 push 3 / Sprint 17 wire.
+  souxmar::ai::ChatResult result;
+  if (resolved.bridge_kind == SOUXMAR_BRIDGE_PROVIDER_OLLAMA) {
+    souxmar::ai::OllamaProviderOptions opts;
+    if (!resolved.endpoint.empty()) opts.endpoint = resolved.endpoint;
+    souxmar::ai::OllamaProvider ollama(opts);
+    result = ollama.chat_completion(req);
+  } else if (resolved.bridge_kind == SOUXMAR_BRIDGE_PROVIDER_ANTHROPIC ||
+             resolved.bridge_kind == SOUXMAR_BRIDGE_PROVIDER_OPENAI    ||
+             resolved.bridge_kind == SOUXMAR_BRIDGE_PROVIDER_MANAGED) {
+    // Not yet wired — return NotConfigured with an honest
+    // explanation. Sprint 15 push 3 lands the Anthropic
+    // forwarder; Sprint 17 wires Managed. Until then, the
+    // chat panel surfaces this through its typed error path.
+    out->error_kind = SOUXMAR_BRIDGE_PE_NOT_CONFIGURED;
+    out->error_text = fmt_provider_not_yet_wired(resolved.bridge_kind);
+    return out;
+  } else {
+    souxmar::ai::StubProvider stub;
+    result = stub.chat_completion(req);
+  }
 
   if (auto* resp = std::get_if<souxmar::ai::ChatResponse>(&result)) {
     out->error_kind = SOUXMAR_BRIDGE_PE_OK;
