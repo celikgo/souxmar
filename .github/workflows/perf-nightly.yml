@@ -151,7 +151,7 @@ jobs:
             --title        "souxmar benchmark report — ${{ github.ref_name }}"
 
       - name: Upload report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: perf-report-${{ github.run_id }}
           # The artifact bundle now carries both the JSON reports and
