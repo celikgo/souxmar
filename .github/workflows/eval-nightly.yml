@@ -58,7 +58,7 @@ jobs:
           runVcpkgInstall: false
 
       - name: Cache vcpkg binary archives
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/.vcpkg-cache
           key: eval-nightly-vcpkg-${{ hashFiles('vcpkg.json') }}
