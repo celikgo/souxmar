@@ -55,10 +55,13 @@ function toNode(entry: FileEntry): Node {
 }
 
 interface Props {
-  projectId: string;
+  projectId:     string;
+  /** Called with the path *relative to the project root* when the user
+   *  clicks a file leaf. Workbench uses this to dispatch viewers. */
+  onSelectFile?: (relPath: string) => void;
 }
 
-export function ProjectTree({ projectId }: Props) {
+export function ProjectTree({ projectId, onSelectFile }: Props) {
   const [tree, setTree] = useState<Node | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string>("");
@@ -113,7 +116,15 @@ export function ProjectTree({ projectId }: Props) {
           node={display}
           depth={0}
           selected={selected}
-          onSelect={setSelected}
+          onSelect={n => {
+            setSelected(n.id);
+            if (n.kind !== "file" || !onSelectFile) return;
+            // Tree ids are absolute paths from the bridge; strip the
+            // project prefix so the viewer gets a project-rel path.
+            const prefix = projectId.endsWith("/") ? projectId : projectId + "/";
+            const rel = n.id.startsWith(prefix) ? n.id.slice(prefix.length) : n.id;
+            onSelectFile(rel);
+          }}
           forceOpen
         />
       </div>
@@ -125,7 +136,7 @@ interface NodeProps {
   node: Node;
   depth: number;
   selected: string;
-  onSelect: (id: string) => void;
+  onSelect: (node: Node) => void;
   forceOpen?: boolean;
 }
 
@@ -141,13 +152,13 @@ function TreeNode({ node, depth, selected, onSelect, forceOpen }: NodeProps) {
         role="button"
         tabIndex={0}
         onClick={() => {
-          onSelect(node.id);
+          onSelect(node);
           if (isFolder && !forceOpen) setOpen(o => !o);
         }}
         onKeyDown={e => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            onSelect(node.id);
+            onSelect(node);
             if (isFolder && !forceOpen) setOpen(o => !o);
           }
         }}

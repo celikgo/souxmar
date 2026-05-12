@@ -26,6 +26,7 @@ import type { CSSProperties } from "react";
 import { Chat } from "../chat/Chat";
 import { Viewport } from "./Viewport";
 import { ModelViewer } from "./ModelViewer";
+import { MarkdownViewer, isMarkdownPath } from "./MarkdownViewer";
 import { ProjectTree } from "./ProjectTree";
 import { Terminal } from "./Terminal";
 import { TitleBar } from "./TitleBar";
@@ -169,7 +170,18 @@ export function Workbench() {
 
       {/* row 2 — left, middle (viewport + bottom), right */}
       <div style={{ ...sideStyle, display: leftOpen ? "block" : "none" }}>
-        <ProjectTree projectId={projectId} />
+        <ProjectTree
+          projectId={projectId}
+          onSelectFile={rel => {
+            // Swap viewer when the user clicks a renderable or markdown
+            // file leaf. Unsupported extensions are ignored — the
+            // previous viewer stays mounted.
+            const lower = rel.toLowerCase();
+            const viewable =
+              VIEWABLE_EXTS.some(ext => lower.endsWith(ext)) || isMarkdownPath(rel);
+            if (viewable) setActiveModel(rel);
+          }}
+        />
       </div>
 
       <div style={middleStyle}>
@@ -181,16 +193,20 @@ export function Workbench() {
               onOpenSample={handleOpenSample}
             />
           ) : activeModel ? (
-            <ModelViewer
-              projectPath={projectId}
-              relPath={activeModel}
-              overlays={overlays}
-              onSimplified={newRel => {
-                setActiveModel(newRel);
-                const ts = new Date().toLocaleTimeString();
-                setLog(prev => [...prev, `[${ts}] simplified → ${newRel}`]);
-              }}
-            />
+            isMarkdownPath(activeModel) ? (
+              <MarkdownViewer projectPath={projectId} relPath={activeModel} />
+            ) : (
+              <ModelViewer
+                projectPath={projectId}
+                relPath={activeModel}
+                overlays={overlays}
+                onSimplified={newRel => {
+                  setActiveModel(newRel);
+                  const ts = new Date().toLocaleTimeString();
+                  setLog(prev => [...prev, `[${ts}] simplified → ${newRel}`]);
+                }}
+              />
+            )
           ) : (
             <Viewport projectId={projectId} features={features} />
           )}
@@ -271,18 +287,27 @@ export function Workbench() {
 }
 
 function findFirstViewable(node: FileEntry, projectRoot: string): string | null {
+  // Prefer a renderable 3D model; fall back to README.md / any markdown so
+  // a freshly-opened project without geometry still shows *something*.
+  return findMatching(node, projectRoot, n =>
+    VIEWABLE_EXTS.some(ext => n.endsWith(ext)),
+  ) ?? findMatching(node, projectRoot, isMarkdownPath);
+}
+
+function findMatching(
+  node:        FileEntry,
+  projectRoot: string,
+  match:       (lowerName: string) => boolean,
+): string | null {
   if (!node.is_dir) {
-    const lower = node.name.toLowerCase();
-    if (VIEWABLE_EXTS.some(ext => lower.endsWith(ext))) {
-      // Return the path *relative* to the project root so the bridge command
-      // can resolve it against the project's geometry/ directory safely.
+    if (match(node.name.toLowerCase())) {
       const prefix = projectRoot.endsWith("/") ? projectRoot : projectRoot + "/";
       return node.path.startsWith(prefix) ? node.path.slice(prefix.length) : node.path;
     }
     return null;
   }
   for (const c of node.children ?? []) {
-    const hit = findFirstViewable(c, projectRoot);
+    const hit = findMatching(c, projectRoot, match);
     if (hit) return hit;
   }
   return null;
