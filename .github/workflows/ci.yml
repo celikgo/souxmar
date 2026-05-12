@@ -46,6 +46,15 @@ jobs:
           # baseline shipped no longer exists upstream).
           sudo apt-get install -y ninja-build pkg-config curl zip unzip tar \
                                   autoconf autoconf-archive automake libtool
+          if [ "${{ matrix.preset }}" = "ci-linux-gcc" ]; then
+            # The ubuntu-22.04 runner image's default gcc is 11; the
+            # ci-linux-gcc preset asks for gcc-13. Install from the
+            # ubuntu-toolchain-r/test PPA (which packages newer GCCs
+            # for older Ubuntu releases).
+            sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+            sudo apt-get update
+            sudo apt-get install -y gcc-13 g++-13
+          fi
           if [ "${{ matrix.preset }}" = "ci-linux-clang" ]; then
             wget -q https://apt.llvm.org/llvm.sh
             chmod +x llvm.sh
