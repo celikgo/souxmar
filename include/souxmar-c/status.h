@@ -28,6 +28,12 @@ typedef int32_t souxmar_status_code_t;
 #define SOUXMAR_E_IO                    10
 #define SOUXMAR_E_TIMEOUT               11
 #define SOUXMAR_E_CANCELLED             12
+/* v1.7 — sketch solver result codes (ADR-0040). */
+#define SOUXMAR_E_UNDERCONSTRAINED      13   /* sketch has remaining DoF        */
+#define SOUXMAR_E_OVERCONSTRAINED       14   /* constraints are redundant        */
+#define SOUXMAR_E_NO_CONVERGENCE        15   /* solver gave up (time-limit etc.) */
+/* v1.8 — design.yaml replay failure (ADR-0041). */
+#define SOUXMAR_E_DANGLING_REFERENCE    16   /* feature input no longer resolves */
 
 /* Status carries the code plus optional human-readable message + detail.
  * Strings are owned by the producer; consumer must treat them as const

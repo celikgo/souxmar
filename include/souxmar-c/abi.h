@@ -45,11 +45,29 @@
  *                            `souxmar_mesh_face_tag`,
  *                            `souxmar_mesh_set_face_tag`,
  *                            `SOUXMAR_FACE_UNTAGGED`); ADR-0012.
+ *   v1.4  Sprint 25 push 1 — surface-stream renderer surface
+ *                            (souxmar-c/surface_stream.h); ADR-0037.
+ *   v1.5  Sprint 27 push 1 — field-stream renderer surface
+ *                            (souxmar-c/field_stream.h); ADR-0038.
+ *   v1.6  Sprint 28 push 1 — BREP session surface + cad.* plugin type
+ *                            (souxmar-c/brep.h); ADR-0039.
+ *   v1.7  Sprint 29 push 1 — 2D sketch surface + sketch.solver.*
+ *                            plugin type (souxmar-c/sketch.h); three
+ *                            new status codes (UNDERCONSTRAINED,
+ *                            OVERCONSTRAINED, NO_CONVERGENCE);
+ *                            ADR-0040.
+ *   v1.8  Sprint 30 push 1 — BREP feature ops (extend brep.h);
+ *                            SOUXMAR_INVALID_ID sentinel;
+ *                            SOUXMAR_E_DANGLING_REFERENCE status code;
+ *                            ADR-0041.
+ *   v1.9  Sprint 32 push 1 — time-series stream surface +
+ *                            writer.video.* plugin type
+ *                            (souxmar-c/timeseries.h); ADR-0042.
  *
  * Future minor bumps land via ADR plus the
  * `Ratchet: additive minor surface (ADR-0008)` commit marker checked
  * by scripts/check-frozen-headers.sh. */
-#define SOUXMAR_ABI_VERSION_MINOR 3
+#define SOUXMAR_ABI_VERSION_MINOR 9
 
 /* ---- Symbol export ---------------------------------------------------- */
 
