@@ -13,7 +13,7 @@
 import { useEffect, useState, useMemo } from "react";
 import type { CSSProperties } from "react";
 import { invokeCommand, type SolverCapability } from "../tauri/bridge";
-import { replaceSolverKind } from "./YamlViewer";
+import { replaceSolverPlugin } from "./YamlViewer";
 
 interface Props {
   projectPath: string;
@@ -45,8 +45,9 @@ export function SolversPanel({ projectPath, currentText, onChange }: Props) {
   }, [projectPath]);
 
   // Detect the currently-selected capability from the YAML buffer.
+  // Field name is `plugin:` per the souxmar pipeline schema.
   const activeCap = useMemo(() => {
-    const m = /^\s*kind:\s*['"]?(solver\.[\w.\-]+)['"]?/m.exec(currentText);
+    const m = /^\s*plugin:\s*['"]?(solver\.[\w.\-]+)['"]?/m.exec(currentText);
     return m ? m[1] : null;
   }, [currentText]);
 
@@ -55,7 +56,7 @@ export function SolversPanel({ projectPath, currentText, onChange }: Props) {
   const grouped = useMemo(() => groupByPhysics(caps ?? []), [caps]);
 
   const handlePick = (cap: SolverCapability) => {
-    onChange(replaceSolverKind(currentText, cap.capability));
+    onChange(replaceSolverPlugin(currentText, cap.capability));
   };
 
   return (

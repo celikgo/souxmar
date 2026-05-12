@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { invokeCommand } from "../tauri/bridge";
 import { SolversPanel } from "./SolversPanel";
+import { MaterialsPanel } from "./MaterialsPanel";
 
 interface Props {
   projectPath: string;
@@ -135,11 +136,17 @@ export function YamlViewer({ projectPath, relPath }: Props) {
       </header>
 
       {isPipeline && originalText !== null && (
-        <SolversPanel
-          projectPath={projectPath}
-          currentText={text}
-          onChange={(next) => setText(next)}
-        />
+        <>
+          <SolversPanel
+            projectPath={projectPath}
+            currentText={text}
+            onChange={(next) => setText(next)}
+          />
+          <MaterialsPanel
+            currentText={text}
+            onChange={(next) => setText(next)}
+          />
+        </>
       )}
 
       <div style={bodyStyle}>
@@ -520,13 +527,14 @@ export function isYamlPath(relPath: string): boolean {
   return YAML_EXTS.has(lower.slice(dot + 1));
 }
 
-// Exported for SolversPanel's swap-the-kind-line logic.
-export function replaceSolverKind(yaml: string, newCapability: string): string {
-  // Match the *first* `kind:` line whose value starts with `solver.`.
-  // Keep the indent, the `kind:` literal, and any trailing comment.
+// Exported for SolversPanel's swap-the-plugin-line logic. The souxmar
+// pipeline schema names the capability field `plugin:` (see
+// examples/*/pipeline.yaml). Keep this in sync with the schema; don't
+// confuse with the toml `[plugin]` section in souxmar-plugin.toml.
+export function replaceSolverPlugin(yaml: string, newCapability: string): string {
   const lines = yaml.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    const m = /^(\s*kind:\s*)(['"]?)solver\.[\w.\-]+(['"]?)(\s*(#.*)?)$/.exec(lines[i]);
+    const m = /^(\s*plugin:\s*)(['"]?)solver\.[\w.\-]+(['"]?)(\s*(#.*)?)$/.exec(lines[i]);
     if (m) {
       const quote = m[2] || "";
       const tail  = m[4] || "";
@@ -537,5 +545,5 @@ export function replaceSolverKind(yaml: string, newCapability: string): string {
   // No existing solver stage — append a hint comment. Conservative: we
   // do not invent a new stage; the user gets a visible TODO.
   return yaml + (yaml.endsWith("\n") ? "" : "\n") +
-    `# TODO: no solver.* stage found; add e.g. "kind: ${newCapability}"\n`;
+    `# TODO: no solver.* stage found; add e.g. "plugin: ${newCapability}"\n`;
 }
