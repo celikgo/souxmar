@@ -536,6 +536,13 @@ export function isYamlPath(relPath: string): boolean {
 // pipeline schema names the capability field `plugin:` (see
 // examples/*/pipeline.yaml). Keep this in sync with the schema; don't
 // confuse with the toml `[plugin]` section in souxmar-plugin.toml.
+//
+// If no existing solver stage is found, insert a new `- id: solve`
+// stage in the `stages:` block — before the first writer stage when
+// possible, else at the end. That keeps the DAG dependency order
+// natural (mesh → solve → write) without asking the user to edit YAML
+// by hand. The new stage carries an `input: { mesh: { from: mesh } }`
+// block so Materials/BC panels have a place to write into.
 export function replaceSolverPlugin(yaml: string, newCapability: string): string {
   const lines = yaml.split("\n");
   for (let i = 0; i < lines.length; i++) {
@@ -547,8 +554,71 @@ export function replaceSolverPlugin(yaml: string, newCapability: string): string
       return lines.join("\n");
     }
   }
-  // No existing solver stage — append a hint comment. Conservative: we
-  // do not invent a new stage; the user gets a visible TODO.
-  return yaml + (yaml.endsWith("\n") ? "" : "\n") +
-    `# TODO: no solver.* stage found; add e.g. "plugin: ${newCapability}"\n`;
+  return insertSolverStage(lines, newCapability).join("\n");
+}
+
+// Find the upstream-mesh stage id (best-effort) and the index of the
+// first writer stage (so we can insert before it). Append a new stage
+// using the conventional 2-space stage indent + 4-space child indent.
+function insertSolverStage(lines: string[], newCapability: string): string[] {
+  // Discover the mesh stage id. Heuristic: first stage whose plugin
+  // starts with `mesher.`. Fall back to "mesh" — the convention used by
+  // every in-tree example.
+  let meshId = "mesh";
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^\s*-\s*id\s*:\s*['"]?([\w\-]+)['"]?\s*(#.*)?$/.exec(lines[i]);
+    if (!m) continue;
+    // Look ahead for this stage's plugin: line.
+    for (let j = i + 1; j < lines.length && j < i + 6; j++) {
+      const pm = /^\s*plugin\s*:\s*['"]?(mesher\.[\w.\-]+)['"]?/.exec(lines[j]);
+      if (pm) { meshId = m[1]; break; }
+      if (/^\s*-\s*id\s*:/.test(lines[j])) break;
+    }
+  }
+
+  // Locate the insertion point: index of the first writer stage's
+  // `- id:` header line, else end-of-file.
+  let writerIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^\s*-\s*id\s*:/.test(lines[i])) continue;
+    for (let j = i + 1; j < lines.length && j < i + 6; j++) {
+      if (/^\s*plugin\s*:\s*['"]?writer\.[\w.\-]+/.test(lines[j])) {
+        writerIdx = i;
+        break;
+      }
+      if (/^\s*-\s*id\s*:/.test(lines[j])) break;
+    }
+    if (writerIdx >= 0) break;
+  }
+
+  // Discover the existing stage indent by scanning the first `- id:` we
+  // see; fall back to two spaces, matching every in-tree example.
+  let stageIndent = "  ";
+  for (const ln of lines) {
+    const m = /^(\s*)-\s*id\s*:/.exec(ln);
+    if (m) { stageIndent = m[1]; break; }
+  }
+  const childIndent = stageIndent + "  ";
+  const grandchildIndent = childIndent + "  ";
+
+  const stageBlock = [
+    "",
+    `${stageIndent}- id: solve`,
+    `${childIndent}plugin: ${newCapability}`,
+    `${childIndent}input:`,
+    `${grandchildIndent}mesh: { from: ${meshId} }`,
+  ];
+
+  if (writerIdx >= 0) {
+    return [
+      ...lines.slice(0, writerIdx),
+      ...stageBlock,
+      "",
+      ...lines.slice(writerIdx),
+    ];
+  }
+  return [
+    ...lines,
+    ...stageBlock,
+  ];
 }

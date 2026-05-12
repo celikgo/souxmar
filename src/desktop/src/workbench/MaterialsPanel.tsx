@@ -32,9 +32,17 @@ export function MaterialsPanel({ currentText, onChange }: Props) {
   // properties appear in the buffer with the same scalar value.
   const activeId = useMemo(() => findActiveMaterial(currentText), [currentText]);
 
+  // Materials can only be assigned to a solver stage's `input:` block.
+  // Without one, chip clicks have nowhere to land — gate the panel.
+  const hasSolverStage = useMemo(
+    () => /^\s*plugin\s*:\s*['"]?solver\./m.test(currentText),
+    [currentText],
+  );
+
   const grouped = useMemo(() => groupByFamily(CATALOG), []);
 
   const handlePick = (m: Material) => {
+    if (!hasSolverStage) return;
     onChange(applyMaterial(currentText, m));
   };
 
@@ -52,6 +60,9 @@ export function MaterialsPanel({ currentText, onChange }: Props) {
           <span style={countStyle}>
             {CATALOG.length} in catalog
             {activeId && <> · active: <code style={codeStyle}>{activeId}</code></>}
+            {!hasSolverStage && (
+              <span style={hintStyle}>needs a solver stage — pick one above</span>
+            )}
             <span style={badgeStyle}>curated · plugin coming v1.5</span>
           </span>
         </button>
@@ -71,11 +82,17 @@ export function MaterialsPanel({ currentText, onChange }: Props) {
                         key={m.id}
                         type="button"
                         onClick={() => handlePick(m)}
+                        disabled={!hasSolverStage}
                         style={{
                           ...chipStyle,
                           ...(active ? chipActiveStyle : null),
+                          ...(!hasSolverStage ? chipDisabledStyle : null),
                         }}
-                        title={describeMaterial(m)}
+                        title={
+                          hasSolverStage
+                            ? describeMaterial(m)
+                            : "Pick a solver above to enable material assignment"
+                        }
                       >
                         <span style={chipNameStyle}>{m.name}</span>
                         <span style={chipMetaStyle}>
@@ -516,6 +533,16 @@ const chipActiveStyle: CSSProperties = {
   background:     "var(--accent-default, #1d9bf0)",
   borderColor:    "var(--accent-default, #1d9bf0)",
   color:          "#fff",
+};
+
+const chipDisabledStyle: CSSProperties = {
+  opacity:        0.4,
+  cursor:         "not-allowed",
+};
+
+const hintStyle: CSSProperties = {
+  color:          "var(--warning, #ffd43b)",
+  fontStyle:      "italic",
 };
 
 const chipNameStyle: CSSProperties = {

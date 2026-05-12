@@ -79,9 +79,17 @@ export function BoundaryConditionsPanel({ currentText, onChange }: Props) {
   // setState-during-render hack.
   const bcs = useMemo(() => parseLoadsFromYaml(currentText), [currentText]);
 
+  // BCs land in a solver stage's input block; without one, edits have
+  // nowhere to go. Gate the + Add menu and surface a hint.
+  const hasSolverStage = useMemo(
+    () => /^\s*plugin\s*:\s*['"]?solver\./m.test(currentText),
+    [currentText],
+  );
+
   const setBCs = (next: BC[]) => onChange(writeLoadsToYaml(currentText, next));
 
   const addBC = (kind: BCKind) => {
+    if (!hasSolverStage) return;
     const fresh = defaultFor(kind);
     setBCs([...bcs, fresh]);
   };
@@ -106,9 +114,14 @@ export function BoundaryConditionsPanel({ currentText, onChange }: Props) {
         >
           <span style={chevronStyle}>{collapsed ? "▸" : "▾"}</span>
           <span style={titleTextStyle}>Boundary conditions</span>
-          <span style={countStyle}>{bcs.length} active</span>
+          <span style={countStyle}>
+            {bcs.length} active
+            {!hasSolverStage && (
+              <span style={hintStyle}>needs a solver stage — pick one above</span>
+            )}
+          </span>
         </button>
-        {!collapsed && <AddMenu onAdd={addBC} />}
+        {!collapsed && <AddMenu onAdd={addBC} disabled={!hasSolverStage} />}
       </header>
 
       {!collapsed && (
@@ -139,16 +152,18 @@ export function BoundaryConditionsPanel({ currentText, onChange }: Props) {
 // ---------------------------------------------------------------------------
 // Add-BC dropdown.
 
-function AddMenu({ onAdd }: { onAdd: (kind: BCKind) => void }) {
+function AddMenu({ onAdd, disabled }: { onAdd: (kind: BCKind) => void; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <div style={{ position: "relative", marginRight: 8 }}>
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
-        style={addBtnStyle}
+        onClick={() => { if (!disabled) setOpen(o => !o); }}
+        disabled={disabled}
+        style={{ ...addBtnStyle, opacity: disabled ? 0.4 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
         aria-haspopup="menu"
         aria-expanded={open}
+        title={disabled ? "Pick a solver above to enable BCs" : undefined}
       >
         + Add
       </button>
@@ -693,6 +708,14 @@ const titleTextStyle: CSSProperties = {
 const countStyle: CSSProperties = {
   opacity:        0.8,
   fontSize:       11,
+  display:        "inline-flex",
+  alignItems:     "center",
+  gap:            10,
+};
+
+const hintStyle: CSSProperties = {
+  color:          "var(--warning, #ffd43b)",
+  fontStyle:      "italic",
 };
 
 const bodyStyle: CSSProperties = {
