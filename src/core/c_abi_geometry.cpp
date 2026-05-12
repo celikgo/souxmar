@@ -4,6 +4,8 @@
 
 #include "souxmar-c/geometry.h"
 
+#include <stdexcept>
+
 namespace {
 
 souxmar::core::Geometry* as_cpp(souxmar_geometry_t* p) noexcept {
