@@ -57,6 +57,31 @@ const CELL_TRIANGULATION: Record<number, ReadonlyArray<readonly [number, number,
 };
 
 export function parseVtu(text: string): THREE.BufferGeometry {
+  return parseVtuWithFields(text).geometry;
+}
+
+/** A scalar or vector point-field carried alongside the geometry. The
+ *  `magnitude` array is the per-point scalar value used for colormap
+ *  rendering — equal to `values` for n=1 fields, and `sqrt(sum(c²))`
+ *  for n>1 fields. min/max are computed over `magnitude`. */
+export interface VtuField {
+  name:        string;
+  components:  number;   // 1 for scalar, 3 for vector
+  /** Raw per-point values, flattened (length = num_points * components). */
+  values:      Float32Array;
+  /** Per-point magnitude — colormap input. length = num_points. */
+  magnitude:   Float32Array;
+  min:         number;
+  max:         number;
+}
+
+export interface VtuParsed {
+  geometry:  THREE.BufferGeometry;
+  numPoints: number;
+  fields:    VtuField[];
+}
+
+export function parseVtuWithFields(text: string): VtuParsed {
   const xml = new DOMParser().parseFromString(text, "application/xml");
   const err = xml.querySelector("parsererror");
   if (err) {
@@ -75,6 +100,7 @@ export function parseVtu(text: string): THREE.BufferGeometry {
   if (pointsArr.length % 3 !== 0) {
     throw new Error(`Points array length ${pointsArr.length} is not a multiple of 3`);
   }
+  const numPoints = pointsArr.length / 3;
 
   // Build triangle index array from the cell connectivity, dispatching per
   // cell type. Unknown cell types are skipped and reported once.
@@ -107,7 +133,55 @@ export function parseVtu(text: string): THREE.BufferGeometry {
   geom.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(pointsArr), 3));
   geom.setIndex(triIndices);
   geom.computeVertexNormals();
-  return geom;
+
+  // Parse <PointData> scalar/vector arrays. CellData not yet supported —
+  // the writer.vtu plugin in souxmar emits PointData today.
+  const fields: VtuField[] = [];
+  const pointDataArrays = piece.querySelectorAll("PointData > DataArray");
+  pointDataArrays.forEach(el => {
+    const name = el.getAttribute("Name") ?? "";
+    if (!name) return;
+    const fmt = el.getAttribute("format") ?? "ascii";
+    if (fmt !== "ascii") {
+      // eslint-disable-next-line no-console
+      console.warn(`vtuReader: skipped PointData "${name}" — format="${fmt}" not supported`);
+      return;
+    }
+    const components = Math.max(1, Number(el.getAttribute("NumberOfComponents") ?? "1"));
+    const raw = parseAsciiNumbers(el.textContent ?? "");
+    if (raw.length !== numPoints * components) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `vtuReader: PointData "${name}" has ${raw.length} values, expected ${numPoints * components}`,
+      );
+      return;
+    }
+    const values = new Float32Array(raw);
+    const magnitude = new Float32Array(numPoints);
+    if (components === 1) {
+      magnitude.set(values);
+    } else {
+      for (let i = 0; i < numPoints; i++) {
+        let s = 0;
+        for (let c = 0; c < components; c++) {
+          const v = values[i * components + c];
+          s += v * v;
+        }
+        magnitude[i] = Math.sqrt(s);
+      }
+    }
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < magnitude.length; i++) {
+      const v = magnitude[i];
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    if (!Number.isFinite(mn)) mn = 0;
+    if (!Number.isFinite(mx)) mx = 0;
+    fields.push({ name, components, values, magnitude, min: mn, max: mx });
+  });
+
+  return { geometry: geom, numPoints, fields };
 }
 
 function readArrayUnder(piece: Element, selector: string, label: string): number[] {
@@ -119,21 +193,27 @@ function readArrayUnder(piece: Element, selector: string, label: string): number
       `VTU ${label} uses format="${fmt}" — the workbench's built-in viewer only reads format="ascii" today. Use ParaView for binary/appended files, or re-run the writer with the ASCII flag.`,
     );
   }
-  const text = el.textContent ?? "";
-  // The VTU text body is a stream of whitespace-separated numbers.
-  // Number() is fine here — all values are decimal int or float.
+  return parseAsciiNumbers(el.textContent ?? "", label);
+}
+
+/** Tokenise a whitespace-separated numeric stream. Used for both the
+ *  Points/Cells arrays and PointData field arrays. The `label`
+ *  parameter is optional — when set, malformed tokens throw with
+ *  context; when omitted, callers handle the empty/short array case
+ *  themselves (used for opt-in PointData parsing). */
+function parseAsciiNumbers(text: string, label?: string): number[] {
   const out: number[] = [];
   let i = 0;
   const n = text.length;
   while (i < n) {
-    // Skip whitespace.
     while (i < n && (text.charCodeAt(i) <= 32)) i++;
     const start = i;
     while (i < n && text.charCodeAt(i) > 32) i++;
     if (i === start) break;
     const v = Number(text.slice(start, i));
     if (Number.isNaN(v)) {
-      throw new Error(`VTU ${label}: non-numeric token "${text.slice(start, i)}"`);
+      if (label) throw new Error(`VTU ${label}: non-numeric token "${text.slice(start, i)}"`);
+      return out;
     }
     out.push(v);
   }

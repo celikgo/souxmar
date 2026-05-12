@@ -28,6 +28,7 @@ import { Viewport } from "./Viewport";
 import { ModelViewer } from "./ModelViewer";
 import { MarkdownViewer, isMarkdownPath } from "./MarkdownViewer";
 import { YamlViewer, isYamlPath } from "./YamlViewer";
+import { ResultsViewer, isResultsPath } from "./ResultsViewer";
 import { ProjectTree } from "./ProjectTree";
 import { Terminal } from "./Terminal";
 import { TitleBar } from "./TitleBar";
@@ -181,7 +182,8 @@ export function Workbench() {
             const viewable =
               VIEWABLE_EXTS.some(ext => lower.endsWith(ext)) ||
               isMarkdownPath(rel) ||
-              isYamlPath(rel);
+              isYamlPath(rel) ||
+              isResultsPath(rel);
             if (viewable) setActiveModel(rel);
           }}
         />
@@ -198,8 +200,14 @@ export function Workbench() {
           ) : activeModel ? (
             isMarkdownPath(activeModel) ? (
               <MarkdownViewer projectPath={projectId} relPath={activeModel} />
+            ) : isResultsPath(activeModel) ? (
+              <ResultsViewer projectPath={projectId} relPath={activeModel} />
             ) : isYamlPath(activeModel) ? (
-              <YamlViewer projectPath={projectId} relPath={activeModel} />
+              <YamlViewer
+                projectPath={projectId}
+                relPath={activeModel}
+                onOpenResult={setActiveModel}
+              />
             ) : (
               <ModelViewer
                 projectPath={projectId}

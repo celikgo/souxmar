@@ -20,14 +20,18 @@ import { MeshingPanel } from "./MeshingPanel";
 import { SolversPanel } from "./SolversPanel";
 import { MaterialsPanel } from "./MaterialsPanel";
 import { BoundaryConditionsPanel } from "./BoundaryConditionsPanel";
+import { ResultsPanel } from "./ResultsPanel";
 
 interface Props {
-  projectPath: string;
+  projectPath:    string;
   /** Path of the YAML file relative to the project root. */
-  relPath:     string;
+  relPath:        string;
+  /** Called when the user clicks a result file's Open button in the
+   *  Results panel; Workbench swaps the viewer to that file. */
+  onOpenResult?:  (relPath: string) => void;
 }
 
-export function YamlViewer({ projectPath, relPath }: Props) {
+export function YamlViewer({ projectPath, relPath, onOpenResult }: Props) {
   const [originalText, setOriginalText] = useState<string | null>(null);
   const [text, setText] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +160,11 @@ export function YamlViewer({ projectPath, relPath }: Props) {
           <BoundaryConditionsPanel
             currentText={text}
             onChange={(next) => setText(next)}
+          />
+          <ResultsPanel
+            projectPath={projectPath}
+            currentText={text}
+            onOpen={(rel) => onOpenResult?.(rel)}
           />
         </>
       )}
