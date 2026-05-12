@@ -32,6 +32,7 @@ add_library(souxmar_core
   c_abi_brep.cpp            # v1.6 + v1.8 — ADRs 0039 / 0041   [stub]
   c_abi_sketch.cpp          # v1.7 — ADR-0040, RFC-004 (S29)   [stub]
   time_series.cpp           # v1.9 — real LRU cache (S32 PR 1 partial)
+  pvd.cpp                   # v1.9 — minimal PVD parser (S32 PR 1 partial)
   c_abi_timeseries.cpp      # v1.9 — ADR-0042, RFC-006 (S32) — _open still
                             #         stubbed pending reader plugin (S32 PR 2)
 )

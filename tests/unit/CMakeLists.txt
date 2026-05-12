@@ -18,6 +18,7 @@ add_executable(souxmar_unit_tests
   test_field_stream.cpp
   # Sprint 32 push 1 (post-v1.0, partial) — time_series LRU cache (ADR-0042, RFC-006).
   test_time_series.cpp
+  test_pvd.cpp
   test_manifest.cpp
   test_discovery.cpp
   test_registry.cpp
