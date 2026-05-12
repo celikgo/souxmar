@@ -82,8 +82,8 @@ size_t souxmar_buffer_alignment(void);
  * souxmar_status_t around the operation.
  */
 
-#define SOUXMAR_BUFFER_FLAG_READONLY ((uint32_t)1u << 0)
-#define SOUXMAR_BUFFER_FLAG_CREATE ((uint32_t)1u << 1)
+#define SOUXMAR_BUFFER_FLAG_READONLY (1u << 0)
+#define SOUXMAR_BUFFER_FLAG_CREATE (1u << 1)
 
 souxmar_buffer_t* souxmar_buffer_new_mmap(const char* path, size_t size_bytes, uint32_t flags);
 

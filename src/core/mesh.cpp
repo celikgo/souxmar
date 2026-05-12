@@ -91,7 +91,7 @@ CellIndex Mesh::add_cell(ElementType type, std::span<const NodeIndex> node_indic
   impl_->cell_tags.push_back(tag);
   impl_->cell_node_indices.insert(
       impl_->cell_node_indices.end(), node_indices.begin(), node_indices.end());
-  impl_->cell_node_offsets.push_back(static_cast<std::uint64_t>(impl_->cell_node_indices.size()));
+  impl_->cell_node_offsets.push_back(impl_->cell_node_indices.size());
   return CellIndex{cell_idx};
 }
 
@@ -127,7 +127,7 @@ std::span<const NodeIndex> Mesh::cell_nodes(CellIndex index) const {
   }
   const auto begin = impl_->cell_node_offsets[index.value];
   const auto end = impl_->cell_node_offsets[index.value + 1];
-  return {impl_->cell_node_indices.data() + begin, static_cast<std::size_t>(end - begin)};
+  return {impl_->cell_node_indices.data() + begin, end - begin};
 }
 
 EntityTag Mesh::cell_tag(CellIndex index) const noexcept {

@@ -125,7 +125,7 @@ const double* souxmar_mesh_nodes_flat(const souxmar_mesh_t* mesh, size_t* out_si
  *
  * Convention matches Gmsh / VTK / OpenFOAM side-set ordering. */
 
-#define SOUXMAR_FACE_UNTAGGED ((int32_t)-1)
+#define SOUXMAR_FACE_UNTAGGED (-1)
 
 /* Returns the bounding-side count for the cell's element type, or 0 if
  * the cell index is out of range / the cell has no face concept. */
