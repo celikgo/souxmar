@@ -8,7 +8,7 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.9.4 cut below.)
+- (None this release — `[Unreleased]` reopens after the v0.9.5 cut below.)
 
 ### Changed
 
@@ -25,6 +25,31 @@ The plugin C ABI version is tracked separately and is independent of the project
 ### Security
 
 - (None this release.)
+
+---
+
+## [0.9.5] - 2026-05-15
+
+Sprint 17 closes here. See [`docs/retros/sprint-17.md`](docs/retros/sprint-17.md).
+**Tag:** `v0.9.5`. **ABI:** v1.3 frozen (unchanged). **Tool contract:** v1
+frozen final at 18 tools (unchanged). **Bridge ABI:** stays at v3.
+
+### Added
+
+- **ADR-0025** + souxmar-bridge `cli_shapes` typed mirror of every CLI
+  `--json` output (schema + kind discriminator + serde-default forward
+  compat).
+- **ADR-0026 + account-portal scaffold** (5th Pro-tier service).
+- **ADR-0027 + compute-offload scaffold** (6th Pro-tier service). The
+  six-service Pro-tier surface is now complete-in-scaffold.
+- Show HN post + 5 partner outreach emails landed today (docs/launch/2026-05-15-show-hn.md).
+- Unit test for the billing service's mode/key consistency check
+  (ADR-0024 R-030 mitigation, machine-verified).
+
+### Changed
+
+- `souxmar agent list --json` + `souxmar plugin install --json` emit
+  `kind` discriminator (forward-compat retrofit per ADR-0025).
 
 ---
 
