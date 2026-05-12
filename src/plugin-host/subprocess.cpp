@@ -3,6 +3,7 @@
 #include "souxmar/plugin/subprocess.h"
 
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <chrono>
 #include <cstdio>

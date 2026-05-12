@@ -166,7 +166,7 @@ TaskOutcome run_one(ai::Provider&            provider,
                     const LlmTask&           task,
                     ai::ToolContext&         ctx,
                     const ai::ToolRegistry&  registry,
-                    const ai::ConfirmationPolicy& policy) {
+                    ai::ConfirmationPolicy&  policy) {
   TaskOutcome out;
   out.task_id  = task.id;
   out.model    = model;

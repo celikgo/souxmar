@@ -271,7 +271,10 @@ class SurfaceStream::Impl {
         FaceKey key;
         key.size = lf.vertex_count;
         key.v = face_verts;
-        std::sort(key.v.begin(), key.v.begin() + key.size);
+        // Cap explicitly at the array bound; gcc-13's -Werror=array-bounds
+        // can't statically prove lf.vertex_count <= 4 through the sort.
+        const auto sort_n = std::min<std::uint8_t>(key.size, 4);
+        std::sort(key.v.begin(), key.v.begin() + sort_n);
 
         auto it = face_map.find(key);
         if (it == face_map.end()) {
