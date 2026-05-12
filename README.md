@@ -27,9 +27,9 @@ The free tier is the full product. You bring your own Anthropic / OpenAI / local
 
 ## Status
 
-**Public beta — `v0.99-beta1` tagged 2026-05-20.** First non-`-alpha`-suffixed tag in the project's history that precedes a final `v1.0.0`. Plugin C ABI **frozen FINAL at v1.3**; agent tool contract **frozen FINAL at v1** with 18 tools; bridge ABI v3. **New this release:** [ADR-0034](docs/adr/0034-v099-beta-scope.md) ratifies the v0.99 scope; the Pro-tier service surface flips from scaffold to wired for the chat path (Anthropic upstream live; Stripe-mode=test); the marketplace storefront soft-opens with 5 free plugins; the HackerOne bug-bounty programme is live (since Sprint 21). Sprint 22 retro: [`docs/retros/sprint-22.md`](docs/retros/sprint-22.md). **External bug reports remain the most useful contribution.** v1.0.0 targeted for Sprint 24.
+**Release candidate — `v0.99-rc1` tagged 2026-05-21.** Plugin C ABI **v1.3 FINAL-FINAL** per [ADR-0035](docs/adr/0035-v1-contract-bake.md); agent tool contract **v1 FINAL-FINAL** at 18 tools; on-disk pipeline format **v1 FINAL-FINAL**; update manifest **v1 FINAL-FINAL**; bridge ABI v3. **New this release:** the v1.0 contract bake; Stripe live mode activated (first real Pro subscription transaction processed); pen-test concluded (0 Critical / 1 High fixed / 3 Medium fixed / 1 Medium deferred to v1.0.1); HackerOne first reports paid + fixed; DNS CNAME, Discord server, on-call rotation all live. Sprint 23 retro: [`docs/retros/sprint-23.md`](docs/retros/sprint-23.md). **v1.0.0 cuts in Sprint 24** (next sprint).
 
-**Explicitly not in v0.99-beta1:** viewport rendering (`viewport_renderer` flag stays off — v1.0+); Enterprise E2E cloud sync (v1.0.1); in-app geometry edits (v1.0.x); live Stripe billing (Sprint 23 flips alongside v0.99-rc1); paid plugins (publisher onboarding waits on pen-test conclusion).
+**Still NOT in v0.99-rc1 (per ADR-0034):** viewport rendering, Enterprise E2E cloud sync (→ v1.0.1), in-app geometry edits, paid-plugin storefront. Sprint 24's v1.0.0 ships at this scope.
 
 What changed since v0.9.5 (Sprint 18 in full):
 

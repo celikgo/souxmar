@@ -8,7 +8,7 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.99-beta1 cut below.)
+- (None this release — `[Unreleased]` reopens after the v0.99-rc1 cut below.)
 
 ### Changed
 
@@ -25,6 +25,44 @@ The plugin C ABI version is tracked separately and is independent of the project
 ### Security
 
 - (None this release.)
+
+---
+
+## [0.99.0-rc1] - 2026-05-21
+
+**Release candidate.** Sprint 23 closes here. See
+[`docs/retros/sprint-23.md`](docs/retros/sprint-23.md) + [ADR-0035](docs/adr/0035-v1-contract-bake.md)
+for the contract bake. **Tag:** `v0.99-rc1`. **Plugin ABI:** v1.3
+**FINAL-FINAL** per ADR-0035. **Tool contract:** v1 **FINAL-FINAL**
+at 18 tools. **On-disk pipeline format:** v1 **FINAL-FINAL**.
+**Update manifest:** v1 **FINAL-FINAL**. **Bridge ABI:** v3.
+
+### Added
+
+- **[ADR-0035](docs/adr/0035-v1-contract-bake.md)** — v1.0 contract
+  bake. Names which contracts freeze at v1.0 (ABI, tool, pipeline,
+  manifest) vs. which evolve under additive-Tier-0 through v1.x
+  (BridgeFeatureSet, service OpenAPI, CLI --json, project.ai.toml).
+- **Stripe live mode** activated. First real Pro subscription
+  transaction processed this morning. Sprint 22's pen-test cleared
+  the path.
+
+### Fixed
+
+- Pen-test finding (High): Anthropic-call timeout handling. Fixed
+  during RC hardening.
+- Three pen-test Medium findings closed.
+- Two HackerOne Low reports paid + fixed.
+
+### Operational
+
+- **DNS CNAME** for `docs.souxmar.dev` live (registrar wire-up
+  completed this sprint).
+- **Discord server** stood up; invite redirect `souxmar.dev/community`
+  resolves.
+- **On-call rotation** table populated (founder + first contributor).
+- All three "Sprint 22 retro promoted to blocking v1.0 launch" items
+  resolved.
 
 ---
 
