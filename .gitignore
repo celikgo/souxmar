@@ -48,6 +48,8 @@ src/desktop/src-tauri/gen/
 src/desktop/dist/
 src/desktop/package-lock.json
 src/desktop/src-tauri/Cargo.lock
+# tsc -b incremental cache; regenerated on every typecheck.
+src/desktop/tsconfig.tsbuildinfo
 
 # Claude Code IDE local settings (per-user allowlist of tool calls).
 .claude/settings.local.json
