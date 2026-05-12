@@ -32,6 +32,11 @@ add_subdirectory(plugins/elasticity-stub)
 if(SOUXMAR_WITH_FENICSX)
   add_subdirectory(plugins/fenicsx-solver)
 endif()
+# Sprint 33 PR 1 — modal/vibration analysis. Always-on modal-stub
+# (closed-form Euler-Bernoulli cantilever beam); the SLEPc-backed
+# eigensolver lives behind SOUXMAR_WITH_FENICSX alongside the
+# linear-static FEniCSx solver above.
+add_subdirectory(plugins/modal-stub)
 # Sprint 8 push 2 — CFD. Always-on cfd-stub (closed form);
 # opt-in OpenFOAM subprocess adapter per ADR-0009.
 add_subdirectory(plugins/cfd-stub)

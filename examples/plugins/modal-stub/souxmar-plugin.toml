@@ -1,0 +1,24 @@
+[plugin]
+id            = "dev.souxmar.examples.modal-stub"
+name          = "Modal Analysis Stub Solver"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/modal-stub"
+
+description   = "Closed-form Euler-Bernoulli cantilever-beam modal analysis. Stand-in for the FEniCSx/SLEPc adapter in default CI."
+documentation = "https://souxmar.dev/docs/plugins/modal-stub"
+tags          = ["solver", "modal", "vibration", "dynamics", "stub", "reference"]
+min_souxmar_abi_minor = 0
+
+[plugin.binary]
+file          = "libmodal_stub.so"
+
+[plugin.capabilities]
+provides      = ["solver.modal.linear"]
+
+[plugin.threading]
+model         = "reentrant"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"

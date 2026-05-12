@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modal-beam — runnable modal-analysis example.
+#
+# Drives the `solver.modal.*` capability the same way thermal-fin
+# drives `solver.heat.*`: mesher → solver → writer. Output is a
+# nodal vector Field "modal_displacement" with one time step per
+# computed mode, ready for ParaView's Animation View.
+#
+# The mesher is `mesher.tetra.hello` (a single unit tet, 4 nodes) —
+# same metaphorical-geometry pattern thermal-fin uses. Modal-stub
+# is geometry-agnostic: it reads the bounding-box span along x as
+# the beam length and lays the closed-form Euler-Bernoulli mode
+# shapes onto whichever nodes the upstream mesher produced. When
+# the OCCT reader + Gmsh adapter land, swap `mesher.tetra.hello`
+# for `mesher.tetra.gmsh` on a real cantilever-beam STEP geometry
+# without touching anything else.
+#
+# Run:
+#   souxmar run examples/modal-beam/pipeline.yaml \
+#     --plugin-path build/dev/examples/plugins
+#
+# Output: modal-beam.vtu in $PWD.
+
+version: 1
+
+stages:
+  # Stage 1: mesh.
+  # hello-mesher emits a single unit tetrahedron — enough nodes
+  # (4) for the field shape to round-trip through the C ABI and
+  # the VTU writer. Sprint 6's `mesher.tetra.gmsh` becomes a
+  # drop-in replacement on a real beam mesh.
+  - id: mesh
+    plugin: mesher.tetra.hello
+    input:
+      target_size: 0.05
+      element_order: 1
+
+  # Stage 2: modal solve.
+  # modal-stub computes the first `num_modes` Euler-Bernoulli
+  # cantilever-beam mode shapes (closed-form). E, ρ, A, I enter
+  # the natural-frequency formula in README.md; mode shapes
+  # themselves are geometry-only.
+  - id: modal
+    plugin: solver.modal.linear
+    input:
+      mesh:           { from: mesh }
+      num_modes:      4
+      youngs_modulus: 210e9
+      density:        7850
+      area:           2.5e-3
+      inertia:        5.208e-7
+
+  # Stage 3: write.
+  # VTU writer dumps mesh + the multi-step modal_displacement field.
+  - id: write
+    plugin: writer.vtu
+    input:
+      mesh: { from: mesh }
+      path: modal-beam.vtu
