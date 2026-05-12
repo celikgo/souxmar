@@ -34,6 +34,10 @@
 //     each feature flips on individually.
 
 pub mod ffi;
+// Sprint 17 push 1 — typed mirror of the CLI's --json shapes
+// (ADR-0025). Consumed by the desktop's shell-out paths per
+// ADR-0022's MVC-via-subprocess pattern.
+pub mod cli_shapes;
 
 use serde::Serialize;
 

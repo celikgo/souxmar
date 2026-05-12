@@ -89,6 +89,45 @@ fn parse_addr(args: &[String]) -> SocketAddr {
     "127.0.0.1:8083".parse().unwrap()
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Sprint 17 push 1 — unit test the mode/key consistency
+    // check (ADR-0024 R-030 mitigation). The check panics on
+    // the failure mode that would create real charges in test
+    // (mode=live + sk_test_*); we verify the panic fires.
+
+    #[test]
+    fn parse_mode_disabled_by_default() {
+        std::env::remove_var("SOUXMAR_BILLING_MODE");
+        assert_eq!(parse_mode(), Mode::Disabled);
+    }
+
+    #[test]
+    #[should_panic(expected = "refusing to start")]
+    fn live_mode_with_test_key_panics() {
+        std::env::set_var("SOUXMAR_BILLING_MODE", "live");
+        std::env::set_var("SOUXMAR_STRIPE_API_KEY", "sk_test_abc");
+        key_consistency_check(Mode::Live);
+    }
+
+    #[test]
+    #[should_panic(expected = "refusing to start")]
+    fn test_mode_with_live_key_panics() {
+        std::env::set_var("SOUXMAR_BILLING_MODE", "test");
+        std::env::set_var("SOUXMAR_STRIPE_API_KEY", "sk_live_abc");
+        key_consistency_check(Mode::Test);
+    }
+
+    #[test]
+    fn test_mode_with_test_key_is_fine() {
+        std::env::set_var("SOUXMAR_BILLING_MODE", "test");
+        std::env::set_var("SOUXMAR_STRIPE_API_KEY", "sk_test_xyz");
+        key_consistency_check(Mode::Test);  // no panic
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()

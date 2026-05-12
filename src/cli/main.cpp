@@ -301,7 +301,8 @@ int cmd_plugin_install(const std::string& plugin_id,
   if (!hit) {
     if (json_output) {
       fmt::print(
-          "{{\"status\":\"error\",\"code\":\"not_found\",\"id\":\"{}\"}}\n",
+          "{{\"schema\":1,\"kind\":\"plugin_install_result\","
+          "\"status\":\"error\",\"code\":\"not_found\",\"id\":\"{}\"}}\n",
           plugin_id);
     } else {
       fmt::print(stderr, "error: plugin id '{}' not in index\n", plugin_id);
@@ -315,7 +316,8 @@ int cmd_plugin_install(const std::string& plugin_id,
   if (hit->paid && license_key.empty()) {
     if (json_output) {
       fmt::print(
-          "{{\"status\":\"error\",\"code\":\"license_required\","
+          "{{\"schema\":1,\"kind\":\"plugin_install_result\","
+          "\"status\":\"error\",\"code\":\"license_required\","
           "\"id\":\"{}\",\"detail\":\"plugin is paid; pass --license <sxm_lic_...>\"}}\n",
           plugin_id);
     } else {
@@ -328,7 +330,8 @@ int cmd_plugin_install(const std::string& plugin_id,
   if (!license_key.empty() && license_key.find("sxm_lic_") != 0) {
     if (json_output) {
       fmt::print(
-          "{{\"status\":\"error\",\"code\":\"license_malformed\","
+          "{{\"schema\":1,\"kind\":\"plugin_install_result\","
+          "\"status\":\"error\",\"code\":\"license_malformed\","
           "\"id\":\"{}\"}}\n",
           plugin_id);
     } else {
@@ -346,8 +349,10 @@ int cmd_plugin_install(const std::string& plugin_id,
   // shells out + polls the install-status read FFI for
   // completion. Reporting honestly here.
   if (json_output) {
+    // ADR-0025 schema=1 + kind discriminator.
     fmt::print(
-        "{{\"status\":\"not_yet_wired\","
+        "{{\"schema\":1,\"kind\":\"plugin_install_result\","
+        "\"status\":\"not_yet_wired\","
         "\"code\":\"sprint_17_pending\","
         "\"id\":\"{}\",\"version\":\"{}\","
         "\"paid\":{},\"license_supplied\":{},"
@@ -587,7 +592,9 @@ int cmd_agent_list(bool json_output) {
     // docs-site/agents/tools.md's header. Tools listed sorted by
     // name (registry.list() already sorts) so output is
     // byte-deterministic across runs.
+    // Sprint 17 push 1 — ADR-0025 schema + kind discriminator.
     fmt::print("{{\n  \"schema\": 1,\n");
+    fmt::print("  \"kind\": \"agent_tool_catalogue\",\n");
     fmt::print("  \"contract_version\": \"v1\",\n");
     fmt::print("  \"tool_count\": {},\n", registry.size());
     fmt::print("  \"tools\": [\n");
