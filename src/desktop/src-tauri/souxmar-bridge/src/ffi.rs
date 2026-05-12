@@ -28,6 +28,11 @@ pub struct souxmar_bridge_chat_response_t {
     _private: [u8; 0],
 }
 
+#[repr(C)]
+pub struct souxmar_bridge_update_status_t {
+    _private: [u8; 0],
+}
+
 // Declared once. Only resolved at link time when `real-ffi` is on
 // (build.rs gates the `cargo:rustc-link-lib`); when the feature
 // is off, the high-level wrappers never call these, so the
@@ -71,6 +76,19 @@ extern "C" {
     pub fn souxmar_bridge_chat_tokens_out(r: *const souxmar_bridge_chat_response_t) -> i64;
 
     pub fn souxmar_bridge_chat_response_free(r: *mut souxmar_bridge_chat_response_t);
+
+    // Sprint 15 push 4 — auto_updater_menu surface (bridge ABI v3).
+    pub fn souxmar_bridge_update_status_read(
+        target_root: *const c_char,
+        out_err:     *mut *mut c_char,
+    ) -> *mut souxmar_bridge_update_status_t;
+
+    pub fn souxmar_bridge_update_state             (s: *const souxmar_bridge_update_status_t) -> i32;
+    pub fn souxmar_bridge_update_current_version   (s: *const souxmar_bridge_update_status_t) -> *const c_char;
+    pub fn souxmar_bridge_update_available_version (s: *const souxmar_bridge_update_status_t) -> *const c_char;
+    pub fn souxmar_bridge_update_detail            (s: *const souxmar_bridge_update_status_t) -> *const c_char;
+
+    pub fn souxmar_bridge_update_status_free(s: *mut souxmar_bridge_update_status_t);
 }
 
 /// Bridge ABI version this Rust crate was built against. Compared
@@ -81,7 +99,8 @@ extern "C" {
 ///
 /// v1 (Sprint 13 push 3): pipeline introspection.
 /// v2 (Sprint 14 push 4): + provider_call.
-pub const EXPECTED_ABI_VERSION: u32 = 2;
+/// v3 (Sprint 15 push 4): + auto_updater_menu.
+pub const EXPECTED_ABI_VERSION: u32 = 3;
 
 /// Outcome of a real FFI call. The `Skeleton*` variants are
 /// returned when the `real-ffi` feature is off; the `Ffi*`
@@ -313,5 +332,88 @@ pub fn chat_send(request_json: &str, project_id: &str) -> FfiOutcome<Result<Chat
 
 #[cfg(not(feature = "real-ffi"))]
 pub fn chat_send(_request_json: &str, _project_id: &str) -> FfiOutcome<Result<ChatOk, ChatErr>> {
+    FfiOutcome::SkeletonNoFfi
+}
+
+// ---- Sprint 15 push 4 — auto_updater_menu wrappers ------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdateState {
+    Unknown,
+    UpToDate,
+    Available,
+    Staged,
+    Refused,
+    Corrupted,
+    UnknownCode(i32),
+}
+
+impl From<i32> for UpdateState {
+    fn from(v: i32) -> Self {
+        match v {
+            0 => Self::Unknown,
+            1 => Self::UpToDate,
+            2 => Self::Available,
+            3 => Self::Staged,
+            4 => Self::Refused,
+            5 => Self::Corrupted,
+            n => Self::UnknownCode(n),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UpdateStatus {
+    pub state:             UpdateState,
+    pub current_version:   String,
+    pub available_version: String,
+    pub detail:            String,
+}
+
+#[cfg(feature = "real-ffi")]
+pub fn read_update_status(target_root: &str) -> FfiOutcome<UpdateStatus> {
+    let actual = unsafe { souxmar_bridge_abi_version() };
+    if actual != EXPECTED_ABI_VERSION {
+        return FfiOutcome::AbiMismatch {
+            expected: EXPECTED_ABI_VERSION,
+            actual,
+        };
+    }
+    let croot = match CString::new(target_root) {
+        Ok(c) => c,
+        Err(_) => return FfiOutcome::FfiError("target_root contains an interior NUL byte".into()),
+    };
+    let mut err: *mut c_char = ptr::null_mut();
+    let handle = unsafe {
+        souxmar_bridge_update_status_read(croot.as_ptr(), &mut err as *mut _)
+    };
+    if handle.is_null() {
+        let msg = if err.is_null() {
+            "souxmar-c-bridge: update_status_read returned NULL with no error message".to_string()
+        } else {
+            let m = unsafe { CStr::from_ptr(err) }.to_string_lossy().into_owned();
+            unsafe { souxmar_bridge_free_string(err) };
+            m
+        };
+        return FfiOutcome::FfiError(msg);
+    }
+    let state   = UpdateState::from(unsafe { souxmar_bridge_update_state(handle) });
+    let current = unsafe { CStr::from_ptr(souxmar_bridge_update_current_version(handle)) }
+        .to_string_lossy().into_owned();
+    let avail   = unsafe { CStr::from_ptr(souxmar_bridge_update_available_version(handle)) }
+        .to_string_lossy().into_owned();
+    let detail  = unsafe { CStr::from_ptr(souxmar_bridge_update_detail(handle)) }
+        .to_string_lossy().into_owned();
+    unsafe { souxmar_bridge_update_status_free(handle) };
+    FfiOutcome::FfiOk(UpdateStatus {
+        state,
+        current_version:   current,
+        available_version: avail,
+        detail,
+    })
+}
+
+#[cfg(not(feature = "real-ffi"))]
+pub fn read_update_status(_target_root: &str) -> FfiOutcome<UpdateStatus> {
     FfiOutcome::SkeletonNoFfi
 }

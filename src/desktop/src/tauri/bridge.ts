@@ -21,7 +21,9 @@ export type CommandName =
   // Sprint 12 push 2 — FFI bridge feature-set query.
   | "bridge_feature_set"
   // Sprint 13 push 3 — first real FFI: pipeline introspection.
-  | "pipeline_summary";
+  | "pipeline_summary"
+  // Sprint 15 push 4 — third real FFI: auto-updater menu.
+  | "update_menu_status";
 
 // Sprint 12 push 2 — BridgeFeatureSet mirror of the Rust struct.
 // Renaming or removing fields here without a matching change to
@@ -89,4 +91,13 @@ export interface ChatSummary {
   tokens_in:  number;
   tokens_out: number;
   error:      ChatErrorSummary | null;
+}
+
+// Sprint 15 push 4 — auto-updater menu status. Mirrors
+// souxmar_bridge::UpdateMenuStatus.
+export interface UpdateMenuStatus {
+  state:             string;  // "unknown" | "up_to_date" | "available" | "staged" | "refused" | "corrupted"
+  current_version:   string;
+  available_version: string;
+  detail:            string;
 }

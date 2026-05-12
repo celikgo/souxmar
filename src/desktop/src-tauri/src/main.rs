@@ -20,6 +20,8 @@ fn main() {
             commands::bridge_feature_set,
             // Sprint 13 push 3 — first real FFI command.
             commands::pipeline_summary,
+            // Sprint 15 push 4 — third real FFI command.
+            commands::update_menu_status,
         ])
         .run(tauri::generate_context!())
         .expect("error launching souxmar-desktop");

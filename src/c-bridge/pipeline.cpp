@@ -52,7 +52,8 @@ extern "C" uint32_t souxmar_bridge_abi_version(void) {
   //
   // v1 (Sprint 13 push 3): pipeline introspection surface.
   // v2 (Sprint 14 push 4): + provider_call surface.
-  return 2;
+  // v3 (Sprint 15 push 4): + auto_updater_menu surface.
+  return 3;
 }
 
 extern "C"

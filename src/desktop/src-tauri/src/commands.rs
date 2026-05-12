@@ -112,6 +112,20 @@ pub fn pipeline_summary(
         .map_err(|e| e.to_string())
 }
 
+/// Sprint 15 push 4 — read the auto-updater's menu status for
+/// the given install layout. Read-only; the desktop's "Apply
+/// update" click shells out to `souxmar update apply` (per the
+/// updater.h header rationale — don't double-implement the
+/// state-machine surface ADR-0014 depends on).
+#[tauri::command]
+pub fn update_menu_status(
+    target_root: String,
+) -> Result<souxmar_bridge::UpdateMenuStatus, String> {
+    souxmar_bridge::Bridge::new()
+        .update_status(&target_root)
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn chat_send(
     message:    String,

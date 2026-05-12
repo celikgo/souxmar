@@ -98,13 +98,10 @@ impl Default for BridgeFeatureSet {
         BridgeFeatureSet {
             viewport_renderer:       false,
             pipeline_introspection:  ffi::is_real_ffi_compiled_in(),
-            // Sprint 14 push 4 — second flag flips structural.
-            // Both `pipeline_introspection` and `provider_call`
-            // route through the same `libsouxmar-c-bridge` static
-            // archive; the feature flag turns both on together.
             provider_call:           ffi::is_real_ffi_compiled_in(),
             keychain_write:          true,
-            auto_updater_menu:       false,
+            // Sprint 15 push 4 — third flag flips structural.
+            auto_updater_menu:       ffi::is_real_ffi_compiled_in(),
             bridge_protocol_version: ffi::EXPECTED_ABI_VERSION,
         }
     }
@@ -230,6 +227,54 @@ pub struct ChatSummary {
 pub struct ChatErrorSummary {
     pub kind: String,
     pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UpdateMenuStatus {
+    pub state:             String,   // "unknown" | "up_to_date" | "available" | "staged" | "refused" | "corrupted"
+    pub current_version:   String,
+    pub available_version: String,
+    pub detail:            String,
+}
+
+impl Bridge {
+    /// Sprint 15 push 4 — third real FFI surface. Read-only
+    /// update status for the desktop's "Check for updates" menu.
+    /// Apply / rollback shell out to `souxmar update apply` —
+    /// not double-implemented through FFI (see updater.h header
+    /// rationale).
+    pub fn update_status(
+        &self,
+        target_root: &str,
+    ) -> Result<UpdateMenuStatus, BridgeError> {
+        use ffi::UpdateState;
+        match ffi::read_update_status(target_root) {
+            ffi::FfiOutcome::SkeletonNoFfi => {
+                Err(BridgeError::FeatureNotWired("auto_updater_menu".into()))
+            }
+            ffi::FfiOutcome::AbiMismatch { expected, actual } => {
+                Err(BridgeError::FfiCallFailed(format!(
+                    "souxmar-c-bridge ABI mismatch: bridge built against \
+                     v{}, library reports v{}", expected, actual
+                )))
+            }
+            ffi::FfiOutcome::FfiError(msg) => Err(BridgeError::FfiCallFailed(msg)),
+            ffi::FfiOutcome::FfiOk(s) => Ok(UpdateMenuStatus {
+                state: match s.state {
+                    UpdateState::Unknown        => "unknown".into(),
+                    UpdateState::UpToDate       => "up_to_date".into(),
+                    UpdateState::Available      => "available".into(),
+                    UpdateState::Staged         => "staged".into(),
+                    UpdateState::Refused        => "refused".into(),
+                    UpdateState::Corrupted      => "corrupted".into(),
+                    UpdateState::UnknownCode(n) => format!("unknown_code_{}", n),
+                },
+                current_version:   s.current_version,
+                available_version: s.available_version,
+                detail:            s.detail,
+            }),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

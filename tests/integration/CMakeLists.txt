@@ -55,6 +55,8 @@ add_executable(souxmar_integration_tests
   test_c_bridge_pipeline.cpp
   # Sprint 14 push 4 — provider_call surface (bridge ABI v2).
   test_c_bridge_provider.cpp
+  # Sprint 15 push 4 — auto_updater_menu surface (bridge ABI v3).
+  test_c_bridge_updater.cpp
 )
 
 target_include_directories(souxmar_integration_tests
