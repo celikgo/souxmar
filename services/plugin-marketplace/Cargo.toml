@@ -1,0 +1,22 @@
+[package]
+name        = "plugin-marketplace"
+version     = "0.1.0"
+description = "souxmar paid-plugin storefront + license verification (MVP scaffold)"
+edition     = "2021"
+license     = "Apache-2.0"
+
+# Sprint 16 push 2 scaffold. ADR-0023 documents the architecture.
+# Standalone Rust binary; same out-of-workspace pattern as
+# services/managed-ai-proxy/ + services/cloud-sync/.
+
+[[bin]]
+name = "plugin-marketplace"
+path = "src/main.rs"
+
+[dependencies]
+axum               = "0.7"
+tokio              = { version = "1", features = ["full"] }
+serde              = { version = "1", features = ["derive"] }
+serde_json         = "1"
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

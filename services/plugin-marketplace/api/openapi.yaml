@@ -1,0 +1,116 @@
+# OpenAPI 3.1 contract for plugin-marketplace v1.
+# Sprint 16 push 2. ADR-0023.
+
+openapi: 3.1.0
+info:
+  title:       plugin-marketplace
+  version:     v1
+  description: souxmar paid-plugin storefront + license verification.
+  license:
+    name:      Apache-2.0
+    url:       https://www.apache.org/licenses/LICENSE-2.0
+
+paths:
+  /v1/plugin/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    get:
+      summary:     Plugin metadata.
+      operationId: getPlugin
+      responses:
+        '200':
+          description: Plugin metadata.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PluginEntry' }
+        '404':
+          description: Plugin not found / withdrawn.
+        '503':
+          description: MVP scaffold.
+
+  /v1/license/check:
+    post:
+      summary:     Validate an sxm_lic_<...> license key.
+      operationId: checkLicense
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plugin_id, license_key]
+              properties:
+                plugin_id:   { type: string }
+                license_key: { type: string }
+      responses:
+        '200':
+          description: Valid; entitlement receipt returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EntitlementReceipt' }
+        '402':
+          description: License revoked or expired.
+        '503':
+          description: MVP scaffold.
+
+  /v1/license/issue:
+    post:
+      summary:     Stripe webhook — issue a license key after a successful payment.
+      operationId: issueLicense
+      responses:
+        '200':
+          description: License issued + emailed to buyer.
+        '503':
+          description: MVP scaffold.
+
+  /v1/publisher/{id}/keys:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    get:
+      summary:     Last-known signing-key fingerprints for the publisher.
+      operationId: getPublisherKeys
+      responses:
+        '200':
+          description: List of fingerprint records.
+        '503':
+          description: MVP scaffold.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type:    http
+      scheme:  bearer
+      bearerFormat: sxm_pro_<32-hex>
+
+  schemas:
+    PluginEntry:
+      type: object
+      required: [id, version, manifest_url, signature_url]
+      properties:
+        id:                       { type: string }
+        version:                  { type: string }
+        manifest_url:             { type: string, format: uri }
+        signature_url:            { type: string, format: uri }
+        license_key_required:     { type: boolean, default: false }
+        price_usd_one_time:       { type: number }
+        price_usd_monthly:        { type: number }
+        publisher:                { type: string }
+        publisher_verified_at:    { type: string, format: date-time }
+
+    EntitlementReceipt:
+      type: object
+      required: [plugin_id, user_id, issued_at, expires_at, signature]
+      properties:
+        plugin_id:   { type: string }
+        user_id:     { type: string }
+        issued_at:   { type: string, format: date-time }
+        expires_at:  { type: string, format: date-time }
+        signature:   { type: string, description: "ed25519 over plugin_id|user_id|expires_at" }
