@@ -8,7 +8,7 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.9.7 cut below.)
+- (None this release — `[Unreleased]` reopens after the v0.9.8 cut below.)
 
 ### Changed
 
@@ -25,6 +25,21 @@ The plugin C ABI version is tracked separately and is independent of the project
 ### Security
 
 - (None this release.)
+
+---
+
+## [0.9.8] - 2026-05-18
+
+Sprint 20 closes here. See [`docs/retros/sprint-20.md`](docs/retros/sprint-20.md).
+**Tag:** `v0.9.8`. **ABI:** v1.3 frozen (unchanged). **Tool contract:** v1
+frozen final at 18 tools (unchanged). **Bridge ABI:** v3.
+
+### Added
+
+- **[ADR-0031](docs/adr/0031-sso-scim.md)** ratifies SAML 2.0 + OIDC SSO
+  and SCIM v2.0 user provisioning for Team/Enterprise tiers.
+- **[ADR-0032](docs/adr/0032-e2e-cloud-sync.md)** ratifies Enterprise-tier
+  end-to-end encrypted cloud sync (operator excluded from trust model).
 
 ---
 
