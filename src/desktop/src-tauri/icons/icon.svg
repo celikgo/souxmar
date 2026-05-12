@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Rounded-square backdrop in Twitter dim base. Apple-style rx for
+       a recognisable app-icon silhouette. -->
+  <rect x="0" y="0" width="1024" height="1024" rx="180" ry="180" fill="#15202B"/>
+
+  <!-- All line work in accent blue (#1D9BF0). Stroke widths tuned so
+       the bee remains readable down to ~32px. -->
+  <g fill="none" stroke="#1D9BF0" stroke-width="22"
+     stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Wings: two ovals splayed outward and slightly up, behind the
+         thorax. Drawn first so the body overlaps the inner edges. -->
+    <ellipse cx="300" cy="440" rx="140" ry="78"
+             transform="rotate(-28 300 440)"/>
+    <ellipse cx="724" cy="440" rx="140" ry="78"
+             transform="rotate(28 724 440)"/>
+
+    <!-- Body: a vertical oval (thorax + abdomen as one shape). -->
+    <ellipse cx="512" cy="610" rx="175" ry="225"/>
+
+    <!-- Stripes: three horizontal arcs across the body, all curving
+         the same direction so the abdomen reads as one rounded form. -->
+    <path d="M 358 530 Q 512 560 666 530"/>
+    <path d="M 348 660 Q 512 690 676 660"/>
+    <path d="M 372 775 Q 512 805 652 775"/>
+
+    <!-- Head: a smaller circle overlapping the top of the body.
+         Filled with the backdrop so the body outline stops at the
+         head boundary instead of reading as a chin curve. -->
+    <circle cx="512" cy="345" r="96" fill="#15202B"/>
+
+    <!-- Antennae: two soft curls reaching up and outward. -->
+    <path d="M 472 268 Q 444 222 432 178"/>
+    <path d="M 552 268 Q 580 222 592 178"/>
+
+    <!-- Antenna tips: small filled dots so they read at thumbnail size. -->
+    <circle cx="432" cy="176" r="10" fill="#1D9BF0"/>
+    <circle cx="592" cy="176" r="10" fill="#1D9BF0"/>
+
+    <!-- Eyes: small filled dots on the head. -->
+    <circle cx="482" cy="345" r="11" fill="#1D9BF0"/>
+    <circle cx="542" cy="345" r="11" fill="#1D9BF0"/>
+
+    <!-- Stinger: a short tick at the bottom point of the body. -->
+    <line x1="512" y1="835" x2="512" y2="872"/>
+  </g>
+</svg>
