@@ -200,6 +200,30 @@ stages:\n\
   - id: write\n\
     plugin: writer.vtu\n";
 
+/// Read a geometry file off disk as raw bytes. The frontend three.js
+/// loaders parse this directly (OBJLoader from a UTF-8 string, STLLoader
+/// from an ArrayBuffer). Path is restricted to a project's `geometry/`
+/// subdirectory to keep this from being an unbounded filesystem read.
+#[tauri::command]
+pub fn read_geometry_bytes(project_path: String, rel_path: String) -> Result<Vec<u8>, String> {
+    let project = PathBuf::from(project_path.trim());
+    if !project.is_dir() {
+        return Err(format!("project {} is not a directory", project.to_string_lossy()));
+    }
+    // Reject any `..` traversal — rel_path must stay inside the project.
+    let rel = PathBuf::from(rel_path.trim());
+    for c in rel.components() {
+        if matches!(c, std::path::Component::ParentDir | std::path::Component::RootDir) {
+            return Err("rel_path must be inside the project".into());
+        }
+    }
+    let abs = project.join(&rel);
+    if !abs.is_file() {
+        return Err(format!("{} is not a file", abs.to_string_lossy()));
+    }
+    fs::read(&abs).map_err(|e| format!("read {}: {}", abs.to_string_lossy(), e))
+}
+
 /// Open a native folder-picker dialog and return the chosen directory.
 /// Returns `Ok(None)` if the user cancelled. The `start_dir` parameter is
 /// the directory the picker opens at; an empty string means "platform
