@@ -16,12 +16,12 @@ import {
   primaryButtonStyle,
   secondaryButtonStyle,
 } from "./Modal";
-import { invokeCommand } from "../../tauri/bridge";
+import { invokeCommand, type ImportResult } from "../../tauri/bridge";
 
 interface Props {
   projectPath: string;
   onClose:     () => void;
-  onImported:  (destPath: string) => void;
+  onImported:  (result: ImportResult) => void;
 }
 
 export function ImportModelDialog({ projectPath, onClose, onImported }: Props) {
@@ -34,11 +34,11 @@ export function ImportModelDialog({ projectPath, onClose, onImported }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const dst = await invokeCommand<string>("import_model", {
+      const result = await invokeCommand<ImportResult>("import_model", {
         projectPath,
         sourceFile: sourcePath,
       });
-      onImported(dst);
+      onImported(result);
     } catch (e) {
       setError(String(e));
       setBusy(false);
