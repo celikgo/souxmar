@@ -175,7 +175,7 @@ IndexLoadResult load_index_file(const fs::path& path) {
     return err;
   } catch (const std::exception& e) {
     IndexParseError err;
-    err.message = std::string(path.string()) + ": " + e.what();
+    err.message = path.string() + ": " + e.what();
     return err;
   }
 }

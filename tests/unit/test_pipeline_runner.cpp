@@ -168,9 +168,9 @@ stages:
 )yaml");
   MockDispatcher d;
   Cache c;
-  run_pipeline(p1, d, c);
+  (void)run_pipeline(p1, d, c);
   EXPECT_EQ(d.calls.size(), 1u);
-  run_pipeline(p2, d, c);
+  (void)run_pipeline(p2, d, c);
   EXPECT_EQ(d.calls.size(), 2u);  // re-dispatched because input differs
 }
 
@@ -183,9 +183,9 @@ stages:
   MockDispatcher d;
   Cache c;
   d.versions["x"] = "1.0";
-  run_pipeline(p, d, c);
+  (void)run_pipeline(p, d, c);
   d.versions["x"] = "2.0";
-  run_pipeline(p, d, c);
+  (void)run_pipeline(p, d, c);
   EXPECT_EQ(d.calls.size(), 2u);  // version change invalidated the cache
 }
 
@@ -204,9 +204,9 @@ stages:
 )yaml");
   MockDispatcher d;
   Cache c;
-  run_pipeline(p1, d, c);
+  (void)run_pipeline(p1, d, c);
   EXPECT_EQ(d.calls.size(), 2u);
-  run_pipeline(p2, d, c);
+  (void)run_pipeline(p2, d, c);
   EXPECT_EQ(d.calls.size(), 4u);  // both a and b re-run
 }
 
@@ -220,8 +220,8 @@ stages:
   Cache c;
   RunOptions opts;
   opts.use_cache = false;
-  run_pipeline(p, d, c, opts);
-  run_pipeline(p, d, c, opts);
+  (void)run_pipeline(p, d, c, opts);
+  (void)run_pipeline(p, d, c, opts);
   EXPECT_EQ(d.calls.size(), 2u);  // no caching in either run
   EXPECT_EQ(c.size(), 0u);        // cache untouched
 }
