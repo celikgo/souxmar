@@ -28,7 +28,9 @@ export type CommandName =
   | "create_project"
   | "open_project"
   | "import_model"
-  | "list_project_files";
+  | "list_project_files"
+  | "pick_directory"
+  | "pick_file";
 
 // Sprint 12 push 2 — BridgeFeatureSet mirror of the Rust struct.
 // Renaming or removing fields here without a matching change to

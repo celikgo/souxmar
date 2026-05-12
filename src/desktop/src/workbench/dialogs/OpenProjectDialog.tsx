@@ -64,16 +64,35 @@ export function OpenProjectDialog({ onClose, onOpened }: Props) {
       </p>
       <div style={dialogFieldStyle}>
         <label style={dialogLabelStyle}>Project path</label>
-        <input
-          autoFocus
-          value={path}
-          onChange={e => setPath(e.target.value)}
-          style={dialogInputStyle}
-          placeholder="/Users/you/souxmar-projects/cantilever-beam"
-          onKeyDown={e => {
-            if (e.key === "Enter" && path.trim().length > 0) onSubmit();
-          }}
-        />
+        <div style={{ display: "flex", gap: 6 }}>
+          <input
+            autoFocus
+            value={path}
+            onChange={e => setPath(e.target.value)}
+            style={{ ...dialogInputStyle, flex: 1 }}
+            placeholder="/Users/you/souxmar-projects/cantilever-beam"
+            onKeyDown={e => {
+              if (e.key === "Enter" && path.trim().length > 0) onSubmit();
+            }}
+          />
+          <button
+            type="button"
+            onClick={async () => {
+              setError(null);
+              try {
+                const picked = await invokeCommand<string | null>("pick_directory", {
+                  startDir: path,
+                });
+                if (picked) setPath(picked);
+              } catch (e) {
+                setError(String(e));
+              }
+            }}
+            style={secondaryButtonStyle}
+          >
+            Browse…
+          </button>
+        </div>
       </div>
       {error && <div style={dialogErrorStyle}>{error}</div>}
     </Modal>

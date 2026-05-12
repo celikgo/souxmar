@@ -200,6 +200,41 @@ stages:\n\
   - id: write\n\
     plugin: writer.vtu\n";
 
+/// Open a native folder-picker dialog and return the chosen directory.
+/// Returns `Ok(None)` if the user cancelled. The `start_dir` parameter is
+/// the directory the picker opens at; an empty string means "platform
+/// default" (typically the user's home).
+#[tauri::command]
+pub fn pick_directory(start_dir: String) -> Result<Option<String>, String> {
+    let mut d = rfd::FileDialog::new().set_title("Choose a folder");
+    let start = start_dir.trim();
+    if !start.is_empty() && PathBuf::from(start).is_dir() {
+        d = d.set_directory(start);
+    }
+    Ok(d.pick_folder().map(|p| p.to_string_lossy().into_owned()))
+}
+
+/// Open a native file-picker dialog and return the chosen file path.
+/// Returns `Ok(None)` if the user cancelled. `extensions` is a list of
+/// bare extensions like `["stl", "obj"]`; pass an empty list to accept
+/// any file.
+#[tauri::command]
+pub fn pick_file(
+    start_dir:  String,
+    extensions: Vec<String>,
+) -> Result<Option<String>, String> {
+    let mut d = rfd::FileDialog::new().set_title("Choose a file");
+    let start = start_dir.trim();
+    if !start.is_empty() && PathBuf::from(start).is_dir() {
+        d = d.set_directory(start);
+    }
+    if !extensions.is_empty() {
+        let ext_refs: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
+        d = d.add_filter("Model files", &ext_refs);
+    }
+    Ok(d.pick_file().map(|p| p.to_string_lossy().into_owned()))
+}
+
 #[tauri::command]
 pub fn create_project(name: String, parent_dir: String) -> Result<String, String> {
     let trimmed = name.trim();
