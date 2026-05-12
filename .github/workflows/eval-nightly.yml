@@ -106,7 +106,7 @@ jobs:
 
       - name: Upload eval report + latency JSON
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: eval-report
           path: |
@@ -137,7 +137,7 @@ jobs:
 
       - name: Upload synth-load report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: synth-load-report
           path: synth-load-report.json

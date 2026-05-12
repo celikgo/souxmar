@@ -75,7 +75,7 @@ jobs:
             HEAD
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: source-tarball
           path: artefacts/
@@ -185,7 +185,7 @@ jobs:
           done
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-cli
           path: artefacts/
@@ -252,7 +252,7 @@ jobs:
           done
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-bundle
           path: artefacts/
@@ -304,7 +304,7 @@ jobs:
             -DestinationPath "artefacts/souxmar-$version-windows-x86_64.zip"
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-msi
           path: artefacts/
@@ -330,7 +330,7 @@ jobs:
           cp dist/*.tar.gz ../../artefacts/
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-sdist
           path: artefacts/
