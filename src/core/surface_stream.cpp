@@ -271,10 +271,21 @@ class SurfaceStream::Impl {
         FaceKey key;
         key.size = lf.vertex_count;
         key.v = face_verts;
-        // Cap explicitly at the array bound; gcc-13's -Werror=array-bounds
-        // can't statically prove lf.vertex_count <= 4 through the sort.
-        const auto sort_n = std::min<std::uint8_t>(key.size, 4);
-        std::sort(key.v.begin(), key.v.begin() + sort_n);
+        // gcc-13's -Werror=array-bounds propagates through std::sort
+        // inlining and can't statically prove the iterator pair stays
+        // inside key.v[0..3]. Dispatch on the constant face arities (3
+        // for tri-faces, 4 for quad-faces) so each std::sort call has a
+        // compile-time-known bound; gcc-13 then accepts both.
+        switch (key.size) {
+          case 3:
+            std::sort(key.v.begin(), key.v.begin() + 3);
+            break;
+          case 4:
+            std::sort(key.v.begin(), key.v.end());
+            break;
+          default:
+            break;
+        }
 
         auto it = face_map.find(key);
         if (it == face_map.end()) {

@@ -407,7 +407,7 @@ int main(int argc, char** argv) {
 
   std::vector<TaskOutcome> outcomes;
   outcomes.reserve(tasks.size());
-  int failures = 0;
+  std::size_t failures = 0;
   for (const auto& t : tasks) {
     auto o = run_one(*provider, model, t, ctx, tool_registry, policy);
     fmt::print("[{}] {}  ({}, {}ms)\n",

@@ -66,9 +66,10 @@ struct BufferHeader {
 #if defined(_WIN32)
   HANDLE map_handle;   // CreateFileMappingA handle
   HANDLE file_handle;  // CreateFileA handle
+  void* _pad;          // pad to kAlignment (16); HANDLE pair is 16 → header is 64
 #else
   int map_fd;  // POSIX file descriptor
-  int _pad;    // align to 8-byte word
+  int _pad;    // align to 8-byte word; total Linux/macOS header is 48
 #endif
 };
 

@@ -41,7 +41,7 @@ TEST(Geometry, VertexPositionRoundtrip) {
 
 TEST(Geometry, VertexPositionOutOfRangeThrows) {
   Geometry g;
-  EXPECT_THROW(g.vertex_position(VertexIndex{0}), std::out_of_range);
+  EXPECT_THROW((void)g.vertex_position(VertexIndex{0}), std::out_of_range);
 }
 
 TEST(Geometry, AddNonVertexEntities) {
