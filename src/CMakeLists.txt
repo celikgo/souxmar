@@ -13,6 +13,10 @@ add_subdirectory(crypto)
 # Sprint 10 push 4 — auto-updater (manifest parser + validator now;
 # verifier + state machine + rollback land in subsequent pushes).
 add_subdirectory(updater)
+# Sprint 13 push 3 — souxmar-c-bridge: first real FFI surface for
+# the Rust souxmar-bridge crate to call into. Builds a static
+# library that wraps libsouxmar-pipeline in a stable C ABI.
+add_subdirectory(c-bridge)
 
 if(SOUXMAR_BUILD_CLI)
   add_subdirectory(cli)

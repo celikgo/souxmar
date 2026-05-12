@@ -95,6 +95,23 @@ pub fn bridge_feature_set() -> Result<souxmar_bridge::BridgeFeatureSet, String> 
     Ok(souxmar_bridge::Bridge::new().feature_set())
 }
 
+/// Sprint 13 push 3 — first real FFI surface from React. Parses
+/// the pipeline YAML through libsouxmar-c-bridge and returns the
+/// inspector-panel summary. The Bridge wrapper handles both the
+/// `real-ffi` path (real parse) and the skeleton fallback; the
+/// React side calls this the same way regardless and surfaces the
+/// `FeatureNotWired` error as the existing "scaffolding" empty
+/// state if the flag is off.
+#[tauri::command]
+pub fn pipeline_summary(
+    project_id:    String,
+    pipeline_yaml: String,
+) -> Result<souxmar_bridge::PipelineSummary, String> {
+    souxmar_bridge::Bridge::new()
+        .pipeline_summary(&project_id, &pipeline_yaml)
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn chat_send(message: String, project_id: String) -> Result<String, String> {
     // Sprint 11 push 4 stub. The real implementation routes through

@@ -18,6 +18,8 @@ fn main() {
             commands::open_sample_project,
             commands::chat_send,
             commands::bridge_feature_set,
+            // Sprint 13 push 3 — first real FFI command.
+            commands::pipeline_summary,
         ])
         .run(tauri::generate_context!())
         .expect("error launching souxmar-desktop");

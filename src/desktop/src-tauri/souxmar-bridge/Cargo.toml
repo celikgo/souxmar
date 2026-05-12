@@ -1,19 +1,25 @@
 [package]
 name        = "souxmar-bridge"
-version     = "0.9.0-beta5"
+version     = "0.9.1-dev"
 description = "Rust ⇄ C++ FFI bridge between the souxmar desktop shell and libsouxmar-*"
 edition     = "2021"
 license     = "Apache-2.0"
+build       = "build.rs"
 
-# Sprint 12 push 2 skeleton. Closes R-013 (the workbench's three
-# panels each wait on this crate). ADR-0016 ratifies the
-# BridgeFeatureSet contract this crate exposes.
+# Sprint 12 push 2 skeleton; Sprint 13 push 3 lands the first real
+# FFI call (pipeline introspection via libsouxmar-c-bridge). ADR-
+# 0016 ratifies the BridgeFeatureSet contract.
 #
-# Today's surface is small on purpose: the contract (which
-# features are wired) is the load-bearing artefact, not the
-# behaviour. Subsequent pushes (Sprint 13+) fill in real FFI
-# calls into libsouxmar-pipeline, libsouxmar-core, libsouxmar-ai
-# behind the same Bridge API.
+# The `real-ffi` cargo feature gates linking against
+# libsouxmar-c-bridge.a. With the feature off (default for CI
+# builds that don't have a C++ build available), the Bridge falls
+# back to the previous skeleton stubs. With it on, build.rs
+# expects `SOUXMAR_C_BRIDGE_LIB_DIR` to point at the directory
+# containing the built static archive.
+
+[features]
+default  = []
+real-ffi = []
 
 [dependencies]
 serde       = { version = "1.0", features = ["derive"] }

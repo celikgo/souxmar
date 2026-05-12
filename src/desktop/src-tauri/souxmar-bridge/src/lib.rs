@@ -33,6 +33,8 @@
 //     workbench renders the "(Sprint 13+)" empty states until
 //     each feature flips on individually.
 
+pub mod ffi;
+
 use serde::Serialize;
 
 /// Which workbench surfaces are wired to real implementations
@@ -86,14 +88,20 @@ impl Default for BridgeFeatureSet {
     /// commit. The release CI workflow checks that for `stable`
     /// release builds at least `provider_call + pipeline_introspection`
     /// are true (or the desktop app is unfit for stable use).
+    ///
+    /// Sprint 13 push 3 — `pipeline_introspection` flips on when
+    /// the `real-ffi` cargo feature is compiled in (the build was
+    /// linked against libsouxmar-c-bridge). The flag is structural,
+    /// not feature-flag-only — if compile failed, the symbol is
+    /// absent and the desktop falls back to the skeleton path.
     fn default() -> Self {
         BridgeFeatureSet {
             viewport_renderer:       false,
-            pipeline_introspection:  false,
+            pipeline_introspection:  ffi::is_real_ffi_compiled_in(),
             provider_call:           false,
             keychain_write:          true,
             auto_updater_menu:       false,
-            bridge_protocol_version: 1,
+            bridge_protocol_version: ffi::EXPECTED_ABI_VERSION,
         }
     }
 }
@@ -111,13 +119,52 @@ impl Bridge {
         BridgeFeatureSet::default()
     }
 
-    /// Stub. Real implementation routes through
-    /// `libsouxmar_pipeline_summary()` via cbindgen.
+    /// Parse a pipeline YAML document and return a stage-by-stage
+    /// summary for the inspector panel.
+    ///
+    /// Sprint 13 push 3 — first real FFI call. Routes through
+    /// `libsouxmar-c-bridge`'s `souxmar_bridge_pipeline_parse()`
+    /// when `real-ffi` is on; falls back to `FeatureNotWired` when
+    /// it's off (the skeleton path). The Tauri command wrapper
+    /// surfaces both states the same way to the React side so the
+    /// inspector panel renders the same "scaffolding" empty state
+    /// whether the C bridge is absent (build) or unavailable
+    /// (runtime) — the user-visible distinction would not help
+    /// them act differently.
     pub fn pipeline_summary(
         &self,
-        _project_id: &str,
+        project_id: &str,
+        pipeline_yaml: &str,
     ) -> Result<PipelineSummary, BridgeError> {
-        Err(BridgeError::FeatureNotWired("pipeline_introspection".into()))
+        match ffi::parse_pipeline_stages(pipeline_yaml) {
+            ffi::FfiOutcome::SkeletonNoFfi => {
+                Err(BridgeError::FeatureNotWired("pipeline_introspection".into()))
+            }
+            ffi::FfiOutcome::AbiMismatch { expected, actual } => {
+                Err(BridgeError::FfiCallFailed(format!(
+                    "souxmar-c-bridge ABI mismatch: bridge built against \
+                     v{}, library reports v{}", expected, actual
+                )))
+            }
+            ffi::FfiOutcome::FfiError(msg) => {
+                Err(BridgeError::FfiCallFailed(msg))
+            }
+            ffi::FfiOutcome::FfiOk(stages) => {
+                let stages = stages
+                    .into_iter()
+                    .map(|s| PipelineStageSummary {
+                        id:     s.id,
+                        plugin: s.plugin,
+                        status: "pending".into(), // run-state lands later
+                    })
+                    .collect::<Vec<_>>();
+                Ok(PipelineSummary {
+                    project_id:  project_id.to_string(),
+                    stage_count: stages.len() as u32,
+                    stages,
+                })
+            }
+        }
     }
 
     /// Stub. Real implementation routes through

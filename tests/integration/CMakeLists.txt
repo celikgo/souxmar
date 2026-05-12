@@ -49,6 +49,10 @@ add_executable(souxmar_integration_tests
   # Sprint 13 push 2 — VTU consumer-conformance carry-over from
   # the Sprint 11 / 12 retro.
   test_vtu_consumer_conformance.cpp
+  # Sprint 13 push 3 — libsouxmar-c-bridge C ABI smoke. The
+  # regression net for the bridge surface declared in
+  # include/souxmar-c-bridge/pipeline.h (ADR-0018).
+  test_c_bridge_pipeline.cpp
 )
 
 target_include_directories(souxmar_integration_tests
@@ -62,6 +66,10 @@ target_link_libraries(souxmar_integration_tests
     souxmar::plugin
     souxmar::pipeline
     souxmar::update
+    # Sprint 13 push 3 — libsouxmar-c-bridge smoke test calls the
+    # C ABI directly; link the static archive into the integration
+    # suite.
+    souxmar::c_bridge
     souxmar::warnings
     souxmar::sanitizers
     # Sprint 10 push 6 — the `update check` integration test signs

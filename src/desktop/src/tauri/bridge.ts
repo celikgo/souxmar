@@ -19,7 +19,9 @@ export type CommandName =
   // Sprint 11 push 4 — workbench chat.
   | "chat_send"
   // Sprint 12 push 2 — FFI bridge feature-set query.
-  | "bridge_feature_set";
+  | "bridge_feature_set"
+  // Sprint 13 push 3 — first real FFI: pipeline introspection.
+  | "pipeline_summary";
 
 // Sprint 12 push 2 — BridgeFeatureSet mirror of the Rust struct.
 // Renaming or removing fields here without a matching change to
@@ -56,3 +58,18 @@ export const fallbackFeatureSet: BridgeFeatureSet = {
   auto_updater_menu:       false,
   bridge_protocol_version: 1,
 };
+
+// Sprint 13 push 3 — pipeline_summary command shapes. Mirrors
+// the souxmar_bridge::PipelineSummary + PipelineStageSummary
+// Rust structs. Adding a field is non-breaking per ADR-0016.
+export interface PipelineStageSummary {
+  id:     string;
+  plugin: string;
+  status: string;   // pending | running | ok | failed | cached
+}
+
+export interface PipelineSummary {
+  project_id:  string;
+  stage_count: number;
+  stages:      PipelineStageSummary[];
+}
