@@ -8,7 +8,7 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.9.1 cut below.)
+- (None this release — `[Unreleased]` reopens after the v0.9.2 cut below.)
 
 ### Changed
 
@@ -25,6 +25,52 @@ The plugin C ABI version is tracked separately and is independent of the project
 ### Security
 
 - (None this release.)
+
+---
+
+## [0.9.2] - 2026-05-13
+
+**Second dot-release after the public alpha.** Sprint 14 closes here. See
+[`docs/retros/sprint-14.md`](docs/retros/sprint-14.md) for the
+keep/fix/one-ADR-worthy-decision/risk/capacity. **Tag:** `v0.9.2`. **ABI:**
+v1.3 frozen (unchanged). **Tool contract:** v1 frozen final at 18 tools
+(unchanged). **Bridge ABI:** bumps 1 → 2 (additive surface growth — see
+ADR-0018 § Decision 5).
+
+### Added
+
+- **ADR-0019** ratifying the managed-AI proxy architecture for the Pro
+  tier. New `services/managed-ai-proxy/` directory tree — axum + tokio
+  binary scaffold with three v1 endpoints returning honest 503s.
+  Architecture decisions: stateless proxy, opaque souxmar tokens (not
+  upstream API keys), pre-charge per token with in-flight holds,
+  separate binary outside the Cargo workspace, mutual coexistence with
+  BYOK on a per-project basis.
+- **Second real FFI — `provider_call`** (bridge ABI v2). New
+  `include/souxmar-c-bridge/provider.h` + `src/c-bridge/provider.cpp`.
+  `BridgeFeatureSet::provider_call` flips structural when `real-ffi` is
+  on. React Chat panel renders typed error surfaces.
+- **synth-load `--bootstrap` flag** for one-shot corpus initialisation.
+- **Per-platform visual-regression matrix** workflow + Playwright
+  `snapshotPathTemplate` for `*.spec.ts-snapshots-{linux,darwin,win32}/`.
+- **`desktop-ffi.yml` CI workflow** validating the C bridge + Rust
+  souxmar-bridge build path with `--features real-ffi` on Linux + macOS.
+- **`docs/COMMUNITY.md` → `docs/bug-reports/` link** documenting the
+  ADR-0017 triage-record convention.
+
+### Changed
+
+- `souxmar_bridge_abi_version()` returns 2 (was 1). The byte was always
+  cross-checked on every FFI call; old desktop builds against bridge v1
+  fail loudly with a typed AbiMismatch error.
+- `chat_send` Tauri command now returns a typed `ChatSummary` shape
+  (reply_text, provider, tokens_in, tokens_out, error) instead of a raw
+  string.
+
+### Fixed
+
+- R-016 (release CI doesn't yet build the C bridge with `real-ffi`)
+  closes via the new desktop-ffi workflow. Sprint 14 push 2.
 
 ---
 
