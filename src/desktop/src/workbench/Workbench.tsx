@@ -193,10 +193,16 @@ export function Workbench() {
         <ImportModelDialog
           projectPath={projectId}
           onClose={() => setDialog(null)}
-          onImported={dst => {
+          onImported={result => {
             setDialog(null);
             const ts = new Date().toLocaleTimeString();
-            setLog(prev => [...prev, `[${ts}] imported ${dst}`]);
+            setLog(prev => {
+              const next = [...prev, `[${ts}] imported ${result.dst_path}`];
+              if (result.pipeline_change) {
+                next.push(`[${ts}]   pipeline.yaml: ${result.pipeline_change}`);
+              }
+              return next;
+            });
           }}
         />
       )}

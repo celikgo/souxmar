@@ -114,3 +114,12 @@ export interface FileEntry {
   is_dir:   boolean;
   children: FileEntry[];
 }
+
+// Mirrors the Rust ImportResult struct. `pipeline_change` is set when
+// import_model auto-wired the imported file into the project's
+// pipeline.yaml (today: STL only via reader.stl).
+export interface ImportResult {
+  dst_path:        string;
+  rel_path:        string;
+  pipeline_change: string | null;
+}
