@@ -67,18 +67,25 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build clang-17 lld-17 pkg-config
+          # autoconf/autoconf-archive/automake/libtool: required by
+          # vcpkg's libsodium port (builds from source via autotools).
+          sudo apt-get install -y ninja-build clang-17 lld-17 pkg-config \
+                                  autoconf autoconf-archive automake libtool
 
       - name: Install macOS toolchain
         if: runner.os == 'macOS'
-        run: brew install ninja pkg-config
+        # autoconf-archive + libtool needed by vcpkg's libsodium port.
+        run: brew install ninja pkg-config autoconf autoconf-archive automake libtool
 
       - name: Set up vcpkg
-        shell: bash
-        run: |
-          git clone --depth 1 https://github.com/microsoft/vcpkg "$HOME/vcpkg"
-          "$HOME/vcpkg/bootstrap-vcpkg.sh"
-          echo "VCPKG_ROOT=$HOME/vcpkg" >> "$GITHUB_ENV"
+        uses: lukka/run-vcpkg@v11
+        with:
+          # Pin to the same baseline as ci.yml so vcpkg can resolve the
+          # ports declared in vcpkg.json. The previous `git clone --depth 1`
+          # gave vcpkg only its HEAD commit, then the baseline lookup
+          # for fmt etc. failed with "Couldn't find baseline".
+          vcpkgGitCommitId: 56bb2411609227288b70117ead2c47585ba07713
+          runVcpkgInstall: false
 
       - name: Cache vcpkg binary archives
         uses: actions/cache@v4
