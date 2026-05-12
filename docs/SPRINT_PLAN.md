@@ -627,3 +627,141 @@ In addition to the existing gates (perf, determinism, security, docs, conformanc
 - **Distributed compute** — Pro-tier feature, not in open core.
 - **Web-app port** — desktop only.
 - **Assembly modeling (multi-body with mates)** — RFC-005's `design.yaml` is single-body; assemblies are a later block.
+
+---
+
+# Post-v1.3 plan — Sprints 33–36: simulate more, simulate broader
+
+**Context.** With v1.3 the full design → mesh → solve → visualize loop is in users' hands, but the *simulate* leg is still narrow: linear static structural, steady heat, single-physics transient, single-phase CFD. This block widens the simulation surface in two directions: (1) the **physics axis** — vibrations, multiphysics coupling, geometric/material nonlinearity — so the primary engineering audience (mechanical, aerospace, civil) can actually finish their day-to-day analyses inside souxmar instead of exporting to a legacy tool; and (2) the **researcher axis** — first-class algorithm experimentation hooks so academics can plug in custom kernels, A/B them against the in-tree reference, and cite a reproducible build.
+
+It is an eight-week (4-sprint) block. The ABI v1 contract stays frozen; every new physics arrives as a new `solver.*` capability id and (where coupling is involved) a new `coupler.*` capability id introduced via RFC. No existing field, mesh, or stage type changes shape.
+
+**Releases:** `v1.4` at end of S33 (vibrations GA), `v1.5` at end of S35 (nonlinear + multiphysics beta), `v1.6` at end of S36 (research mode GA).
+
+## Risk register additions (post-v1.3)
+
+| ID    | Risk                                                                                            | Likelihood | Impact | Mitigation                                                                                                                                            |
+| ----- | ----------------------------------------------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R-016 | SLEPc + DOLFINx integration on Windows is fragile; CI flakes block merges                       | Med        | High   | Linux/macOS-first; Windows behind `SOUXMAR_WITH_FENICSX_MSVC=OFF` until S34; pin SLEPc/PETSc versions; provide a Docker-based dev image.                |
+| R-017 | Two-way thermal-structural coupling diverges on stiff problems; users blame "souxmar is broken" | High       | Med    | Ship the explicit (one-way) coupler first; gate the implicit/two-way coupler behind a stability switch with conservative defaults; tutorials warn loudly. |
+| R-018 | Nonlinear convergence failures are opaque to the engineer audience                              | High       | High   | Solver diagnostics surface in the Inspector — residual history, divergence detection, recommended action; agent tool `explain_nonlinear_failure`.        |
+| R-019 | Research-mode kernel plugins crash the host; flaky third-party algorithms tarnish the project   | Med        | Med    | Existing `SOUXMAR_E_PLUGIN_FAULT` host isolation already covers crashes; research-mode adds a `solver.research.*` namespace clearly marked unstable.    |
+| R-020 | Academic adoption pulls support load (eg. "my custom kernel is slow") onto the core maintainers | Med        | Low    | Research-mode docs are explicit: maintainers do not debug user kernels; pointer to the plugin-author Slack + plugin marketplace conformance badge.      |
+
+## RFCs required before merge of this block
+
+Every item below is **Tier-3** per `docs/GOVERNANCE.md` and needs an RFC merged before the implementing sprint starts.
+
+| RFC slot | Subject                                                                                                | Sprint that consumes it |
+| -------- | ------------------------------------------------------------------------------------------------------ | ----------------------- |
+| RFC-007  | Modal/eigenvalue solver contract — `solver.modal.*`, frequency-table field metadata, harmonic forcing  | S33                     |
+| RFC-008  | Multiphysics coupling contract — `coupler.*` capability type, staggered vs monolithic dispatch         | S34                     |
+| RFC-009  | Nonlinear-solver contract — residual/jacobian callbacks, line-search policy, divergence diagnostics    | S35                     |
+| RFC-010  | Research-mode contract — `solver.research.*` namespace, algorithm A/B harness, dataset registry, citation export | S36           |
+
+---
+
+## Sprint 33 — Vibrations: modal + harmonic (`v1.4` release)
+
+**Theme:** make souxmar a real vibrations tool. Eigenvalue (modal) analysis with mode-shape animation in the viewport, plus harmonic (frequency-response) analysis driven from the same `set_bc` surface.
+
+| Team       | Story                                                                                                       | Size |
+| ---------- | ----------------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | RFC-007 merged; `solver.modal.*` ABI shape locked; field-metadata frequency table added to RFC-002 follow-up | M    |
+| Platform   | `examples/plugins/modal-stub`: closed-form Euler-Bernoulli cantilever, in-tree reference (always-on CI)     | S    |
+| Adapters   | FEniCSx + SLEPc adapter: real `solver.modal.linear` behind `SOUXMAR_WITH_FENICSX=ON`; Lanczos eigensolver   | XL   |
+| Adapters   | FEniCSx adapter: `solver.harmonic.linear` (frequency-response sweep over user-defined band)                 | L    |
+| Desktop    | Mode-shape playback in the viewport: amplification slider, frequency table panel, per-mode export to GLTF   | L    |
+| AI         | Agent tools: `solve_modal`, `solve_harmonic`, `list_mode_frequencies`, `explain_mode_shape`                 | M    |
+| DX         | Tutorial: "Finding the natural frequencies of a turbine blade"; bench: 100k-DoF modal in <60s on M2 Pro     | M    |
+| Platform   | Release `v1.4`; retro + capacity reset                                                                      | M    |
+
+**Exit criteria:**
+- `examples/modal-beam/pipeline.yaml` runs end-to-end on the stub and the FEniCSx adapter, byte-identical mode-shape output to the closed form for the cantilever case.
+- Mode-shape animation plays at 60fps on the cantilever sample.
+- `v1.4` tagged + downloadable on all three OSes.
+
+---
+
+## Sprint 34 — Multiphysics coupling: one-way and two-way
+
+**Theme:** introduce the `coupler.*` capability type so users can chain solvers across physics. First two couplers: thermal-structural (one-way) and fluid-structural (one-way), with two-way thermal-structural behind a beta flag.
+
+| Team       | Story                                                                                                       | Size |
+| ---------- | ----------------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | RFC-008 merged; `coupler.*` ABI added to `include/souxmar-c/`; pipeline runner gains coupler stage type      | L    |
+| Plugin Host| `coupler.thermal_structural.oneway` reference plugin (always-on): heat field → thermal-load BC for elasticity| L    |
+| Adapters   | FEniCSx-backed `coupler.thermal_structural.twoway` behind `SOUXMAR_COUPLER_BETA=ON`; staggered iteration     | XL   |
+| Plugin Host| `coupler.fluid_structural.oneway`: CFD pressure field → mechanical-load BC; needs interpolation kernel       | L    |
+| Desktop    | Coupling-graph view in the workbench (DAG: which solver feeds which); per-stage residual history            | L    |
+| AI         | Agent tools: `couple`, `query_coupling_residual`, `explain_coupling_divergence`                              | M    |
+| DX         | Tutorial: "Hot exhaust manifold — thermal stress in 4 stages"; coupling-failure-mode docs                    | M    |
+
+**Exit criteria:**
+- A user can mesh a part once, run heat → elasticity with the one-way coupler, and see thermal-stress contours without writing a coupling script.
+- The two-way coupler converges on the standard thermal-bimetallic-strip benchmark to <1% of the analytic solution.
+- Coupling DAG is visible and editable from the workbench.
+
+---
+
+## Sprint 35 — Nonlinear structural + materials library (`v1.5` release)
+
+**Theme:** geometric and material nonlinearity for the structural solver. Plasticity (von Mises + Drucker-Prager), large-deformation kinematics, contact (frictionless first). Plus a real material library so engineers stop hand-entering E and ν.
+
+| Team       | Story                                                                                                       | Size |
+| ---------- | ----------------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | RFC-009 merged; nonlinear-solver ABI surface (residual + jacobian callbacks, divergence detection)           | L    |
+| Adapters   | FEniCSx: `solver.elasticity.nonlinear` — Newton-Raphson with line search; geometric nonlinearity (St. Venant)| XL   |
+| Adapters   | FEniCSx: plasticity (von Mises radial-return + linear isotropic hardening); Drucker-Prager for geotech       | XL   |
+| Plugin Host| `solver.contact.frictionless` reference: node-to-surface penalty contact                                     | L    |
+| Platform   | `materials.toml` library: 60 common engineering materials (steels, aluminums, polymers, soils, concretes)    | M    |
+| Desktop    | Material picker UI; assigned-region inspector; convergence-plot panel with residual + step-size history      | L    |
+| AI         | Agent tools: `assign_material`, `set_nonlinear_options`, `explain_nonlinear_failure`, `query_residual_history` | M  |
+| DX         | Tutorial: "Plastic bending of an aluminum bracket"; release notes for `v1.5` (multiphysics + nonlinear beta) | M    |
+| Platform   | Release `v1.5` (`solver.elasticity.nonlinear` GA, two-way couplers + contact behind beta flag)               | M    |
+
+**Exit criteria:**
+- Aluminum-bracket tutorial converges and matches the published Abaqus reference within 3% on tip deflection.
+- Material picker is the default flow in the workbench; tutorials are updated.
+- `v1.5` tagged.
+
+---
+
+## Sprint 36 — Research mode: algorithm A/B + reproducible academic publishing (`v1.6` release)
+
+**Theme:** open the project to academic algorithm research. A `solver.research.*` namespace clearly marked as unstable, an A/B harness so researchers can compare their kernel against the in-tree reference under identical inputs, a curated benchmark dataset registry (NIST / NAFEMS / public CFD cases), and a citation-export flow so a paper based on souxmar runs is reproducible by a reviewer.
+
+| Team       | Story                                                                                                            | Size |
+| ---------- | ---------------------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | RFC-010 merged; `solver.research.*` namespace, instability banner in the agent + UI when used                     | M    |
+| Platform   | `souxmar bench ab --reference solver.modal.linear --candidate solver.research.modal.my_lanczos`: deterministic A/B harness with per-mesh tolerances, statistical report; CI plumbing for external researchers | XL   |
+| Platform   | Dataset registry: `souxmar dataset list / fetch` over a signed catalog of benchmark inputs (NAFEMS LE-* set, NIST heat-transfer, Turek-Hron FSI) | L  |
+| Plugin Host| Citation export: `souxmar cite <run-hash>` emits BibTeX entry that pins souxmar version + plugin versions + dataset hash + agent transcript | L   |
+| Desktop    | "Research mode" workbench toggle: surface A/B results + dataset picker + citation pane                            | L    |
+| AI         | Agent tools: `ab_compare`, `fetch_dataset`, `emit_citation`; tutorial-mode agent that walks a researcher through reproducing a published result | M |
+| DX         | Tutorial: "Reproducing the Turek-Hron FSI benchmark in souxmar"; partnership outreach to 3 university courses     | L    |
+| Platform   | Release `v1.6` (research mode GA + first signed dataset catalog)                                                  | M    |
+
+**Exit criteria:**
+- A grad student can clone souxmar, run `souxmar dataset fetch nafems-le10`, register their own `solver.research.modal.custom` plugin, and produce a side-by-side comparison report with the FEniCSx reference — without core changes.
+- A paper-style citation emitted by `souxmar cite` resolves to a downloadable bundle (binary versions + plugin manifests + dataset hash + transcript).
+- At least one academic course is using souxmar as a teaching tool.
+
+---
+
+## Cross-cutting commitments (Sprints 33–36)
+
+In addition to the existing gates (perf, determinism, security, docs, conformance, viz-golden):
+
+- **Solver-validation gate:** every new `solver.*` capability ships with at least one analytical-solution test, one mesh-convergence study, and one cross-solver comparison (`validating-solver` skill). CI fails if any is missing.
+- **Coupler-stability gate:** every new `coupler.*` capability ships with a divergence-detection test plus a documented stability envelope.
+- **Research-mode isolation:** `solver.research.*` plugins are excluded from the determinism gate (their whole point is experimentation) but *included* in the plugin-fault gate (must not crash the host).
+- **Every new agent tool ships with at least one eval case in `tests/agent-eval/`**; this block adds ~25 tools, so eval-suite grows by ≥25 cases.
+
+## What this block deliberately does *not* do
+
+- **Distributed/HPC solvers** — Pro-tier feature, addressed in a later block alongside the on-prem AI proxy.
+- **Topology optimization** — large surface, deferred to a dedicated block.
+- **Fully-implicit FSI two-way coupler** — Sprint 34 ships the staggered (loose) coupler only; monolithic FSI is a separate RFC.
+- **GPU solver back-ends** — the renderer is on the GPU; the solvers stay CPU through v1.6.
+- **Wet-lab / experimental-data fitting** — a research-mode follow-up, not in S36.
