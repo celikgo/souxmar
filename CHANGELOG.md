@@ -8,7 +8,7 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.9.8 cut below.)
+- (None this release — `[Unreleased]` reopens after the v0.9.9 cut below.)
 
 ### Changed
 
@@ -25,6 +25,24 @@ The plugin C ABI version is tracked separately and is independent of the project
 ### Security
 
 - (None this release.)
+
+---
+
+## [0.9.9] - 2026-05-19
+
+Sprint 21 closes here. See [`docs/retros/sprint-21.md`](docs/retros/sprint-21.md).
+**Tag:** `v0.9.9`. **ABI:** v1.3 frozen (unchanged). **Tool contract:** v1
+frozen final at 18 tools (unchanged). **Bridge ABI:** v3. **Last
+`-alpha`-window release before the v0.99 public beta.**
+
+### Added
+
+- **[ADR-0033](docs/adr/0033-security-audit-bug-bounty.md)** scopes the
+  pen-test engagement (6 numbered surfaces) and launches the HackerOne
+  bug-bounty programme ($5k Critical / $2k High / $500 Medium / $100
+  Low). 90-day coordinated disclosure window.
+- Bug-bounty triage workflow integration: new `security` auto-label,
+  P0 SLA reduced to 12 hours (from 24) for security-channel reports.
 
 ---
 
