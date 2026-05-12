@@ -1,19 +1,17 @@
 # RFC 0006: Time-series stream protocol + animation export
 
-- **Author:** TBD (Platform team lead, ratified by Desktop + Adapters)
+- **Author:** celikgokhun
 - **Status:** Draft
-- **Tracking issue:** TBD
+- **Tracking issue:** TBD — file at Sprint 32 kickoff
 - **Affects:** ABI, agent tool contract, on-disk format conventions
 - **Tier:** 3
 - **Date opened:** 2026-05-12
 - **Date `final-comment` started:** —
 - **Date accepted / rejected:** —
 
-> **Stub.** Closes the post-v1.0 block. Extends RFC-002 (field stream) with time-series semantics — playback, scrubbing, bounded-memory streaming — and adds a `writer.video` plugin type for animation export (ffmpeg as a subprocess plugin, ADR-0009 pattern). PVD (`*.pvd`) is the canonical on-disk format. Pairs with the reference transient solver (Newmark-β linear-elastic dynamics) landing in the same sprint.
-
 ## Summary
 
-Layer a time-series view on top of the existing `souxmar_field_t` (which already carries `num_time_steps`, see `include/souxmar-c/field.h:50`) so the renderer can play back transient solver output frame-by-frame. New C ABI surface `include/souxmar-c/timeseries.h` (additive, ABI minor `(1, 6, 0)`) layers on `field.h`; the bridge gains `timeseries_open` / `timeseries_frame` / `timeseries_cache_window` commands; the desktop gets playback controls (play / pause / scrub / step / loop). Animation export goes through a new `writer.video` plugin type whose first conforming implementation is `examples/plugins/video-ffmpeg` — a subprocess wrapper around ffmpeg following the ADR-0009 (OpenFOAM) process-isolation pattern. PVD is the on-disk format the reader stack standardises on; numbered-VTU input is accepted via a glob convention.
+Layer a time-series view on top of the existing `souxmar_field_t` (which already carries `num_time_steps`, see `include/souxmar-c/field.h:50`) so the renderer can play back transient solver output frame-by-frame. New C ABI surface `include/souxmar-c/timeseries.h` (additive minor bump v1.8 → v1.9 under the ADR-0008 ratchet — closes the chain of six minor bumps in the post-v1.0 block) layers on `field.h`; the bridge gains `timeseries_open` / `timeseries_frame` / `timeseries_cache_window` commands; the desktop gets playback controls (play / pause / scrub / step / loop). Animation export goes through a new `writer.video` plugin type whose first conforming implementation is `examples/plugins/video-ffmpeg` — a subprocess wrapper around ffmpeg following the ADR-0009 (OpenFOAM) process-isolation pattern. PVD is the on-disk format the reader stack standardises on; numbered-VTU input is accepted via a glob convention.
 
 ## Motivation
 
@@ -50,10 +48,19 @@ Picked because it's the de-facto standard for time-series VTU and Paraview / Vis
 
 ### 2. C ABI: `include/souxmar-c/timeseries.h` (new)
 
-`SOUXMAR_C_API_VERSION` bumps `(1, 5, 0)` → `(1, 6, 0)`. Additive minor.
+`SOUXMAR_ABI_VERSION_MINOR` in `abi.h` bumps from **8** to **9**, with a new history line:
+
+```
+ *   v1.9  Sprint 32 push 1 — time-series stream surface
+ *                            (souxmar-c/timeseries.h); ADR-NNNN.
+```
+
+Additive minor under the ADR-0008 ratchet. Existing plugins compiled against v1.0–v1.8 link and load unchanged. Function prototypes are bare (no `SOUXMAR_API` decoration), matching the existing `field.h` convention.
 
 ```c
-/* include/souxmar-c/timeseries.h — additive, v1.6.
+/* SPDX-License-Identifier: Apache-2.0
+ *
+ * include/souxmar-c/timeseries.h — additive, v1.9 of the C ABI.
  *
  * A time-series view over a sequence of souxmar_field_t handles. The
  * sequence is keyed by an opaque handle that the reader plugin
@@ -75,10 +82,9 @@ Picked because it's the de-facto standard for time-series VTU and Paraview / Vis
 
 #include "abi.h"
 #include "field.h"
+#include "status.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+SOUXMAR_C_BEGIN
 
 typedef struct souxmar_timeseries_t souxmar_timeseries_t;
 
@@ -86,26 +92,20 @@ typedef struct souxmar_timeseries_t souxmar_timeseries_t;
 
 /* Open a PVD or PVD-equivalent file. The reader is selected via the
  * existing reader.* plugin dispatch on the file extension. */
-SOUXMAR_API
 souxmar_timeseries_t* souxmar_timeseries_open(const char* path);
 
-SOUXMAR_API
 void souxmar_timeseries_close(souxmar_timeseries_t* series);
 
 /* ---- Series metadata ---- */
 
-SOUXMAR_API
 size_t souxmar_timeseries_frame_count(const souxmar_timeseries_t* series);
 
-SOUXMAR_API
 souxmar_status_t souxmar_timeseries_time(const souxmar_timeseries_t* series,
                                           size_t                       frame_index,
                                           double*                      out_time);
 
-SOUXMAR_API
 size_t souxmar_timeseries_field_count(const souxmar_timeseries_t* series);
 
-SOUXMAR_API
 const char* souxmar_timeseries_field_name(const souxmar_timeseries_t* series,
                                            size_t                       field_index);
 
@@ -116,7 +116,6 @@ const char* souxmar_timeseries_field_name(const souxmar_timeseries_t* series,
  * call). The renderer thread must consume the field before it next
  * calls the API. The host promises the returned field is in the
  * cache window. */
-SOUXMAR_API
 const souxmar_field_t* souxmar_timeseries_frame(souxmar_timeseries_t* series,
                                                   size_t                 frame_index,
                                                   const char*            field_name);
@@ -126,19 +125,15 @@ const souxmar_field_t* souxmar_timeseries_frame(souxmar_timeseries_t* series,
  * window_size: how many frames the host may keep resident. Defaults
  * to 16. Setting 0 disables caching (every frame request hits disk).
  * Setting SIZE_MAX pins the whole series (caller's risk). */
-SOUXMAR_API
 souxmar_status_t souxmar_timeseries_cache_window(souxmar_timeseries_t* series,
                                                   size_t                 window_size);
 
 /* Pre-warm the cache so playback can start without disk stalls. */
-SOUXMAR_API
 souxmar_status_t souxmar_timeseries_cache_preload(souxmar_timeseries_t* series,
                                                    size_t                 start_frame,
                                                    size_t                 count);
 
-#ifdef __cplusplus
-}
-#endif
+SOUXMAR_C_END
 #endif /* SOUXMAR_C_TIMESERIES_H */
 ```
 
@@ -162,7 +157,7 @@ id            = "dev.souxmar.examples.video-ffmpeg"
 name          = "ffmpeg Video Writer"
 version       = "0.1.0"
 abi           = 1
-min_souxmar_abi_minor = 6
+min_souxmar_abi_minor = 9
 license       = "Apache-2.0"
 
 [plugin.capabilities]
@@ -298,12 +293,13 @@ Leading indicators to watch in the first six months:
 
 Six PRs in Sprint 32.
 
-- [ ] **PR 1 — ABI add.** `include/souxmar-c/timeseries.h`; in-core stubs; ABI bump to `(1, 6, 0)`; conformance scaffold for `writer.video.*`. Reviewer: ABI gate.
+- [ ] **PR 1 — ABI add.** `include/souxmar-c/timeseries.h`; in-core stubs; `SOUXMAR_ABI_VERSION_MINOR` bump 8 → 9 with the new history line; conformance scaffold for `writer.video.*`. Commit marker `Ratchet: additive minor surface (ADR-0008)`. Reviewer: ABI gate.
 - [ ] **PR 2 — PVD reader extension.** Extend the Sprint 27 `reader.vtu` plugin (RFC-002 PR 3) to also accept `*.pvd` and produce a `souxmar_timeseries_t`; cache-window backing impl in libcore.
 - [ ] **PR 3 — Bridge surface + cache.** Rust commands; Tauri registration; LRU cache; pre-warm path; React `useTimeSeries(series_id)` hook.
 - [ ] **PR 4 — Playback UI.** Playback strip below viewport; per-frame deformed-shape / color-by-field / threshold re-evaluation; performance gate (24 fps on 250k tris on the CI integrated-GPU runner).
 - [ ] **PR 5 — `video-ffmpeg` plugin.** Subprocess-driven; conformance round-trip ("export a 24-frame test series, decode and compare frame hashes within tolerance"); error UX for ffmpeg-not-found.
 - [ ] **PR 6 — Agent tools + reference solver + example.** Five `viz.*` tools; `examples/plugins/solver-dyn` (Newmark-β linear-elastic dynamics); `examples/dynamic-beam` example case; "A dynamic beam" tutorial; v1.3 release notes.
+- [ ] ADR filed at `docs/adr/NNNN-abi-v1-9-timeseries-ratchet.md` — records the v1.9 minor bump under the ADR-0008 ratchet. Filed with PR 1.
 - [ ] ADR filed at `docs/adr/NNNN-pvd-as-canonical-timeseries.md`.
 - [ ] Documentation: tutorial; release notes; `docs/INFRA_STATUS.md` ffmpeg dependency note.
 

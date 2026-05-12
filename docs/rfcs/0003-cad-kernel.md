@@ -1,19 +1,17 @@
 # RFC 0003: CAD kernel choice + `cad.*` plugin contract
 
-- **Author:** TBD (Platform team lead, ratified by Adapters + Desktop)
+- **Author:** celikgokhun
 - **Status:** Draft
-- **Tracking issue:** TBD
+- **Tracking issue:** TBD — file at Sprint 28 kickoff
 - **Affects:** ABI, governance (new plugin type), agent tool contract
 - **Tier:** 3
 - **Date opened:** 2026-05-12
 - **Date `final-comment` started:** —
 - **Date accepted / rejected:** —
 
-> **Stub.** This RFC picks **Open CASCADE Technology (OCCT)** as the v1.x CAD kernel for souxmar and introduces a new `cad.*` plugin type that owns a live, editable BREP session. It does *not* land the sketcher (RFC-004) or the feature tree (RFC-005); those build on this surface in S29 / S30. Licensing is the load-bearing decision here; the ABI sketch is intentionally minimal so RFC-005 can extend it without re-litigating the kernel choice.
-
 ## Summary
 
-Adopt OCCT (LGPL-2.1 with linking exception, dynamic-link only) as the in-tree CAD kernel. Introduce a new plugin type `cad.*` distinct from `reader.*` — readers produce a one-shot `souxmar_geometry_t` snapshot today, whereas a `cad.*` plugin owns a *live* kernel session keyed by an opaque `souxmar_brep_session_t*` handle that supports edits across calls. The new ABI surface lands at `include/souxmar-c/brep.h` (additive, ABI minor `(1, 3, 0)`). The first conforming plugin is `examples/plugins/cad-occt`, replacing the existing `examples/plugins/occt-reader` (which becomes a thin wrapper that opens a session, exports the snapshot, and closes — preserving the v1 capability for plugins consuming `reader.step`).
+Adopt OCCT (LGPL-2.1 with linking exception, dynamic-link only) as the in-tree CAD kernel. Introduce a new plugin type `cad.*` distinct from `reader.*` — readers produce a one-shot `souxmar_geometry_t` snapshot today, whereas a `cad.*` plugin owns a *live* kernel session keyed by an opaque `souxmar_brep_session_t*` handle that supports edits across calls. The new ABI surface lands at `include/souxmar-c/brep.h` (additive minor bump v1.5 → v1.6 under the ADR-0008 ratchet — assumes RFC-001 and RFC-002 have already landed their v1.4 and v1.5 surfaces). The first conforming plugin is `examples/plugins/cad-occt`, replacing the existing `examples/plugins/occt-reader` (which becomes a thin wrapper that opens a session, exports the snapshot, and closes — preserving the v1 capability for plugins consuming `reader.step`).
 
 The agent gains `cad.*` tools that operate on the BREP session — initially `import_step`, `list_bodies`, `get_body_metadata`. The parametric feature operations (extrude, revolve, fillet, boolean) ship in RFC-005's `feature.*` tools on top of this surface.
 
@@ -44,7 +42,7 @@ name          = "OpenCASCADE CAD Kernel"
 version       = "0.1.0"
 abi           = 1
 license       = "Apache-2.0"
-min_souxmar_abi_minor = 3
+min_souxmar_abi_minor = 6
 
 [plugin.capabilities]
 provides      = ["cad.occt", "reader.step", "reader.iges"]
@@ -65,10 +63,19 @@ The conformance suite gains a `cad.*` plugin type with tests for: open / close a
 
 ### C ABI: `include/souxmar-c/brep.h` (new)
 
-`SOUXMAR_C_API_VERSION` bumps `(1, 2, 0)` → `(1, 3, 0)`. Additive minor.
+`SOUXMAR_ABI_VERSION_MINOR` in `abi.h` bumps from **5** to **6**, with a new history line:
+
+```
+ *   v1.6  Sprint 28 push 1 — BREP session surface + cad.* plugin type
+ *                            (souxmar-c/brep.h); ADR-NNNN.
+```
+
+Additive minor under the ADR-0008 ratchet. Existing plugins compiled against v1.0–v1.5 link and load unchanged. Function prototypes are bare (no `SOUXMAR_API` decoration), matching the existing `geometry.h` / `mesh.h` convention.
 
 ```c
-/* include/souxmar-c/brep.h — additive, v1.3.
+/* SPDX-License-Identifier: Apache-2.0
+ *
+ * include/souxmar-c/brep.h — additive, v1.6 of the C ABI.
  *
  * A live BREP session owned by a cad.* plugin. The session is the
  * unit of mutation: feature operations (RFC-005) take a session +
@@ -88,69 +95,56 @@ The conformance suite gains a `cad.*` plugin type with tests for: open / close a
 
 #include "abi.h"
 #include "geometry.h"
+#include "mesh.h"
+#include "status.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+SOUXMAR_C_BEGIN
 
 typedef struct souxmar_brep_session_t souxmar_brep_session_t;
 
 /* ---- Lifecycle ---- */
 
-SOUXMAR_API
 souxmar_brep_session_t* souxmar_brep_session_open(void);
-
-SOUXMAR_API
-void souxmar_brep_session_close(souxmar_brep_session_t* session);
+void                     souxmar_brep_session_close(souxmar_brep_session_t* session);
 
 /* ---- Import / export ---- */
 
-SOUXMAR_API
 souxmar_status_t souxmar_brep_import_step(souxmar_brep_session_t* session,
-                                          const char*             path);
+                                          const char*              path);
 
-SOUXMAR_API
 souxmar_status_t souxmar_brep_import_iges(souxmar_brep_session_t* session,
-                                          const char*             path);
+                                          const char*              path);
 
 /* Snapshot the session's body graph into a souxmar_geometry_t. The
  * session retains ownership of its BREP; the geometry is a discrete
  * read-only view consumable by mesher plugins. Calling this is the
  * only legal way for a non-cad plugin to see CAD output. */
-SOUXMAR_API
 souxmar_geometry_t* souxmar_brep_to_geometry(const souxmar_brep_session_t* session);
 
 /* ---- Body queries ---- */
 
-SOUXMAR_API
 size_t souxmar_brep_num_bodies(const souxmar_brep_session_t* session);
 
-SOUXMAR_API
 souxmar_status_t souxmar_brep_body_id(const souxmar_brep_session_t* session,
-                                       size_t                          index,
-                                       uint64_t*                       out_body_id);
+                                       size_t                         index,
+                                       uint64_t*                      out_body_id);
 
-SOUXMAR_API
 souxmar_status_t souxmar_brep_body_bounds(const souxmar_brep_session_t* session,
                                            uint64_t                       body_id,
                                            double                         out_min[3],
                                            double                         out_max[3]);
 
-SOUXMAR_API
 const char* souxmar_brep_body_name(const souxmar_brep_session_t* session,
                                     uint64_t                       body_id);
 
 /* ---- Tessellation (for the renderer; deflection in model units) ---- */
 
-SOUXMAR_API
 souxmar_status_t souxmar_brep_tessellate(souxmar_brep_session_t* session,
                                           uint64_t                 body_id,
                                           double                   deflection,
                                           souxmar_mesh_t**         out_surface_mesh);
 
-#ifdef __cplusplus
-}
-#endif
+SOUXMAR_C_END
 #endif /* SOUXMAR_C_BREP_H */
 ```
 
@@ -250,12 +244,13 @@ Leading indicators to watch in the first six months:
 
 Four PRs in Sprint 28.
 
-- [ ] **PR 1 — ABI add.** `include/souxmar-c/brep.h`; in-core stub backing (returns `SOUXMAR_E_NOT_IMPLEMENTED` until PR 2 supplies a real impl); `SOUXMAR_C_API_VERSION` bump to `(1, 3, 0)`; conformance test scaffold for the `cad.*` plugin type. Reviewer: ABI gate.
+- [ ] **PR 1 — ABI add.** `include/souxmar-c/brep.h`; in-core stub backing (returns `SOUXMAR_E_NOT_IMPLEMENTED` until PR 2 supplies a real impl); `SOUXMAR_ABI_VERSION_MINOR` bump 5 → 6 with the new history line; conformance test scaffold for the `cad.*` plugin type. Commit marker `Ratchet: additive minor surface (ADR-0008)`. Reviewer: ABI gate.
 - [ ] **PR 2 — `examples/plugins/cad-occt`.** Real OCCT session backing; STEP/IGES import; tessellation; conformance suite passes on the existing STEP corpus.
 - [ ] **PR 3 — Reader rewrite + agent tools.** Convert `examples/plugins/occt-reader` to a thin wrapper; land `cad.import_step`, `cad.list_bodies`, `cad.get_body_metadata` in `libsouxmar-ai`; eval cases for each.
 - [ ] **PR 4 — Mesher input.** Document the `cad_session` / `cad_body_id` value-bag keys; `examples/plugins/gmsh-mesher` consumes them when present and refines on the BREP analytic surface.
 - [ ] New doc: `docs/LICENSING.md` (OCCT relink-rights compliance story).
 - [ ] `releasing-souxmar` skill: add the OCCT-binary-publish step.
+- [ ] ADR filed at `docs/adr/NNNN-abi-v1-6-brep-ratchet.md` — records the v1.6 minor bump under the ADR-0008 ratchet. Filed with PR 1.
 - [ ] ADR filed at `docs/adr/NNNN-occt-version-pin.md` (Open question 6).
 - [ ] `docs/PLUGIN_SDK.md` updated: new `cad.*` plugin type section.
 

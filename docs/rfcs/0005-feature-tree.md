@@ -1,19 +1,17 @@
 # RFC 0005: Parametric feature tree — `design.yaml` v1 + replay semantics
 
-- **Author:** TBD (Platform team lead, ratified by Desktop + AI)
+- **Author:** celikgokhun
 - **Status:** Draft
-- **Tracking issue:** TBD
+- **Tracking issue:** TBD — file at Sprint 30 kickoff
 - **Affects:** ABI, agent tool contract, on-disk format (new `design.yaml`)
 - **Tier:** 3
 - **Date opened:** 2026-05-12
 - **Date `final-comment` started:** —
 - **Date accepted / rejected:** —
 
-> **Stub.** The capstone of the modeling block. Defines `design.yaml` — the on-disk parametric history that, replayed against an empty BREP session, produces the user's part. Pinned-format Tier-3: once shipped at v1.2, the schema is frozen for the lifetime of v1.x. Adds ~10 feature operations to the BREP ABI and ~10 agent tools.
-
 ## Summary
 
-Introduce `design.yaml` — a single project-level file recording the ordered list of feature operations that produce the part. Each feature is a typed record (extrude / revolve / fillet / boolean / pattern / …) referencing inputs by stable ID (sketch IDs from RFC-004, body/face/edge IDs from RFC-003). Replaying the file against a fresh BREP session is deterministic: same `design.yaml` + same input sketches + same OCCT version → same resulting bodies. The C ABI gains feature-operation entry points in an extended `brep.h` (ABI minor `(1, 5, 0)`). The agent surface gains ten `feature.*` tools. The workbench renders a feature tree panel with edit / suppress / reorder / delete + undo/redo.
+Introduce `design.yaml` — a single project-level file recording the ordered list of feature operations that produce the part. Each feature is a typed record (extrude / revolve / fillet / boolean / pattern / …) referencing inputs by stable ID (sketch IDs from RFC-004, body/face/edge IDs from RFC-003). Replaying the file against a fresh BREP session is deterministic: same `design.yaml` + same input sketches + same OCCT version → same resulting bodies. The C ABI extends the existing `brep.h` (introduced in RFC-003) with feature-operation entry points (additive minor bump v1.7 → v1.8 under the ADR-0008 ratchet — assumes RFCs 001-004 have landed). The agent surface gains ten `feature.*` tools. The workbench renders a feature tree panel with edit / suppress / reorder / delete + undo/redo.
 
 ## Motivation
 
@@ -101,7 +99,14 @@ This is the same "regenerate from history" semantics as every parametric CAD too
 
 ### 2. C ABI extension: feature ops in `brep.h`
 
-`SOUXMAR_C_API_VERSION` bumps `(1, 4, 0)` → `(1, 5, 0)`. Additive.
+`SOUXMAR_ABI_VERSION_MINOR` in `abi.h` bumps from **7** to **8**, with a new history line:
+
+```
+ *   v1.8  Sprint 30 push 1 — BREP feature ops (extend brep.h);
+ *                            ADR-NNNN.
+```
+
+Additive minor under the ADR-0008 ratchet. Existing plugins compiled against v1.0–v1.7 link and load unchanged. Function prototypes are bare (no `SOUXMAR_API` decoration), matching the rest of `brep.h`.
 
 Adds ~10 feature-op entry points to `include/souxmar-c/brep.h`:
 
@@ -110,7 +115,6 @@ Adds ~10 feature-op entry points to `include/souxmar-c/brep.h`:
  * ID (or SOUXMAR_INVALID_ID + status on failure). Caller is the host
  * replayer; plugin authors should not call these directly. */
 
-SOUXMAR_API
 uint64_t souxmar_brep_extrude(souxmar_brep_session_t* session,
                                const souxmar_sketch_t* sketch,
                                double                   distance,
@@ -119,7 +123,6 @@ uint64_t souxmar_brep_extrude(souxmar_brep_session_t* session,
                                uint64_t                 target_body_id, /* 0 for new_body */
                                souxmar_status_t*        out_status);
 
-SOUXMAR_API
 uint64_t souxmar_brep_revolve(souxmar_brep_session_t* session,
                                const souxmar_sketch_t* sketch,
                                uint32_t                 axis_line_id,
@@ -128,7 +131,6 @@ uint64_t souxmar_brep_revolve(souxmar_brep_session_t* session,
                                uint64_t                 target_body_id,
                                souxmar_status_t*        out_status);
 
-SOUXMAR_API
 uint64_t souxmar_brep_sweep(souxmar_brep_session_t* session,
                              const souxmar_sketch_t* profile,
                              const souxmar_sketch_t* path,
@@ -136,7 +138,6 @@ uint64_t souxmar_brep_sweep(souxmar_brep_session_t* session,
                              uint64_t                 target_body_id,
                              souxmar_status_t*        out_status);
 
-SOUXMAR_API
 uint64_t souxmar_brep_loft(souxmar_brep_session_t*  session,
                             const souxmar_sketch_t**  profiles, /* array */
                             size_t                     profile_count,
@@ -144,27 +145,23 @@ uint64_t souxmar_brep_loft(souxmar_brep_session_t*  session,
                             uint64_t                   target_body_id,
                             souxmar_status_t*          out_status);
 
-SOUXMAR_API
 souxmar_status_t souxmar_brep_fillet(souxmar_brep_session_t* session,
                                       uint64_t                 body_id,
                                       const uint64_t*          edge_ids,
                                       size_t                   edge_count,
                                       double                   radius);
 
-SOUXMAR_API
 souxmar_status_t souxmar_brep_chamfer(souxmar_brep_session_t* session,
                                        uint64_t                 body_id,
                                        const uint64_t*          edge_ids,
                                        size_t                   edge_count,
                                        double                   distance);
 
-SOUXMAR_API
 souxmar_status_t souxmar_brep_boolean(souxmar_brep_session_t* session,
                                        uint64_t                 target_body_id,
                                        uint64_t                 tool_body_id,
                                        uint8_t                  operation /* 1..3 */);
 
-SOUXMAR_API
 souxmar_status_t souxmar_brep_pattern_linear(souxmar_brep_session_t* session,
                                               const uint64_t*          source_body_ids,
                                               size_t                   source_count,
@@ -172,7 +169,6 @@ souxmar_status_t souxmar_brep_pattern_linear(souxmar_brep_session_t* session,
                                               double                   spacing,
                                               uint32_t                 count);
 
-SOUXMAR_API
 souxmar_status_t souxmar_brep_pattern_circular(souxmar_brep_session_t* session,
                                                 const uint64_t*         source_body_ids,
                                                 size_t                  source_count,
@@ -181,7 +177,6 @@ souxmar_status_t souxmar_brep_pattern_circular(souxmar_brep_session_t* session,
                                                 double                  angle_rad,
                                                 uint32_t                count);
 
-SOUXMAR_API
 souxmar_status_t souxmar_brep_delete_body(souxmar_brep_session_t* session,
                                            uint64_t                 body_id);
 ```
@@ -314,13 +309,14 @@ Leading indicators to watch in the first six months:
 
 Seven PRs in Sprint 30 — the most PR-heavy sprint of the post-v1.0 block.
 
-- [ ] **PR 1 — ABI extension.** Feature-op entry points added to `brep.h`; in-core stubs returning `SOUXMAR_E_NOT_IMPLEMENTED`; ABI bump to `(1, 5, 0)`; conformance scaffold. Reviewer: ABI gate.
+- [ ] **PR 1 — ABI extension.** Feature-op entry points added to `brep.h`; in-core stubs returning `SOUXMAR_E_NOT_IMPLEMENTED`; `SOUXMAR_ABI_VERSION_MINOR` bump 7 → 8 with the new history line; conformance scaffold. Commit marker `Ratchet: additive minor surface (ADR-0008)`. Reviewer: ABI gate.
 - [ ] **PR 2 — `cad-occt` feature ops.** Real OCCT implementations of extrude / revolve / sweep / loft / fillet / chamfer / boolean / patterns; per-op golden tests against reference output.
 - [ ] **PR 3 — `design.yaml` schema + replayer.** Format parser; replay engine; incremental regenerate with dependency tracking. Conformance corpus of 20+ test designs.
 - [ ] **PR 4 — Bridge surface.** Rust commands; Tauri registration; undo/redo stack.
 - [ ] **PR 5 — Feature tree UI.** Panel; drag-reorder; rename/suppress/delete; selection promotion in feature dialogs.
 - [ ] **PR 6 — Parameter spreadsheet.** Read/write parameters; trigger regenerate; validation (no zero/negative on dimensional inputs by default).
 - [ ] **PR 7 — Agent tools + eval.** 10 `feature.*` tools; eval cases for each; the "design a bracket" end-to-end case.
+- [ ] ADR filed at `docs/adr/NNNN-abi-v1-8-feature-ops-ratchet.md` — records the v1.8 minor bump under the ADR-0008 ratchet. Filed with PR 1.
 - [ ] ADR filed at `docs/adr/NNNN-design-yaml-v1-freeze.md`.
 - [ ] Documentation: tutorial "Modeling a bracket"; chat-driven variant; `docs/DESKTOP_APP.md` + `docs/AI_INTEGRATION.md` updates.
 - [ ] `v1.2` release notes drafted.

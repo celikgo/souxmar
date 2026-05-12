@@ -1,19 +1,17 @@
 # RFC 0002: Field-stream protocol on the bridge
 
-- **Author:** TBD (Platform team lead, ratified by Desktop)
+- **Author:** celikgokhun
 - **Status:** Draft
-- **Tracking issue:** TBD
+- **Tracking issue:** TBD — file at Sprint 27 kickoff
 - **Affects:** ABI, agent tool contract
 - **Tier:** 3
 - **Date opened:** 2026-05-12
 - **Date `final-comment` started:** —
 - **Date accepted / rejected:** —
 
-> **Stub.** Pairs with RFC-001 (viewport renderer). Establishes how scalar/vector/tensor fields from a solver run reach the renderer — the contract is set; chunk encoding + colormap details are deliberate `TBD`s for Sprint 27 week 1. Time-series playback is **out of scope** here; it lives in RFC-006.
-
 ## Summary
 
-Layer a field-stream surface on top of the existing `souxmar_field_t` handle so the workbench can render scalar / vector / tensor fields produced by any solver plugin, alongside the mesh streamed via RFC-001. The C ABI surface is additive (new `include/souxmar-c/field_stream.h`, ABI minor `(1, 2, 0)`); the bridge gains `field_stream_open` + `field_stream_chunk` Rust commands; the desktop wires those into Three.js vertex/face colour buffers and arrow glyphs. A reference `reader.vtu` plugin lands in the same sprint so the cantilever `cantilever.vtu` output renders without per-build special-casing.
+Layer a field-stream surface on top of the existing `souxmar_field_t` handle so the workbench can render scalar / vector / tensor fields produced by any solver plugin, alongside the mesh streamed via RFC-001. The C ABI surface is additive (new `include/souxmar-c/field_stream.h`, additive minor bump v1.4 → v1.5 under the ADR-0008 ratchet — assumes RFC-001's v1.4 surface-stream bump has landed in Sprint 25); the bridge gains `field_stream_open` + `field_stream_chunk` Rust commands; the desktop wires those into Three.js vertex/face colour buffers and arrow glyphs. A reference `reader.vtu` plugin lands in the same sprint so the cantilever `cantilever.vtu` output renders without per-build special-casing.
 
 ## Motivation
 
@@ -83,10 +81,19 @@ Encoding follows whatever RFC-001 chose for chunk transport (open question 1 the
 
 ### 3. C ABI (`include/souxmar-c/field_stream.h`, new)
 
-`SOUXMAR_C_API_VERSION` bumps `(1, 1, 0)` → `(1, 2, 0)` — additive minor. Existing plugins continue to load.
+`SOUXMAR_ABI_VERSION_MINOR` in `abi.h` bumps from **4** to **5**, with a new history line:
+
+```
+ *   v1.5  Sprint 27 push 1 — field-stream renderer surface
+ *                            (souxmar-c/field_stream.h); ADR-NNNN.
+```
+
+Additive minor under the ADR-0008 ratchet. Existing plugins compiled against v1.0–v1.4 link and load unchanged because nothing in this header is required of plugins; the field-stream entry points are host-side. Function prototypes are bare (no `SOUXMAR_API` decoration), matching the existing `field.h` / `mesh.h` convention.
 
 ```c
-/* include/souxmar-c/field_stream.h — additive, v1.2.
+/* SPDX-License-Identifier: Apache-2.0
+ *
+ * include/souxmar-c/field_stream.h — additive, v1.5 of the C ABI.
  *
  * Renderer-friendly view over an existing souxmar_field_t. The view
  * is *derived* and read-only; the host computes per-component min/max
@@ -99,41 +106,29 @@ Encoding follows whatever RFC-001 chose for chunk transport (open question 1 the
 
 #include "abi.h"
 #include "field.h"
+#include "status.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+SOUXMAR_C_BEGIN
 
 typedef struct souxmar_field_stream_t souxmar_field_stream_t;
 
-SOUXMAR_API
 souxmar_field_stream_t* souxmar_field_stream_open(const souxmar_field_t* field);
+void                     souxmar_field_stream_close(souxmar_field_stream_t* stream);
 
-SOUXMAR_API
-void souxmar_field_stream_close(souxmar_field_stream_t* stream);
-
-SOUXMAR_API
-size_t souxmar_field_stream_count(const souxmar_field_stream_t* s);
-
-SOUXMAR_API
+size_t  souxmar_field_stream_count(const souxmar_field_stream_t* s);
 uint8_t souxmar_field_stream_components(const souxmar_field_stream_t* s);
 
-SOUXMAR_API
 souxmar_status_t souxmar_field_stream_range(const souxmar_field_stream_t* s,
                                              double* out_min, /* len == components */
                                              double* out_max);
 
-SOUXMAR_API
 const char* souxmar_field_stream_units(const souxmar_field_stream_t* s);
 
 /* SoA read. out_capacity must be >= count * components. */
-SOUXMAR_API
 souxmar_status_t souxmar_field_stream_values(const souxmar_field_stream_t* s,
                                               float* out, size_t out_capacity);
 
-#ifdef __cplusplus
-}
-#endif
+SOUXMAR_C_END
 #endif /* SOUXMAR_C_FIELD_STREAM_H */
 ```
 
@@ -221,11 +216,12 @@ Leading indicators to watch in the first six months:
 
 Four PRs in Sprint 27, plus the reader plugin.
 
-- [ ] **PR 1 — ABI add.** `include/souxmar-c/field_stream.h`; in-core backing impl; `SOUXMAR_C_API_VERSION` bump to `(1, 2, 0)`; conformance test add. Reviewer: ABI gate.
+- [ ] **PR 1 — ABI add.** `include/souxmar-c/field_stream.h`; in-core backing impl; `SOUXMAR_ABI_VERSION_MINOR` bump 4 → 5 with the new history line; conformance test add. Commit marker `Ratchet: additive minor surface (ADR-0008)`. Reviewer: ABI gate.
 - [ ] **PR 2 — Bridge surface.** Rust commands; Tauri registration; unit tests against the bridge skeleton path. Closes open question (6) via the persistence file path.
 - [ ] **PR 3 — Reader plugin.** `examples/plugins/vtu-reader/`; manifest, build, conformance round-trip on the cantilever VTU + on a multi-cell-type fixture.
 - [ ] **PR 4 — Renderer wiring.** Three.js vertex/face colour pipeline; glyph instancing; deformed-shape pass; threshold filter; colormap legend component. Lands the four agent tools.
 - [ ] Documentation update in `docs/DESKTOP_APP.md`, `docs/AI_INTEGRATION.md`, `docs/PLUGIN_SDK.md`.
+- [ ] ADR filed at `docs/adr/NNNN-abi-v1-5-field-stream-ratchet.md` — records the v1.5 minor bump under the ADR-0008 ratchet. Filed with PR 1.
 - [ ] ADR filed at `docs/adr/NNNN-field-units-accessor.md` (Open question 1 — depends on its resolution).
 - [ ] Tutorial: `docs/tutorials/inspecting-results.md`.
 

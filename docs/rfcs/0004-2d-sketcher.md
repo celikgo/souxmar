@@ -1,25 +1,23 @@
 # RFC 0004: 2D sketcher + constraint solver
 
-- **Author:** TBD (Desktop team lead, ratified by Platform)
+- **Author:** celikgokhun
 - **Status:** Draft
-- **Tracking issue:** TBD
+- **Tracking issue:** TBD — file at Sprint 29 kickoff
 - **Affects:** ABI, agent tool contract, on-disk format (new `*.sketch.yaml`)
 - **Tier:** 3
 - **Date opened:** 2026-05-12
 - **Date `final-comment` started:** —
 - **Date accepted / rejected:** —
 
-> **Stub.** Builds on RFC-003 (BREP session). Sketches anchor to a plane — either a world plane or a planar face on a BREP body. The constraint solver lives in a plugin (`sketch.solver.*`) so the kernel choice can swap without touching the host. RFC-005 (feature tree) consumes sketches as inputs for extrude / revolve / sweep / loft.
-
 ## Summary
 
-Add a 2D sketcher to the workbench: pick a plane, draw primitives (line, polyline, arc, circle, spline), apply geometric + dimensional constraints, solve. Sketches persist as `*.sketch.yaml` inside the project directory and are referenced by the feature tree (RFC-005) as inputs to extrude / revolve / sweep. The constraint solver is wrapped as a `sketch.solver.*` plugin; the first implementation is `examples/plugins/sketch-solver-gcs` wrapping FreeCAD's **planegcs** (LGPL-2.1). The C ABI gains `include/souxmar-c/sketch.h` (ABI minor `(1, 4, 0)`, additive). Sixteen agent tools land in `libsouxmar-ai` for the chat-driven authoring path.
+Add a 2D sketcher to the workbench: pick a plane, draw primitives (line, polyline, arc, circle, spline), apply geometric + dimensional constraints, solve. Sketches persist as `*.sketch.yaml` inside the project directory and are referenced by the feature tree (RFC-005) as inputs to extrude / revolve / sweep. The constraint solver is wrapped as a `sketch.solver.*` plugin; the first implementation is `examples/plugins/sketch-solver-gcs` wrapping FreeCAD's **planegcs** (LGPL-2.1). The C ABI gains `include/souxmar-c/sketch.h` (additive minor bump v1.6 → v1.7 under the ADR-0008 ratchet — assumes RFCs 001-003 have landed their respective surfaces). Sixteen agent tools land in `libsouxmar-ai` for the chat-driven authoring path.
 
 ## Motivation
 
 The post-v1.0 block's Sprint 30 (parametric features) requires sketch inputs; without RFC-004, the feature operations have nothing to extrude or revolve. Concretely:
 
-- The Sprint 24 dogfood retro (TBD link) flagged "I can't author a part — I can only import STEP" as the second-highest external friction point, behind the renderer.
+- Without an in-app sketcher, the only way to introduce geometry today is to import a STEP file from an external CAD tool — confirmed at the architectural level by the Sprint 24 retro's post-v1.0 plan (`docs/retros/sprint-24.md`), which lists viewport rendering at Sprint 28 / v1.1.0 but leaves authoring entirely to imports. That gap is what RFC-004 closes.
 - The agent's "design a bracket" eval case (planned for Sprint 30) presumes a sketch tool surface that does not exist.
 - Architectural / civil users — one of our three primary personas per `docs/VISION.md` — author 2D plans more than 3D bodies; a competent sketcher unlocks that workflow even before the parametric tree lands.
 
@@ -37,10 +35,19 @@ The plugin contract is small: receive a list of primitives + constraints, mutate
 
 ### C ABI: `include/souxmar-c/sketch.h` (new)
 
-`SOUXMAR_C_API_VERSION` bumps `(1, 3, 0)` → `(1, 4, 0)`. Additive.
+`SOUXMAR_ABI_VERSION_MINOR` in `abi.h` bumps from **6** to **7**, with a new history line:
+
+```
+ *   v1.7  Sprint 29 push 1 — 2D sketch surface
+ *                            (souxmar-c/sketch.h); ADR-NNNN.
+```
+
+Additive minor under the ADR-0008 ratchet. Existing plugins compiled against v1.0–v1.6 link and load unchanged. Function prototypes are bare (no `SOUXMAR_API` decoration).
 
 ```c
-/* include/souxmar-c/sketch.h — additive, v1.4.
+/* SPDX-License-Identifier: Apache-2.0
+ *
+ * include/souxmar-c/sketch.h — additive, v1.7 of the C ABI.
  *
  * A 2D sketch is a list of primitives in a local UV plane, plus a
  * list of constraints over those primitives, plus an anchor (the
@@ -56,10 +63,9 @@ The plugin contract is small: receive a list of primitives + constraints, mutate
 
 #include "abi.h"
 #include "brep.h"   /* anchor faces are BREP face IDs */
+#include "status.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+SOUXMAR_C_BEGIN
 
 typedef struct souxmar_sketch_t souxmar_sketch_t;
 
@@ -86,43 +92,35 @@ typedef struct souxmar_sketch_t souxmar_sketch_t;
 
 /* ---- Lifecycle ---- */
 
-SOUXMAR_API
 souxmar_sketch_t* souxmar_sketch_new(void);
 
-SOUXMAR_API
 void souxmar_sketch_free(souxmar_sketch_t* sketch);
 
 /* ---- Anchor (where the sketch lives in 3D) ---- */
 
 /* World-axis-aligned planes: 0 = XY, 1 = XZ, 2 = YZ. */
-SOUXMAR_API
 souxmar_status_t souxmar_sketch_anchor_world(souxmar_sketch_t* sketch,
                                               uint8_t            plane);
 
 /* Anchor to a planar face on a BREP session. The face must be planar
  * (kernel rejects non-planar with SOUXMAR_E_INVALID_ARGUMENT). */
-SOUXMAR_API
 souxmar_status_t souxmar_sketch_anchor_face(souxmar_sketch_t*               sketch,
                                              const souxmar_brep_session_t*   session,
                                              uint64_t                         face_id);
 
 /* ---- Add primitives (returns a u32 primitive ID) ---- */
 
-SOUXMAR_API
 uint32_t souxmar_sketch_add_point(souxmar_sketch_t* sketch, double u, double v);
 
-SOUXMAR_API
 uint32_t souxmar_sketch_add_line(souxmar_sketch_t* sketch,
                                   uint32_t           start_point_id,
                                   uint32_t           end_point_id);
 
-SOUXMAR_API
 uint32_t souxmar_sketch_add_arc(souxmar_sketch_t* sketch,
                                  uint32_t           start_point_id,
                                  uint32_t           end_point_id,
                                  uint32_t           centre_point_id);
 
-SOUXMAR_API
 uint32_t souxmar_sketch_add_circle(souxmar_sketch_t* sketch,
                                     uint32_t           centre_point_id,
                                     double             radius);
@@ -134,7 +132,6 @@ uint32_t souxmar_sketch_add_circle(souxmar_sketch_t* sketch,
  * kind: 1 for horizontal/vertical, 2 for parallel/perpendicular/etc.).
  * `value` is the dimensional value (mm/rad/etc.); 0.0 for non-
  * dimensional constraints. */
-SOUXMAR_API
 uint32_t souxmar_sketch_add_constraint(souxmar_sketch_t* sketch,
                                         uint8_t            kind,
                                         const uint32_t*    targets,
@@ -143,13 +140,10 @@ uint32_t souxmar_sketch_add_constraint(souxmar_sketch_t* sketch,
 
 /* ---- Queries ---- */
 
-SOUXMAR_API
 size_t souxmar_sketch_num_primitives(const souxmar_sketch_t* sketch);
 
-SOUXMAR_API
 size_t souxmar_sketch_num_constraints(const souxmar_sketch_t* sketch);
 
-SOUXMAR_API
 souxmar_status_t souxmar_sketch_point_position(const souxmar_sketch_t* sketch,
                                                 uint32_t                 point_id,
                                                 double*                  out_u,
@@ -159,12 +153,9 @@ souxmar_status_t souxmar_sketch_point_position(const souxmar_sketch_t* sketch,
 
 /* Returns: SOUXMAR_OK (solved), SOUXMAR_E_UNDERCONSTRAINED,
  * SOUXMAR_E_OVERCONSTRAINED, SOUXMAR_E_NO_CONVERGENCE. */
-SOUXMAR_API
 souxmar_status_t souxmar_sketch_solve(souxmar_sketch_t* sketch);
 
-#ifdef __cplusplus
-}
-#endif
+SOUXMAR_C_END
 #endif /* SOUXMAR_C_SKETCH_H */
 ```
 
@@ -180,7 +171,7 @@ id            = "dev.souxmar.examples.sketch-solver-gcs"
 name          = "FreeCAD planegcs Sketch Solver"
 version       = "0.1.0"
 abi           = 1
-min_souxmar_abi_minor = 4
+min_souxmar_abi_minor = 7
 
 [plugin.capabilities]
 provides      = ["sketch.solver.gcs"]
@@ -364,12 +355,13 @@ Leading indicators to watch in the first six months:
 
 Six PRs in Sprint 29.
 
-- [ ] **PR 1 — ABI add.** `include/souxmar-c/sketch.h`; in-core data model; ABI bump to `(1, 4, 0)`; conformance test scaffold for `sketch.solver.*`. Reviewer: ABI gate.
+- [ ] **PR 1 — ABI add.** `include/souxmar-c/sketch.h`; in-core data model; `SOUXMAR_ABI_VERSION_MINOR` bump 6 → 7 with the new history line; conformance test scaffold for `sketch.solver.*`. Commit marker `Ratchet: additive minor surface (ADR-0008)`. Reviewer: ABI gate.
 - [ ] **PR 2 — Solver plugin.** `examples/plugins/sketch-solver-gcs/`; conformance suite on a corpus of test sketches (degenerate / under / over / well-constrained).
 - [ ] **PR 3 — On-disk format.** `*.sketch.yaml` v1 schema + round-trip tests; format documented in `docs/PLUGIN_SDK.md` (sketch addendum).
 - [ ] **PR 4 — Bridge surface.** Rust commands; Tauri registration; React hook `useSketch(sketch_id)`.
 - [ ] **PR 5 — Sketcher UI.** Mode toggle in Viewport; orthographic camera; grid + snap; primitive drawing tools; dimension toolbar; solver status strip.
 - [ ] **PR 6 — Agent tools.** 16 `sketch.*` tools wired through the dispatcher; eval cases for each; "your first sketch" tutorial.
+- [ ] ADR filed at `docs/adr/NNNN-abi-v1-7-sketch-ratchet.md` — records the v1.7 minor bump under the ADR-0008 ratchet. Filed with PR 1.
 - [ ] ADR filed at `docs/adr/NNNN-sketch-solver-pin.md`.
 - [ ] Documentation: tutorial; `docs/AI_INTEGRATION.md` update.
 
