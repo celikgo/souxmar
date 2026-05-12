@@ -95,8 +95,7 @@ souxmar_buffer_t* souxmar_buffer_new(std::size_t size_bytes) {
   // aligned. We compute the data pointer first, then back the header
   // pointer up by sizeof(BufferHeader).
   const auto raw_addr = reinterpret_cast<std::uintptr_t>(raw);
-  const auto data_addr = (raw_addr + sizeof(BufferHeader) + (kAlignment - 1))
-                         & ~static_cast<std::uintptr_t>(kAlignment - 1);
+  const auto data_addr = (raw_addr + sizeof(BufferHeader) + (kAlignment - 1)) & ~(kAlignment - 1);
   auto* header = reinterpret_cast<BufferHeader*>(data_addr - sizeof(BufferHeader));
   std::memset(header, 0, sizeof(*header));
   header->magic = kMagic;
