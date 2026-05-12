@@ -24,15 +24,16 @@
 //      vertices, then normalize.
 //   7. Pack everything into SoA buffers and stash on Impl.
 //
-// Face tables are duplicated from examples/plugins/openfoam-solver
-// for now — ADR-0012's pre-mortem flagged centralization as a future
-// follow-up; doing it here would expand the diff with unrelated
-// refactoring.
+// Face tables live in souxmar/core/face_topology.h (centralised per
+// ADR-0012's pre-mortem follow-up). 2D linear cells (Tri3, Quad4) are
+// emitted directly — they ARE the surface — rather than going through
+// the boundary-dedup pipeline below.
 //
-// Quadratic elements (Tet10, Hex20, Hex27, Prism15, Pyramid13) are
-// skipped silently — same posture as openfoam-solver. Mid-edge nodes
-// are not reflected; a future minor can lower to the linear corner
-// set if the user demand surfaces.
+// Quadratic elements (Tet10, Hex20, Hex27, Prism15, Pyramid13) get an
+// empty face table from face_node_table and are skipped silently —
+// same posture as openfoam-solver. Mid-edge nodes are not reflected;
+// a future minor can lower to the linear corner set if user demand
+// surfaces.
 
 #include "souxmar/core/surface_stream.h"
 
@@ -46,71 +47,13 @@
 #include <vector>
 
 #include "souxmar/core/element_type.h"
+#include "souxmar/core/face_topology.h"
 #include "souxmar/core/mesh.h"
 #include "souxmar/core/tag.h"
 
 namespace souxmar::core {
 
 namespace {
-
-// ---------- Per-element-type local face tables ----------
-
-struct LocalFace {
-  std::uint8_t                  vertex_count;    // 3 (triangle) or 4 (quad)
-  std::array<std::uint8_t, 4>   cell_local_idx;  // 4th slot unused for tri faces
-};
-
-// Tet4 — 4 triangular faces (opposite-vertex convention).
-constexpr LocalFace kTet4Faces[4] = {
-    {3, {{1, 2, 3, 0}}},   // opposite v0
-    {3, {{0, 3, 2, 0}}},   // opposite v1
-    {3, {{0, 1, 3, 0}}},   // opposite v2
-    {3, {{0, 2, 1, 0}}},   // opposite v3
-};
-
-// Hex8 — 6 quadrilateral faces. Vertex ordering matches the VTK_HEXAHEDRON
-// convention souxmar uses internally; faces are CCW from outside the cell.
-constexpr LocalFace kHex8Faces[6] = {
-    {4, {{0, 3, 2, 1}}},   // -z (bottom)
-    {4, {{4, 5, 6, 7}}},   // +z (top)
-    {4, {{0, 1, 5, 4}}},   // -y (front)
-    {4, {{3, 7, 6, 2}}},   // +y (back)
-    {4, {{0, 4, 7, 3}}},   // -x (left)
-    {4, {{1, 2, 6, 5}}},   // +x (right)
-};
-
-// Prism6 — 2 triangular caps + 3 quadrilateral sides.
-constexpr LocalFace kPrism6Faces[5] = {
-    {3, {{0, 2, 1, 0}}},   // -z (bottom triangle)
-    {3, {{3, 4, 5, 0}}},   // +z (top triangle)
-    {4, {{0, 1, 4, 3}}},   // side 0-1
-    {4, {{1, 2, 5, 4}}},   // side 1-2
-    {4, {{2, 0, 3, 5}}},   // side 2-0
-};
-
-// Pyramid5 — 1 quadrilateral base + 4 triangular sides meeting at the apex.
-constexpr LocalFace kPyramid5Faces[5] = {
-    {4, {{0, 3, 2, 1}}},   // -z (base quad)
-    {3, {{0, 1, 4, 0}}},   // side 0-1
-    {3, {{1, 2, 4, 0}}},   // side 1-2
-    {3, {{2, 3, 4, 0}}},   // side 2-3
-    {3, {{3, 0, 4, 0}}},   // side 3-0
-};
-
-struct FaceTable {
-  const LocalFace* faces;
-  std::size_t      count;
-};
-
-FaceTable face_table_for(ElementType et) {
-  switch (et) {
-    case ElementType::Tet4:     return {kTet4Faces,     4};
-    case ElementType::Hex8:     return {kHex8Faces,     6};
-    case ElementType::Prism6:   return {kPrism6Faces,   5};
-    case ElementType::Pyramid5: return {kPyramid5Faces, 5};
-    default:                    return {nullptr, 0};
-  }
-}
 
 // ---------- Canonical face key for dedup ----------
 
@@ -312,15 +255,15 @@ class SurfaceStream::Impl {
         continue;
       }
 
-      // 3D linear: walk the face table.
-      const FaceTable ft = face_table_for(et);
-      if (ft.faces == nullptr) {
+      // 3D linear: walk the centralised face table.
+      const std::span<const LocalFace> ft = face_node_table(et);
+      if (ft.empty()) {
         continue;  // skip quadratic / unsupported types
       }
 
       const auto cell_nodes = mesh.cell_nodes(CellIndex{c});
-      for (std::size_t f = 0; f < ft.count; ++f) {
-        const LocalFace& lf = ft.faces[f];
+      for (std::size_t f = 0; f < ft.size(); ++f) {
+        const LocalFace& lf = ft[f];
 
         std::array<std::uint64_t, 4> face_verts{{0, 0, 0, 0}};
         for (std::uint8_t i = 0; i < lf.vertex_count; ++i) {

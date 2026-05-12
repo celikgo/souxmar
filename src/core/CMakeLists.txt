@@ -17,6 +17,10 @@ add_library(souxmar_core
   c_abi_buffer.cpp
   # Sprint 6 push 1 — mesh-quality metrics (Tet4 + Tri3 in v1).
   mesh_quality.cpp
+  # Per-element-type local face tables — centralised host-side helper
+  # consumed by surface_stream (and future host-side viz / BC helpers).
+  # ADR-0012's pre-mortem named this centralisation as a follow-up.
+  face_topology.cpp
   # Post-v1.0 block (Sprints 25-32) — ABI scaffold for the six minor
   # ratchets v1.4-v1.9. The .cpp files marked "stub" return
   # SOUXMAR_E_NOT_IMPLEMENTED; per-sprint PR 2 of each sprint replaces

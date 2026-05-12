@@ -10,6 +10,8 @@ add_executable(souxmar_unit_tests
   test_topology.cpp
   test_mesh.cpp
   test_field.cpp
+  # Per-element-type face tables — centralised helper (ADR-0012 follow-up).
+  test_face_topology.cpp
   # Sprint 25 push 1 (post-v1.0) — surface_stream (ADR-0037, RFC-001).
   test_surface_stream.cpp
   # Sprint 27 push 1 (post-v1.0) — field_stream (ADR-0038, RFC-002).
