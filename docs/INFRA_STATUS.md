@@ -10,16 +10,22 @@ seeing empty sha256s should land here, not file an issue.
 
 ## Status overview
 
-| Surface                                | State (2026-05-13)                                                 | Unblock                                                                                       | Owner sprint |
-| -------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- | ------------ |
-| synth-load golden corpus               | Wired; placeholder hashes; `--bootstrap` mechanism ready           | One green eval-nightly run after v0.9.2 → maintainer runs bootstrap locally → reviews → commits | Sprint 15+   |
-| Per-platform VR baselines (linux)      | Wired (matrix workflow); zero PNGs in tree                          | One green visual-regression run on the linux runner → maintainer downloads artefact → commits  | Sprint 15+   |
-| Per-platform VR baselines (darwin)     | Same as linux                                                       | Same as linux, macos-14 runner                                                                | Sprint 15+   |
-| Per-platform VR baselines (win32)      | Same as linux                                                       | Same as linux, windows-2022 runner                                                            | Sprint 15+   |
-| docs-site `/agents/tools` content      | Wired (placeholder); generator + `--check-only` gate live          | Same PR as the synth-load bootstrap; the maintainer's first run of `gen-agent-tools.py` against the v0.9.2 binary replaces the placeholder | Sprint 15+   |
-| DNS CNAME for docs.souxmar.dev         | Not wired                                                          | Operational; out-of-band registrar work                                                       | Operational  |
-| Discord server + invite redirect       | Not wired                                                          | Operational; community-launch coordination                                                    | Operational  |
-| On-call rotation table (COMMUNITY.md)  | Placeholder ("TBA")                                                 | Team grows past N=1; rotation can be filled in then                                            | When-team    |
+| Surface                                | State (2026-05-14)                                                 | Unblock                                                                                       | Stale-for-N-sprints |
+| -------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- | ------------------- |
+| synth-load golden corpus               | Wired; placeholder hashes; `--bootstrap` mechanism ready           | One green eval-nightly post-v0.9.3 → maintainer runs bootstrap locally → reviews → commits     | 3 sprints (S13-S15)  |
+| Per-platform VR baselines (linux)      | Wired (matrix workflow); zero PNGs in tree                          | One green visual-regression run on the linux runner → maintainer downloads artefact → commits  | 2 sprints (S14-S15)  |
+| Per-platform VR baselines (darwin)     | Same as linux                                                       | Same as linux, macos-14 runner                                                                | 2 sprints (S14-S15)  |
+| Per-platform VR baselines (win32)      | Same as linux                                                       | Same as linux, windows-2022 runner                                                            | 2 sprints (S14-S15)  |
+| docs-site `/agents/tools` content      | Wired (placeholder); generator + `--check-only` gate live          | Same PR as the synth-load bootstrap; the maintainer's first run of `gen-agent-tools.py` against the v0.9.3 binary replaces the placeholder | 3 sprints (S13-S15) |
+| DNS CNAME for docs.souxmar.dev         | Not wired                                                          | Operational; out-of-band registrar work                                                       | 4 sprints (S12-S15) |
+| Discord server + invite redirect       | Not wired                                                          | Operational; community-launch coordination                                                    | 4 sprints (S12-S15) |
+| On-call rotation table (COMMUNITY.md)  | Placeholder ("TBA")                                                 | Team grows past N=1; rotation can be filled in then                                            | 4 sprints (S12-S15) |
+
+When the stale-for counter passes 5 sprints, the line escalates
+in the next sprint's retro under "what to fix" — at that point
+the gate-without-data has aged enough that the gate-mechanism
+might be a worse status quo than reverting it. None of the
+above have hit that threshold yet; the visibility is the goal.
 
 ## Why these gates ship empty
 
