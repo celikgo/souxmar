@@ -23,7 +23,8 @@ add_library(souxmar_core
   # each stub with the real backing.
   surface_stream.cpp        # v1.4 — real impl (S25 PR 1)
   c_abi_surface_stream.cpp  # v1.4 — ADR-0037, RFC-001 (S25)
-  c_abi_field_stream.cpp    # v1.5 — ADR-0038, RFC-002 (S27)   [stub]
+  field_stream.cpp          # v1.5 — real impl (S27 PR 1)
+  c_abi_field_stream.cpp    # v1.5 — ADR-0038, RFC-002 (S27)
   c_abi_brep.cpp            # v1.6 + v1.8 — ADRs 0039 / 0041   [stub]
   c_abi_sketch.cpp          # v1.7 — ADR-0040, RFC-004 (S29)   [stub]
   c_abi_timeseries.cpp      # v1.9 — ADR-0042, RFC-006 (S32)   [stub]
