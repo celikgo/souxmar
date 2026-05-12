@@ -11,13 +11,19 @@
 #include <limits>
 #include <vector>
 
+#include "souxmar/core/mesh.h"
 #include "souxmar/core/mesh_quality.h"
+#include "souxmar/core/tag.h"
 
 using souxmar::core::ElementType;
+using souxmar::core::Mesh;
+using souxmar::core::NodeIndex;
+using souxmar::core::quality::compute_field;
 using souxmar::core::quality::evaluate;
 using souxmar::core::quality::evaluate_all;
 using souxmar::core::quality::kNumMetrics;
 using souxmar::core::quality::Metric;
+using souxmar::core::quality::metric_name;
 using souxmar::core::quality::summarise;
 using Vec3 = std::array<double, 3>;
 
@@ -159,4 +165,64 @@ TEST(MeshQualitySummarise, FlagsCellsByThreshold) {
   EXPECT_EQ(vol.finite_count, 2u);
   EXPECT_NEAR(vol.min, -0.0001, 1e-12);
   EXPECT_NEAR(vol.max,  0.1666, 1e-12);
+}
+
+// --- compute_field over a whole Mesh ---
+
+namespace {
+Mesh MakeTwoTetMesh() {
+  Mesh m;
+  m.add_node({0, 0, 0});
+  m.add_node({1, 0, 0});
+  m.add_node({0, 1, 0});
+  m.add_node({0, 0, 1});
+  m.add_node({1, 1, 1});
+  const std::array<NodeIndex, 4> tet0{{NodeIndex{0}, NodeIndex{1}, NodeIndex{2}, NodeIndex{3}}};
+  const std::array<NodeIndex, 4> tet1{{NodeIndex{1}, NodeIndex{2}, NodeIndex{3}, NodeIndex{4}}};
+  m.add_cell(ElementType::Tet4, tet0);
+  m.add_cell(ElementType::Tet4, tet1);
+  return m;
+}
+}  // namespace
+
+TEST(MeshQualityComputeField, ShapeMatchesMesh) {
+  const Mesh m = MakeTwoTetMesh();
+  const auto field = compute_field(m, Metric::SignedVolume);
+  EXPECT_EQ(field.count(), m.num_cells());
+  EXPECT_EQ(field.location(), souxmar::core::FieldLocation::Cell);
+  EXPECT_EQ(field.kind(),     souxmar::core::FieldKind::Scalar);
+  EXPECT_EQ(field.num_time_steps(), 1u);
+}
+
+TEST(MeshQualityComputeField, NamesAfterMetric) {
+  const Mesh m = MakeTwoTetMesh();
+  const auto vol = compute_field(m, Metric::SignedVolume);
+  const auto er  = compute_field(m, Metric::EdgeRatio);
+  EXPECT_EQ(vol.name(), metric_name(Metric::SignedVolume));
+  EXPECT_EQ(er.name(),  metric_name(Metric::EdgeRatio));
+}
+
+TEST(MeshQualityComputeField, SignedVolumeIsPositiveForRightHandedTets) {
+  const Mesh m = MakeTwoTetMesh();
+  const auto field = compute_field(m, Metric::SignedVolume);
+  const auto data = field.data();
+  ASSERT_EQ(data.size(), 2u);
+  EXPECT_GT(data[0], 0.0);
+  EXPECT_GT(data[1], 0.0);
+}
+
+TEST(MeshQualityComputeField, EmptyMeshYieldsEmptyField) {
+  Mesh m;
+  const auto field = compute_field(m, Metric::SignedVolume);
+  EXPECT_EQ(field.count(), 0u);
+  EXPECT_EQ(field.data().size(), 0u);
+}
+
+TEST(MeshQualityComputeField, UnsupportedElementTypesGetNaN) {
+  Mesh m;
+  m.add_node({0, 0, 0});
+  m.add_cell(ElementType::Vertex, std::vector<NodeIndex>{NodeIndex{0}});
+  const auto field = compute_field(m, Metric::SignedVolume);
+  ASSERT_EQ(field.count(), 1u);
+  EXPECT_TRUE(std::isnan(field.data()[0]));
 }

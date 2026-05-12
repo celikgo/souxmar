@@ -24,6 +24,7 @@
 #include <span>
 
 #include "souxmar/core/element_type.h"
+#include "souxmar/core/field.h"
 
 namespace souxmar::core::quality {
 
@@ -95,5 +96,20 @@ struct Report {
   }
   return "unknown";
 }
+
+}  // namespace souxmar::core::quality
+
+namespace souxmar::core { class Mesh; }
+
+namespace souxmar::core::quality {
+
+// Compute a per-cell scalar Field of one quality metric for a whole
+// mesh. The returned Field has count == mesh.num_cells(), FieldKind
+// Scalar, FieldLocation Cell, and is named after the metric (per
+// `metric_name`). Cells of unsupported element types receive NaN.
+// Negative SignedVolume entries flag inverted cells; the renderer can
+// color these red. Sprint 26 uses this as a FieldStream input for
+// "color by quality" without re-implementing the cell walk in the UI.
+[[nodiscard]] Field compute_field(const Mesh& mesh, Metric metric);
 
 }  // namespace souxmar::core::quality

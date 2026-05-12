@@ -6,6 +6,11 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <string>
+#include <vector>
+
+#include "souxmar/core/mesh.h"
+#include "souxmar/core/tag.h"
 
 namespace souxmar::core::quality {
 
@@ -254,6 +259,34 @@ Report summarise(std::span<const double> data,
     }
   }
   return r;
+}
+
+Field compute_field(const Mesh& mesh, Metric metric) {
+  Field out(std::string{metric_name(metric)},
+            FieldLocation::Cell,
+            FieldKind::Scalar,
+            mesh.num_cells());
+
+  auto values = out.step(0);
+  if (mesh.num_cells() == 0) return out;
+
+  // Scratch buffer for cell node coordinates. Hex27 is the largest
+  // element type at 27 nodes; reserve up front so the inner loop
+  // doesn't reallocate. The 4-of-up-to-27 unused-slot pattern is
+  // identical to the openfoam-solver translator's approach.
+  std::vector<std::array<double, 3>> nodes_xyz;
+  nodes_xyz.reserve(27);
+
+  for (std::size_t c = 0; c < mesh.num_cells(); ++c) {
+    const ElementType    type       = mesh.cell_type(CellIndex{c});
+    const auto           cell_nodes = mesh.cell_nodes(CellIndex{c});
+    nodes_xyz.clear();
+    for (const auto& ni : cell_nodes) {
+      nodes_xyz.push_back(mesh.node(ni));
+    }
+    values[c] = evaluate(type, metric, nodes_xyz);
+  }
+  return out;
 }
 
 }  // namespace souxmar::core::quality
