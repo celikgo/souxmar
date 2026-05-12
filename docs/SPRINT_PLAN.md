@@ -765,3 +765,168 @@ In addition to the existing gates (perf, determinism, security, docs, conformanc
 - **Fully-implicit FSI two-way coupler** — Sprint 34 ships the staggered (loose) coupler only; monolithic FSI is a separate RFC.
 - **GPU solver back-ends** — the renderer is on the GPU; the solvers stay CPU through v1.6.
 - **Wet-lab / experimental-data fitting** — a research-mode follow-up, not in S36.
+
+---
+
+# Post-v1.6 plan — Sprints 37–40: production solver coverage
+
+**Context.** After v1.6 the platform story is broad (CAD → mesh → solve → research-mode citation export) but the **structural-solver depth** is still a single FEniCSx adapter. A mechanical or aerospace engineer landing in souxmar with a snap-fit assembly, a press-fit shaft, a buckling-prone strut, or a fatigue-driven bracket cannot finish the analysis in-tool — they export to a legacy solver and never come back. This block closes that gap with a single high-leverage addition: a **CalculiX subprocess adapter** (RFC-011) that brings nonlinear, contact, buckling, modal/harmonic, coupled thermo-mechanical, and (downstream) fatigue post-processing under the existing capability-namespace pattern. CalculiX is GPLv2; the ADR-0009 subprocess pattern (the OpenFOAM precedent) keeps the legal/licence story clean — souxmar links nothing of CalculiX's code.
+
+Like the v1.4–v1.6 block, this is eight weeks (four sprints). The ABI v1 contract stays frozen — **no minor-version bump in this block** — because every new physics rides on the existing `solver.*` namespace and `souxmar_field_t` surface. The new surface area is plugins, agent tools, and tutorials.
+
+**Releases:** `v1.7` at end of S37 (CalculiX linear + thermal GA), `v1.8` at end of S38 (nonlinear + contact + buckling GA), `v1.9` at end of S40 (fatigue post-proc + auto-generated report). S39 is a "no-release" hardening sprint (modal/harmonic + cross-solver validation) — historically every other block had one and we under-budgeted for it; making it explicit this time.
+
+**Headline metrics this block must hit:**
+
+- Engineer can clone the new `snap-fit-assembly` example, run it through CalculiX, and see a contact-pressure field without editing pipeline.yaml.
+- `compare_solver_results` cross-checks FEniCSx vs CalculiX on the v1.0 sample suite with all field-norm deltas inside documented tolerances (Linux/macOS/Windows, all three OS gates pass).
+- `bug-reports/` "I had to export to ABAQUS" tag drops to zero new entries for two consecutive weeks before v1.9 ships.
+- Agent-eval CI run time increases by ≤4 minutes (still inside the 15-minute budget).
+- Determinism gate stays green across the block — CalculiX runs pinned to `CCX_NPROC_EQUATION_SOLVER=1`, SPOOLES direct.
+
+## Risk register additions (post-v1.6)
+
+| ID    | Risk                                                                                          | Likelihood | Impact | Mitigation                                                                                                                                                                                                       |
+| ----- | --------------------------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R-021 | CalculiX-not-found on a fresh user install — the first-launch UX bombs                        | High       | High   | Desktop surfaces a one-click "open install docs" panel with a per-OS install command (brew / apt / `bConverged` link). Eval CI gates on the install-docs page rendering on all three OSes.                       |
+| R-022 | `.frd` block-format drift between CalculiX 2.20 / 2.21 / community Windows build              | High       | Med    | Reader version-checks the `.frd` header and errors loudly on unsupported versions; CI matrix runs against three pinned CalculiX builds (one per OS).                                                              |
+| R-023 | Nonlinear-convergence defaults pick the wrong `*CONTROLS` for the user's geometry             | High       | High   | `explain_nonlinear_failure` agent tool reads `.cvg` + `.sta`, surfaces a diagnostic with recommended controls change. Manual-mode escape hatch in pipeline YAML for power users.                                  |
+| R-024 | INP-writer line-ending drift on Windows breaks byte-identical conformance goldens             | Med        | Med    | Writer byte-normalises to LF unconditionally; tests assert the file hash matches a canonical golden regardless of host platform.                                                                                  |
+| R-025 | `compare_solver_results` matrix's per-pipeline tolerance is wrong — false positives in CI     | Med        | High   | Tolerances are derived from documented mesh-convergence rates per pipeline; failures attach the mesh-convergence study output for triage.                                                                          |
+| R-026 | Adapter under-performs FEniCSx on linear cases, users see worst-of-both                       | High       | Low    | Auto-selection prefers FEniCSx for `solver.elasticity.linear`; CalculiX is only chosen when the user explicitly says `prefer: calculix` or asks for a nonlinear/contact/buckling capability FEniCSx doesn't have.   |
+| R-027 | Fatigue post-proc surface attracts user expectations beyond what we ship in v1.9              | Med        | Med    | v1.9 docs explicitly list "supported: Goodman / Soderberg / Gerber on uniaxial loading; not supported: multiaxial, mean-stress correction beyond Goodman, weld classes." `*explain_fatigue_limit*` agent tool answers the limitation directly. |
+
+## RFCs required before merge of this block
+
+| RFC slot | Subject                                                                                                                            | Sprint that consumes it |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| RFC-011  | **CalculiX solver adapter (subprocess plugin)** — capability namespace, INP/FRD format pact, agent tool surface, validation policy | S37                     |
+| RFC-012  | Cross-solver comparison contract — tolerance specification, golden-failure triage flow, `compare_solver_results` agent tool        | S39                     |
+| RFC-013  | Fatigue post-processing contract — supported S-N curves, mean-stress methods, safety-factor field shape                            | S40                     |
+
+The v1.4–v1.6 block reserved RFC-007..010; RFC-011..013 are the new slots opened by this block.
+
+---
+
+## Sprint 37 — CalculiX MVP: linear elastic + steady/transient thermal (`v1.7` release)
+
+**Theme:** ship a working CalculiX path end-to-end on the v1.0 sample suite. By exit, the cantilever-beam and thermal-fin examples can be solved with CalculiX as an alternative to FEniCSx, and a `compare_solver_results` run shows agreement inside documented tolerances. Everything in this sprint is **subset-of-CalculiX** — no nonlinear, no contact — to lock the adapter's plumbing before the harder physics lands in S38.
+
+| Team       | Story                                                                                                                            | Size |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | RFC-011 merged; capability namespace + INP/FRD format pact locked; ADR-0043 filed                                                | M    |
+| Adapters   | `calculix-inp-writer` plugin (linear elastic + linear thermal directives only); byte-identical conformance suite, three-OS gate  | XL   |
+| Adapters   | `calculix-frd-reader` plugin (DISP, STRESS, NDTEMP, FLUX blocks); version-header check; three-OS gate                            | L    |
+| Adapters   | `calculix-solver` plugin, linear path; `solver.elasticity.calculix.linear`, `solver.thermal.calculix.{steady,transient}`         | XL   |
+| Plugin Host| `souxmar::plugin::run_subprocess` audit + tagged-log streaming for `[ccx]`; cleanup-on-cancel; SOUXMAR_CALCULIX_PATH env passthru | M    |
+| Desktop    | "CalculiX not found" install-docs panel (per-OS install command + button to open docs/INFRA_STATUS.md install matrix)             | M    |
+| Desktop    | `pipeline.calculix.yaml` aware in the Run dropdown; status bar reports "ccx 2.21" when adapter is invoked                          | S    |
+| AI         | Agent tools: `solve_with` gains `prefer:` argument; new `export.inp` tool (`confirm-once`); ≥1 eval case each                     | M    |
+| DX         | Tutorial: "Cantilever beam, run two ways" (FEniCSx vs CalculiX, two-pane viewport); release notes for `v1.7`                       | L    |
+| DX         | Per-OS install docs (`brew install calculix-ccx`, `apt install calculix-ccx`, `bConverged` link); `docs/INFRA_STATUS.md` matrix    | M    |
+| Platform   | Release `v1.7`; retro                                                                                                             | M    |
+
+**Exit criteria:**
+- `examples/cantilever-beam/pipeline.calculix.yaml` runs on all three OSes and produces a stress field within documented tolerance of the FEniCSx result.
+- `examples/thermal-fin/pipeline.calculix.yaml` runs on all three OSes, temperature field within tolerance.
+- "CalculiX not found" panel reachable in <3 clicks from a fresh install on each OS; the docs link opens in the system browser.
+- `v1.7` tagged + downloadable on all three OSes.
+- Determinism gate green.
+
+---
+
+## Sprint 38 — Nonlinear + contact + buckling (`v1.8` release)
+
+**Theme:** the headline payoff. A mechanical engineer can model a snap-fit assembly with contact, run a post-yield bracket with plasticity, and check a buckling factor on a strut — all inside souxmar, all driven from the viewport + chat without leaving for a legacy solver. This is the sprint that changes the project's pitch from "open-source linear FEM" to "open-source production FEM."
+
+| Team       | Story                                                                                                                   | Size |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------- | ---- |
+| Adapters   | `calculix-inp-writer` plasticity extension: `*PLASTIC` table emission, non-monotonic-strain rejection with diagnostic    | L    |
+| Adapters   | `solver.elasticity.calculix.nonlinear`: `*STATIC, NLGEOM=YES`; `.cvg`/`.sta` history → convergence diagnostic field      | XL   |
+| Adapters   | `solver.contact.calculix`: surface-from-tags writer, node-to-surface + surface-to-surface, friction coefficient          | XL   |
+| Adapters   | `solver.buckling.calculix`: `*BUCKLE` step, eigenvalue extraction, mode-shape display through RFC-002 surface             | L    |
+| Desktop    | Contact-pair picker: two-click "surface A / surface B + friction" UI; live overlay highlight on the viewport             | L    |
+| Desktop    | Convergence-history panel in the Inspector: residual-vs-iteration plot, last-attempt step size, divergence callout       | M    |
+| AI         | Agent tools: `set_contact_pair`, `explain_nonlinear_failure`, `set_buckling_load_factor_request`; eval cases             | M    |
+| Plugin Host| Long-running-stage progress: ccx `.sta` polled by harness, surfaced as percent-complete on the bridge                    | M    |
+| Platform   | Materials library S-N + hardening-curve schema (groundwork for S40 fatigue + S38 plastic curves)                         | M    |
+| DX         | Two new examples: `examples/snap-fit-assembly/` (contact), `examples/buckling-column/` (buckling)                         | L    |
+| DX         | Tutorials: "Plastic bracket with CalculiX", "Snap-fit contact", "Buckling a column"; release notes for `v1.8`             | L    |
+| Platform   | Release `v1.8`; retro                                                                                                    | M    |
+
+**Exit criteria:**
+- `examples/snap-fit-assembly/` runs end-to-end and produces a non-trivial contact-pressure field; the agent can be asked "what is the peak contact pressure here?" and answer correctly.
+- `examples/buckling-column/` returns the first buckling factor within 5% of the closed-form Euler load on a known column geometry.
+- Plasticity round-trip: 6061-T6 material card from the v1.5 library + `*PLASTIC` table emission + post-yield stress field readable.
+- `explain_nonlinear_failure` fires on a deliberately-divergent canonical case and produces a recommended `*CONTROLS` change in the chat.
+- `v1.8` tagged on all three OSes.
+
+---
+
+## Sprint 39 — Modal + harmonic + cross-solver validation (no release)
+
+**Theme:** finish the structural physics surface and prove it. Modal/harmonic through CalculiX; coupled thermal-mechanical as a tight-coupling alternative to the S34 staggered coupler; **the cross-solver validation matrix that gives us the right to call the adapter "production-grade."** This is a deliberate no-release sprint — historically every block has been undermined by under-budgeting hardening, and we lose nothing by tagging at S40 instead of S39 since the surface is already public after S38.
+
+| Team       | Story                                                                                                                                  | Size |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | RFC-012 merged; cross-solver tolerance spec + triage flow + agent tool contract                                                        | M    |
+| Adapters   | `solver.modal.calculix`: `*FREQUENCY` Lanczos; mode-shape playback via RFC-006 time-series surface                                      | L    |
+| Adapters   | `solver.harmonic.calculix`: `*STEADY STATE DYNAMICS` modal-superposition; frequency-indexed field handle                                | L    |
+| Adapters   | `solver.coupled.calculix.thermal_mechanical`: tight-coupling alternative to the S34 staggered coupler                                    | L    |
+| Platform   | Cross-solver validation matrix CI: `cantilever-beam`, `thermal-fin`, `modal-beam`, `snap-fit-assembly` (where applicable) on both adapters; field-norm + max-error reports archived on every main commit | XL |
+| Platform   | `compare_solver_results` agent tool + ≥4 eval cases                                                                                     | M    |
+| Adapters   | `.frd` parser: version-matrix CI against ccx 2.20 / 2.21 / community Windows build (mitigates R-022)                                     | M    |
+| Desktop    | Solver-comparison viewport: side-by-side two-pane render, synchronised camera, delta-field overlay                                       | L    |
+| DX         | Validation report: NAFEMS LE-1, LE-10, T2; mesh-convergence studies; published as `docs/validation/calculix-2026Q3.pdf`                  | XL   |
+| Adapters   | Performance pass: profile-guided choice of SPOOLES direct vs PARDISO direct on macOS/Linux; document the determinism caveat              | M    |
+
+**Exit criteria:**
+- `compare_solver_results cantilever-beam` returns all field deltas inside published tolerances on all three OSes.
+- Mode-shape playback works for both `solver.modal.linear` (FEniCSx) and `solver.modal.calculix` from the same UI, with the agent able to switch via `solve_with prefer:`.
+- `docs/validation/calculix-2026Q3.pdf` shipped; signed by the project maintainer per the `validating-solver` skill protocol.
+- Three-version `.frd` matrix all green.
+- No regression in the agent-eval CI budget (still <15 min p95).
+
+---
+
+## Sprint 40 — Fatigue post-proc + auto-report + `v1.9` release
+
+**Theme:** close the loop from "I have stress results" to "I have a report I can hand to my reviewer." Fatigue post-processing rides on the CalculiX nonlinear results and the materials-library S-N curves added in S38; the report generator turns a finished project into a one-click PDF without the user touching ParaView.
+
+| Team       | Story                                                                                                                          | Size |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------ | ---- |
+| Platform   | RFC-013 merged; fatigue contract (supported S-N curves + mean-stress methods + safety-factor field shape)                       | M    |
+| Adapters   | `postproc.fatigue.goodman`, `postproc.fatigue.soderberg`, `postproc.fatigue.gerber`: safety-factor field from cyclic-load result | L    |
+| Desktop    | Fatigue panel in the Inspector: S-N curve picker, mean-stress method dropdown, safety-factor color-by-field default              | M    |
+| AI         | Agent tools: `compute_fatigue_safety_factor`, `explain_fatigue_limit`; eval cases                                                | M    |
+| Platform   | Report generator: project → PDF (cover + inputs + mesh stats + boundary conditions + per-step results + selected field plots + cross-solver agreement + citation block from S36 research mode) | XL |
+| Desktop    | "Generate report" button on the title bar + chat agent surface; PDF preview pane                                                 | L    |
+| DX         | Tutorials: "Fatigue safety factor on a lifting eye"; "From geometry to PDF in one click"; release notes for `v1.9`                | L    |
+| Platform   | Release `v1.9`; retro + capacity reset for the next block                                                                       | M    |
+
+**Exit criteria:**
+- `examples/lifting-eye/` runs through nonlinear stress + Goodman fatigue + report generation in <5 minutes wall time on the CI runner.
+- The generated report reproducibly hashes byte-identical given the same inputs (project hash + plugin versions + dataset hashes — leverages S36 research mode).
+- `v1.9` tagged + downloadable on all three OSes.
+- Retro produces the theme proposal for Sprints 41+ (likely: CAD assembly modeling, or the Code_Aster second-solver adapter).
+
+---
+
+## Cross-cutting commitments (Sprints 37–40)
+
+In addition to the existing gates (perf, determinism, security, docs, conformance, viz-golden, solver-validation, coupler-stability):
+
+- **Subprocess-adapter conformance gate:** every subprocess adapter (OpenFOAM, ffmpeg, CalculiX) ships with a "binary-not-found" UX test that asserts the install-docs panel reaches the user on each OS. CI fails if the panel breaks.
+- **Cross-solver agreement gate:** RFC-012's matrix runs on every main commit. Tolerance violations file an automatic triage issue with the failing pipeline + the diff field attached.
+- **Validation-report cadence:** the CalculiX adapter publishes a signed validation PDF every minor release in this block (S37, S38, S40). Skipping a release breaks the `validating-solver` skill's release gate.
+- **Determinism gate:** CalculiX runs pinned to `CCX_NPROC_EQUATION_SOLVER=1` (SPOOLES direct, single-threaded). Multithreaded PARDISO is gated behind a non-deterministic-mode opt-in.
+- **Eval-suite growth:** ~14 new agent tools across this block; eval suite grows by ≥14 cases. CI budget headroom monitored at each sprint exit; if p95 crosses 13 min, we cut the lowest-value cases instead of letting the gate expire.
+
+## What this block deliberately does *not* do
+
+- **Bundle CalculiX in the installer.** Per RFC-011 Alternative C — operational and legal cost outweighs the user-install pain.
+- **Implement Code_Aster, Elmer, or MFEM.** One subprocess adapter at a time; Code_Aster is the strongest candidate for the next block if the demand signal is there.
+- **Multiaxial fatigue (Findley / Smith-Watson-Topper).** Out of scope for v1.9 — uniaxial Goodman/Soderberg/Gerber covers the 80% case; the multiaxial story needs an RFC on its own.
+- **MPC / kinematic coupling.** CalculiX supports `*MPC` and `*EQUATION`; out of scope for this block — rigid-body coupling deserves a dedicated RFC since the souxmar data model has no rigid-body concept yet.
+- **Restart files.** Long-running nonlinear "resume from .rin" — deferred to a v1.10 follow-up once the orchestrator has a "resume a stage" concept.
+- **GUI INP-deck editor.** souxmar generates INPs; we do not become a deck-editor IDE.
