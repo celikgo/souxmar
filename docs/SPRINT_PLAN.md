@@ -405,3 +405,225 @@ Captured here so we do not relitigate. RFC required to revive any of these insid
 - Risk register reviewed every retro; closed/new risks called out explicitly.
 - Capacity adjusted ±10 pts based on actual closure rate of the previous two sprints.
 - Backlog grooming happens *during* the retro for the next sprint, not in a separate meeting.
+
+---
+
+# Post-v1.0 plan — Sprints 25–32: design, mesh, visualize
+
+**Context.** v1.0 closed with the agentic chat + pipeline runner + Inspector working end-to-end, but the workbench viewport is still a placeholder (`viewport_renderer` flag hard-off) and the project has no in-app geometry authoring. This block delivers the full **design → mesh → solve → visualize** loop inside the desktop app, with a full parametric modeler as the design surface.
+
+It is a sixteen-week (8-sprint) block. The ABI v1 contract stays frozen; every new capability is delivered through plugins or new bridge surfaces gated behind a feature flag, so a user on the v1 ABI sees nothing break.
+
+**Releases:** `v1.1` at end of S27 (visualization GA), `v1.2` at end of S30 (parametric modeler GA), `v1.3` at end of S32 (full loop GA + transient).
+
+## Risk register additions (post-v1.0)
+
+| ID    | Risk                                                                                            | Likelihood | Impact | Mitigation                                                                                                                                            |
+| ----- | ----------------------------------------------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R-011 | Renderer perf (60fps on 1M-triangle meshes) is harder than expected on integrated GPUs          | Med        | High   | Perf gate from S25 day 1; instanced rendering + LOD before any feature work; WebGL2 baseline, WebGPU as feature-detect.                               |
+| R-012 | OCCT (LGPL) licensing forces a build-system or distribution change                              | Med        | High   | ADR + RFC at S28 day 1; dynamic-link only; document the LGPL relink-rights story in `docs/LICENSING.md`; alternatives evaluated (CGAL, Manifold).      |
+| R-013 | Constraint solver (planegcs / similar) has performance cliffs on >200-DoF sketches              | Med        | Med    | Bench from day 1; cap sketch DoF in UI with a clear "split this sketch" suggestion; document scaling envelope.                                         |
+| R-014 | Body → tessellation → mesher boundary is lossy (curved surfaces faceted before mesher sees them) | High       | High   | RFC at S28: keep the BREP handle live; let `mesher.*` plugins query the analytic surface via a new `cad_handle` plugin capability.                    |
+| R-015 | Determinism gate breaks on GPU floating-point ops in the renderer                               | High       | Low    | Renderer is presentation-only; cantilever golden continues to assert on numeric solver output, not rendered pixels. New `viz-golden` is screenshot+tol.|
+
+## RFCs required before merge of this block
+
+Every item below is **Tier-3** per `docs/GOVERNANCE.md` and needs an RFC merged before the implementing sprint starts.
+
+| RFC slot | Subject                                                                                          | Sprint that consumes it |
+| -------- | ------------------------------------------------------------------------------------------------ | ----------------------- |
+| RFC-001  | Viewport renderer architecture (Three.js + WebGPU/WebGL2; shared-mmap mesh streaming via bridge) | S25                     |
+| RFC-002  | Field-stream protocol on the bridge (scalar/vector arrays, VTU on-disk path vs. direct handle)   | S27                     |
+| RFC-003  | CAD kernel choice + plugin contract (`cad.*` plugin type, BREP handle ABI, OCCT vs. alternatives) | S28                    |
+| RFC-004  | 2D sketch constraint solver + sketch-on-disk format                                              | S29                     |
+| RFC-005  | Parametric feature tree on-disk format (`design.yaml` v1; feature replay semantics)              | S30                     |
+| RFC-006  | Time-series stream protocol (transient solver output + animation export)                         | S32                     |
+
+---
+
+## Sprint 25 — 3D viewport bring-up
+
+**Theme:** flip `viewport_renderer` from a placeholder to a real renderer. Stream surface meshes from `libsouxmar-core` to a Three.js canvas, with orbit/pan/zoom + face/edge/vertex picking.
+
+| Team       | Story                                                                                              | Size |
+| ---------- | -------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | RFC-001 merged: renderer architecture; shared-mmap mesh-handle ABI added to `include/souxmar-c/`   | M    |
+| Platform   | `souxmar-bridge` exposes `mesh_handle_open()` + `mesh_surface_stream()`; reference impl in libcore | L    |
+| Desktop    | Three.js scene graph wired into `Viewport.tsx`; SVG placeholder removed when flag is on            | L    |
+| Desktop    | Orbit/pan/zoom controls; resize + retina/HiDPI handling; perf budget 60fps @ 250k tris             | M    |
+| Desktop    | Picking: ray-cast against the rendered surface, return face / edge / vertex IDs to React           | M    |
+| DX         | `viz-golden`: screenshot regression test on cantilever sample (PNG + tolerance) in CI              | M    |
+
+**Exit criteria:**
+- Loading `~/souxmar-projects/cantilever-beam` now shows the actual tetrahedral mesh's surface in the viewport, not the SVG placeholder.
+- Picking returns IDs that the Inspector can resolve to mesh entities.
+- `viz-golden` runs on every PR; renderer perf budget defined and tracked.
+
+---
+
+## Sprint 26 — Mesh visualization features
+
+**Theme:** make the viewport useful for understanding the mesh. The `auditing-mesh-quality` skill already defines the metric set — surface them visually.
+
+| Team       | Story                                                                                              | Size |
+| ---------- | -------------------------------------------------------------------------------------------------- | ---- |
+| Desktop    | Render modes: shaded, shaded+edges, wireframe, point cloud (radio toggle in Viewport toolbar)      | M    |
+| Desktop    | Color-by-quality: Jacobian, aspect ratio, dihedral angle, skewness, orthogonality (colormap legend) | L   |
+| Desktop    | Clipping plane: drag-to-position perpendicular to X/Y/Z; cross-section rendered with edges         | M    |
+| Desktop    | Exploded view: separate elements along centroid normals; slider 0..1                               | M    |
+| Platform   | Bridge surface for per-element quality arrays; reference impl on the in-core tetra checker         | M    |
+| DX         | "Viewing a mesh" tutorial in `docs/tutorials/`; updated screenshots                                 | S    |
+
+**Exit criteria:**
+- All five quality metrics render correctly on the cantilever sample and on `examples/pipe-bend`.
+- Clipping plane is interactive at 60fps on the 250k-tri cantilever.
+- Two new tutorial pages live.
+
+---
+
+## Sprint 27 — Results field visualization (`v1.1` release)
+
+**Theme:** read VTU output, render scalar + vector fields on the deformed mesh.
+
+| Team       | Story                                                                                              | Size |
+| ---------- | -------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | RFC-002 merged; bridge `field_open(vtu_path)` + `field_array(name)` + cell/point detection         | M    |
+| Platform   | Reader plugin: in-core VTU reader exposed via the field-stream protocol                            | L    |
+| Desktop    | Scalar field rendering: vertex/cell colors; viridis / coolwarm / grayscale colormaps + legend       | L    |
+| Desktop    | Vector field glyphs: arrow heads at sample points; magnitude → length + color                       | M    |
+| Desktop    | Deformed shape: displacement field applied to mesh; scale slider (1×, 10×, 100×)                   | M    |
+| Desktop    | Threshold filter: hide elements where `field < min` or `field > max`                                | M    |
+| AI         | Agent tools: `viz.set_color_field`, `viz.set_deformation_scale`, `viz.set_threshold`                 | M    |
+| DX         | "Inspecting results" tutorial; cantilever stress visualization on the docs site                    | S    |
+| Platform   | Release `v1.1`: signed installers; release notes (`docs/RELEASE_NOTES_TEMPLATE.md` populated)      | M    |
+
+**Exit criteria:**
+- `cantilever.vtu` opens and renders stress + displacement out of the box.
+- All three new agent tools pass eval suite.
+- `v1.1` tagged + downloadable on all three OSes.
+
+---
+
+## Sprint 28 — CAD kernel integration
+
+**Theme:** stand up the `cad.*` plugin type with a first kernel binding (OCCT, pending RFC-003). This is the precondition for parametric modeling and replaces "import an OBJ/STL" as the canonical geometry path.
+
+| Team       | Story                                                                                              | Size |
+| ---------- | -------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | RFC-003 merged: kernel choice + `cad.*` plugin contract + BREP handle ABI in `include/souxmar-c/`  | L    |
+| Platform   | `examples/plugins/cad-occt` skeleton: reads STEP/IGES, exposes BREP handle + tessellation queries  | XL   |
+| Platform   | Mesher plugins extended: optional `cad_handle` input (preserves analytic surface for refinement)    | L    |
+| Desktop    | Feature tree panel scaffolding (read-only at this point; lists imported bodies + their hierarchy)  | M    |
+| AI         | Agent tools: `cad.import_step`, `cad.list_bodies`, `cad.get_body_metadata`                          | M    |
+| DX         | `docs/PLUGIN_SDK.md` updated with the `cad.*` plugin type; `developing-souxmar-plugin` skill update | M    |
+
+**Exit criteria:**
+- A STEP file imports through the new path; the body shows in the feature tree and is tessellated for the viewport.
+- The mesher uses the BREP handle to refine on curved faces (verified on `examples/pipe-bend`).
+- Plugin conformance suite covers the new `cad.*` type.
+
+---
+
+## Sprint 29 — 2D sketcher + constraint solver
+
+**Theme:** sketches on a plane that the parametric features will consume next sprint.
+
+| Team       | Story                                                                                              | Size |
+| ---------- | -------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | RFC-004 merged; sketch-on-disk format `*.sketch.yaml`; constraint solver chosen + licence check    | M    |
+| Platform   | `examples/plugins/sketch-solver` wrapping the chosen 2D constraint solver (LGPL-compatible)         | L    |
+| Desktop    | Sketcher mode in viewport: plane picker, ortho camera, grid + snap                                  | L    |
+| Desktop    | Primitives: line, polyline, arc (3-point + centre+radius), circle, spline                          | L    |
+| Desktop    | Geometric constraints: coincident, parallel, perpendicular, tangent, equal, horizontal, vertical    | L    |
+| Desktop    | Dimensional constraints: distance, angle, radius, diameter; over-constrained / under-constrained UI | M    |
+| AI         | Agent tools: `sketch.new`, `sketch.add_*`, `sketch.constrain_*` (16 tools; one eval per tool)        | L    |
+| DX         | "Your first sketch" tutorial; sketch-by-chat eval case                                              | S    |
+
+**Exit criteria:**
+- A user can sketch a rectangle, a slot, and a flange profile via UI **and** via chat.
+- Solver tolerates 50-DoF sketches in <100ms; cliff documented for >200-DoF.
+- Sketch files round-trip on disk without geometry loss.
+
+---
+
+## Sprint 30 — Parametric features (`v1.2` release)
+
+**Theme:** sketches + features become a parametric body. Feature tree is editable. Closes the **design** half of the loop.
+
+| Team       | Story                                                                                              | Size |
+| ---------- | -------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | RFC-005 merged; `design.yaml` v1 (feature tree on-disk format); replay semantics nailed down       | L    |
+| Platform   | Feature ops in `cad.occt`: extrude, revolve, sweep, loft (CAD kernel native)                       | XL   |
+| Platform   | Boolean ops: union, subtract, intersect; fillet; chamfer; linear + circular patterns               | XL   |
+| Desktop    | Feature tree panel: full edit (rename, suppress, reorder, delete); parameter spreadsheet           | L    |
+| Desktop    | Selection promotion: clicking faces/edges in the viewport during a feature dialog references them  | M    |
+| Desktop    | Undo / redo across feature graph                                                                   | M    |
+| AI         | Agent tools: `feature.extrude`, `feature.revolve`, `feature.fillet`, `feature.boolean`, `feature.pattern` (10 tools) | L |
+| DX         | "Modeling a bracket" tutorial + chat-driven variant                                                | M    |
+| Platform   | Release `v1.2`: signed installers; release notes; ADR-NNN for `design.yaml` freeze                 | M    |
+
+**Exit criteria:**
+- A user can build a parametric bracket from a sketch via UI **and** via chat; edit a dimension and watch the model regenerate.
+- All feature ops have golden-output tests.
+- `v1.2` tagged + downloadable.
+
+---
+
+## Sprint 31 — Boundary conditions + materials from the viewport
+
+**Theme:** the geometric model now drives the pipeline. Pick a face in the viewport → assign a BC → it lands in `pipeline.yaml` and the solver sees it.
+
+| Team       | Story                                                                                              | Size |
+| ---------- | -------------------------------------------------------------------------------------------------- | ---- |
+| Desktop    | Selection sets: named groups of faces / edges / bodies persisted into `design.yaml`                | M    |
+| Desktop    | BC dialog: fixed, force, pressure, moment, temperature; vector / magnitude / function-of-position  | L    |
+| Desktop    | BC visualization: arrows on faces, hatching on fixed faces, colored loads with per-type legend     | M    |
+| Desktop    | Material library: assign isotropic linear-elastic, isotropic thermal; per-body                     | M    |
+| Platform   | `pipeline.yaml` extended: `bcs:` + `materials:` + `selection_sets:` sections; back-compat shim     | M    |
+| AI         | Agent tools: `bc.add_*`, `material.assign`; eval cases for "fix this end, push that end"           | M    |
+| DX         | Tutorial: "From sketch to results" (full loop, UI only); a second variant fully chat-driven        | M    |
+
+**Exit criteria:**
+- The Sprint 30 bracket can be loaded, fixed on one face, loaded on another, meshed, solved, and visualized — without editing `pipeline.yaml` by hand.
+- The agent passes the "design → mesh → solve → visualize" end-to-end eval task.
+
+---
+
+## Sprint 32 — Transient + animation (`v1.3` release)
+
+**Theme:** time-series solver output rendered as animation; export to MP4 for sharing.
+
+| Team       | Story                                                                                              | Size |
+| ---------- | -------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | RFC-006 merged; time-series field-stream protocol on the bridge                                    | M    |
+| Platform   | VTU series reader (`*.pvd` / numbered VTU); plugin-host streaming with bounded memory               | L    |
+| Desktop    | Playback control: play / pause / scrub / step / loop; framerate-throttled rendering                | L    |
+| Desktop    | Animation export: MP4 (ffmpeg subprocess plugin) + GIF; resolution + framerate UI                  | M    |
+| Platform   | Reference transient solver: linear-elastic dynamics (Newmark-β); in `examples/plugins/solver-dyn`  | XL   |
+| AI         | Agent tools: `viz.play`, `viz.scrub`, `viz.export_animation`                                       | M    |
+| DX         | Tutorial: "A dynamic beam" end-to-end; release notes for `v1.3`                                    | M    |
+| Platform   | Release `v1.3`; close out post-v1.0 block; retro + capacity reset for the next theme               | M    |
+
+**Exit criteria:**
+- The dynamic-beam example plays in the viewport; user exports an MP4.
+- `v1.3` tagged + downloadable on all three OSes.
+- Retro produces the theme proposal for Sprints 33+.
+
+---
+
+## Cross-cutting commitments (Sprints 25–32)
+
+In addition to the existing gates (perf, determinism, security, docs, conformance):
+
+- **Viz perf gate:** `viz-golden` plus a 60fps requirement on the cantilever sample at 250k tris. CI fails on regression >10% frame time.
+- **Renderer determinism is screenshot-with-tolerance** — not pixel-exact. Numeric determinism (solver output) keeps its existing exact-byte gate.
+- **No CAD-kernel-specific types in `include/souxmar-c/`** — only opaque BREP handles and capability queries. Kernel swap is therefore an internal plugin change.
+- **Every new agent tool ships with at least one eval case in `tests/agent-eval/`**; this block adds ~35 tools, so eval-suite grows by ≥35 cases.
+
+## What this block deliberately does *not* do
+
+- **Multiphysics coupling** — explicitly post-v1.3 (still a roadmap theme). Sprint 32's transient is single-physics structural only.
+- **GPU solver back-end** — the renderer is on the GPU; the solver stays CPU in this block.
+- **Distributed compute** — Pro-tier feature, not in open core.
+- **Web-app port** — desktop only.
+- **Assembly modeling (multi-body with mates)** — RFC-005's `design.yaml` is single-body; assemblies are a later block.

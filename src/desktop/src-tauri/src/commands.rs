@@ -63,13 +63,27 @@ pub fn open_sample_project(which: String) -> Result<String, String> {
 
     // In a real build, the bundle ships the examples under
     // /Applications/souxmar.app/Contents/Resources/examples (et al.),
-    // and we copy from there. The dev-time path uses the in-tree
-    // examples/ relative to the executable's working directory.
-    let src = std::env::current_dir()
-        .map_err(|e| format!("cwd: {}", e))?
-        .join("examples")
-        .join(&which);
-    if src.is_dir() {
+    // and we copy from there. For `tauri dev` the binary's cwd is
+    // src-tauri/, with the in-tree examples three levels up at the
+    // repo root — so we try a handful of candidate paths before
+    // falling back to the placeholder.
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.join("examples").join(&which));
+        candidates.push(cwd.join("../examples").join(&which));
+        candidates.push(cwd.join("../../examples").join(&which));
+        candidates.push(cwd.join("../../../examples").join(&which));
+    }
+    // CARGO_MANIFEST_DIR is the absolute src-tauri/ path baked in
+    // at compile time; the repo root sits three levels up.
+    candidates.push(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../examples")
+            .join(&which),
+    );
+
+    let src = candidates.into_iter().find(|p| p.is_dir());
+    if let Some(src) = src {
         copy_dir_recursive(&src, &dst).map_err(|e| format!("copy: {}", e))?;
     } else {
         // No source available in this build — leave an empty

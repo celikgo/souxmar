@@ -24,10 +24,23 @@ export function App() {
     // The bridge returns false the first time the user launches; that
     // boolean is persisted to ~/Library/Application Support/souxmar/
     // settings.json (or the platform equivalent) on completion.
+    //
+    // Guard: if the Tauri bridge is slow to inject (rare race on
+    // first launch) the splash would otherwise hang forever. Race the
+    // invoke against a 1.5s timeout — falling through to the wizard
+    // is always safe: it re-queries on completion.
+    let settled = false;
+    const finish = (done: boolean) => {
+      if (settled) return;
+      settled = true;
+      setOnboardingDone(done);
+      setBootstrapped(true);
+    };
     invokeCommand<boolean>("onboarding_status")
-      .then(done => setOnboardingDone(done))
-      .catch(() => setOnboardingDone(false))
-      .finally(() => setBootstrapped(true));
+      .then(done => finish(done))
+      .catch(() => finish(false));
+    const t = setTimeout(() => finish(false), 1500);
+    return () => clearTimeout(t);
   }, [setOnboardingDone]);
 
   if (!bootstrapped) {

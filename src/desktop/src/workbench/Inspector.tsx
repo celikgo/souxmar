@@ -38,6 +38,33 @@ stages:
       path: cantilever.vtu
 `;
 
+// Lightweight YAML stage extractor for the inspector fallback path.
+// Only recognises the shape the cantilever sample (and other docs/)
+// examples use — `id:` and `plugin:` keys directly under each list
+// item in the top-level `stages:` array. Good enough to render the
+// stage list when the FFI introspection feature is off; the real
+// parse still happens in libsouxmar-c-bridge.
+function parseStagesFromYaml(yaml: string): { id: string; plugin: string; status: string }[] {
+  const stages: { id: string; plugin: string; status: string }[] = [];
+  let curId: string | null = null;
+  let curPlugin: string | null = null;
+  const flush = () => {
+    if (curId && curPlugin) stages.push({ id: curId, plugin: curPlugin, status: "pending" });
+    curId = null;
+    curPlugin = null;
+  };
+  for (const raw of yaml.split("\n")) {
+    if (/^\s*-\s+id:\s*/.test(raw)) {
+      flush();
+      curId = raw.replace(/^\s*-\s+id:\s*/, "").trim();
+    } else if (/^\s*plugin:\s*/.test(raw)) {
+      curPlugin = raw.replace(/^\s*plugin:\s*/, "").trim();
+    }
+  }
+  flush();
+  return stages;
+}
+
 export function Inspector({ projectId, features, onOpenProject }: Props) {
   const [summary, setSummary] = useState<PipelineSummary | null>(null);
   const [summaryErr, setSummaryErr] = useState<string | null>(null);
@@ -102,36 +129,44 @@ export function Inspector({ projectId, features, onOpenProject }: Props) {
           </p>
           <code style={pathStyle}>{projectId}</code>
 
-          {!features.pipeline_introspection && (
-            <p style={{ marginTop: "var(--space-4)", color: "var(--fg-tertiary)", fontSize: 12 }}>
-              Pipeline introspection arrives once the souxmar-bridge
-              FFI is wired (pipeline_introspection flag off in this
-              build).
-            </p>
-          )}
-
           {features.pipeline_introspection && summaryErr && (
             <p style={{ marginTop: "var(--space-4)", color: "var(--fg-tertiary)", fontSize: 12 }}>
               Pipeline introspection failed: {summaryErr}
             </p>
           )}
 
-          {features.pipeline_introspection && summary && (
-            <div style={{ marginTop: "var(--space-4)" }}>
-              <p style={{ margin: 0, fontSize: 12, color: "var(--fg-secondary)" }}>
-                Pipeline stages ({summary.stage_count})
-              </p>
-              <ul style={stageListStyle}>
-                {summary.stages.map((s) => (
-                  <li key={s.id} style={stageItemStyle}>
-                    <code style={stageIdStyle}>{s.id}</code>
-                    <span style={stagePluginStyle}>{s.plugin}</span>
-                    <span style={stageStatusStyle}>{s.status}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {(() => {
+            // Render pipeline stages with the FFI summary if it's
+            // available; otherwise fall back to parsing the embedded
+            // cantilever YAML on the React side. The fallback keeps
+            // the inspector useful when the souxmar-bridge FFI isn't
+            // wired in this build (status reads as "pending").
+            const stages = features.pipeline_introspection && summary
+              ? summary.stages
+              : parseStagesFromYaml(CANTILEVER_PIPELINE_YAML);
+            const stageCount = stages.length;
+            return (
+              <div style={{ marginTop: "var(--space-4)" }}>
+                <p style={{ margin: 0, fontSize: 12, color: "var(--fg-secondary)" }}>
+                  Pipeline stages ({stageCount})
+                  {!features.pipeline_introspection && (
+                    <span style={{ marginLeft: "var(--space-2)", color: "var(--fg-tertiary)" }}>
+                      — parsed locally; FFI introspection off in this build
+                    </span>
+                  )}
+                </p>
+                <ul style={stageListStyle}>
+                  {stages.map((s) => (
+                    <li key={s.id} style={stageItemStyle}>
+                      <code style={stageIdStyle}>{s.id}</code>
+                      <span style={stagePluginStyle}>{s.plugin}</span>
+                      <span style={stageStatusStyle}>{s.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

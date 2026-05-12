@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card, CardActions, PrimaryButton, SecondaryButton } from "./Card";
 import { invokeCommand } from "../tauri/bridge";
+import { useAppStore } from "../store/app";
 
 export function SampleProject({
   onNext, onSkip,
@@ -12,16 +13,20 @@ export function SampleProject({
 }) {
   const [busy, setBusy]   = useState(false);
   const [err, setErr]     = useState("");
+  const setInitialProjectPath = useAppStore(s => s.setInitialProjectPath);
 
   const copyAndOpen = async () => {
     setBusy(true);
     setErr("");
     try {
       // Tauri side copies examples/cantilever-beam/ to
-      // ~/souxmar-projects/cantilever and returns the destination path.
-      // We don't bother surfacing the path here — the main shell will
-      // show it after onComplete.
-      await invokeCommand("open_sample_project", { which: "cantilever-beam" });
+      // ~/souxmar-projects/cantilever-beam and returns the destination
+      // path. Stash it in the app store so the workbench can load it
+      // on mount instead of dropping the user into an empty viewport.
+      const path = await invokeCommand<string>("open_sample_project", {
+        which: "cantilever-beam",
+      });
+      setInitialProjectPath(path);
       onNext();
     } catch (e) {
       setErr(String(e));
