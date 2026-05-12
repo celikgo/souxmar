@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { invokeCommand } from "../tauri/bridge";
+import { MeshingPanel } from "./MeshingPanel";
 import { SolversPanel } from "./SolversPanel";
 import { MaterialsPanel } from "./MaterialsPanel";
 import { BoundaryConditionsPanel } from "./BoundaryConditionsPanel";
@@ -138,6 +139,11 @@ export function YamlViewer({ projectPath, relPath }: Props) {
 
       {isPipeline && originalText !== null && (
         <>
+          <MeshingPanel
+            projectPath={projectPath}
+            currentText={text}
+            onChange={(next) => setText(next)}
+          />
           <SolversPanel
             projectPath={projectPath}
             currentText={text}
@@ -621,4 +627,24 @@ function insertSolverStage(lines: string[], newCapability: string): string[] {
     ...lines,
     ...stageBlock,
   ];
+}
+
+// Swap the first `plugin: mesher.*` line in the buffer. Mesher stages
+// pre-exist in every in-tree example (the mesher is the first thing a
+// pipeline does), so we don't bother inserting a stage when one is
+// missing — that case only arises if the user has stripped the mesh
+// stage manually.
+export function replaceMesherPlugin(yaml: string, newCapability: string): string {
+  const lines = yaml.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(\s*plugin:\s*)(['"]?)mesher\.[\w.\-]+(['"]?)(\s*(#.*)?)$/.exec(lines[i]);
+    if (m) {
+      const quote = m[2] || "";
+      const tail  = m[4] || "";
+      lines[i] = `${m[1]}${quote}${newCapability}${quote}${tail}`;
+      return lines.join("\n");
+    }
+  }
+  return yaml + (yaml.endsWith("\n") ? "" : "\n") +
+    `# TODO: no mesher.* stage found; add e.g. "plugin: ${newCapability}"\n`;
 }

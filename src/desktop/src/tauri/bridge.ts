@@ -35,7 +35,8 @@ export type CommandName =
   | "apply_loads_to_pipeline"
   | "simplify_mesh"
   | "write_text_file"
-  | "list_solver_capabilities";
+  | "list_solver_capabilities"
+  | "list_mesher_capabilities";
 
 // Sprint 12 push 2 — BridgeFeatureSet mirror of the Rust struct.
 // Renaming or removing fields here without a matching change to

@@ -445,25 +445,36 @@ pub struct SolverCapability {
 /// once, preferring the first occurrence in the search order above.
 #[tauri::command]
 pub fn list_solver_capabilities(project_path: String) -> Result<Vec<SolverCapability>, String> {
+    list_capabilities_with_prefix(&project_path, "solver.")
+}
+
+/// List mesher capability ids discovered the same way as
+/// `list_solver_capabilities`. Frontend MeshingPanel uses this.
+#[tauri::command]
+pub fn list_mesher_capabilities(project_path: String) -> Result<Vec<SolverCapability>, String> {
+    list_capabilities_with_prefix(&project_path, "mesher.")
+}
+
+fn list_capabilities_with_prefix(project_path: &str, prefix: &str) -> Result<Vec<SolverCapability>, String> {
     let mut out: Vec<SolverCapability> = Vec::new();
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     let project = PathBuf::from(project_path.trim());
     if project.is_dir() {
-        scan_plugin_dir(&project.join("plugins"), false, &mut seen, &mut out);
+        scan_plugin_dir(&project.join("plugins"), false, prefix, &mut seen, &mut out);
     }
 
     if let Ok(env) = std::env::var("SOUXMAR_PLUGINS_PATH") {
         for raw in env.split(':') {
             let p = PathBuf::from(raw.trim());
             if p.is_dir() {
-                scan_plugin_dir(&p, false, &mut seen, &mut out);
+                scan_plugin_dir(&p, false, prefix, &mut seen, &mut out);
             }
         }
     }
 
     if let Some(in_tree) = in_tree_examples_plugins() {
-        scan_plugin_dir(&in_tree, true, &mut seen, &mut out);
+        scan_plugin_dir(&in_tree, true, prefix, &mut seen, &mut out);
     }
 
     Ok(out)
@@ -483,10 +494,11 @@ fn in_tree_examples_plugins() -> Option<PathBuf> {
 }
 
 fn scan_plugin_dir(
-    root:    &Path,
-    in_tree: bool,
-    seen:    &mut std::collections::HashSet<String>,
-    out:     &mut Vec<SolverCapability>,
+    root:        &Path,
+    in_tree:     bool,
+    cap_prefix:  &str,
+    seen:        &mut std::collections::HashSet<String>,
+    out:         &mut Vec<SolverCapability>,
 ) {
     let entries = match fs::read_dir(root) {
         Ok(e) => e,
@@ -510,7 +522,7 @@ fn scan_plugin_dir(
             continue;
         }
         for cap in provides {
-            if !cap.starts_with("solver.") {
+            if !cap.starts_with(cap_prefix) {
                 continue;
             }
             if !seen.insert(cap.clone()) {

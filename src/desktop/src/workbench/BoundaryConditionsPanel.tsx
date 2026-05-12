@@ -126,6 +126,14 @@ export function BoundaryConditionsPanel({ currentText, onChange }: Props) {
 
       {!collapsed && (
         <div style={bodyStyle}>
+          {!hasSolverStage && (
+            <div style={bannerStyle} role="status">
+              <strong>Pick a solver first.</strong> BCs are written under the
+              solver stage's <code style={bannerCodeStyle}>input:</code> block.
+              Use the <strong>Solvers</strong> panel above to choose one; the
+              <strong> + Add</strong> menu unlocks afterwards.
+            </div>
+          )}
           {bcs.length === 0 ? (
             <div style={emptyStyle}>
               No BCs yet. Use <strong>+ Add</strong> to set a force, pressure,
@@ -716,6 +724,23 @@ const countStyle: CSSProperties = {
 const hintStyle: CSSProperties = {
   color:          "var(--warning, #ffd43b)",
   fontStyle:      "italic",
+};
+
+const bannerStyle: CSSProperties = {
+  padding:        "8px 10px",
+  marginBottom:   8,
+  borderLeft:     "3px solid var(--warning, #ffd43b)",
+  background:     "rgba(255, 212, 59, 0.08)",
+  borderRadius:   "var(--radius-sm, 4px)",
+  fontSize:       11,
+  color:          "var(--fg-secondary)",
+  lineHeight:     1.45,
+};
+
+const bannerCodeStyle: CSSProperties = {
+  fontFamily:     "var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)",
+  fontSize:       10.5,
+  color:          "var(--accent-default, #1d9bf0)",
 };
 
 const bodyStyle: CSSProperties = {

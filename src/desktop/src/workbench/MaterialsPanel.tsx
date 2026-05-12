@@ -70,6 +70,14 @@ export function MaterialsPanel({ currentText, onChange }: Props) {
 
       {!collapsed && (
         <div style={bodyStyle}>
+          {!hasSolverStage && (
+            <div style={bannerStyle} role="status">
+              <strong>Pick a solver first.</strong> Material properties land in
+              the solver stage's <code style={codeStyle}>input:</code> block.
+              Click any chip in the <strong>Solvers</strong> panel above; this
+              panel will light up once a solver stage exists.
+            </div>
+          )}
           <div style={groupsStyle}>
             {grouped.map(g => (
               <div key={g.family} style={groupStyle}>
@@ -543,6 +551,17 @@ const chipDisabledStyle: CSSProperties = {
 const hintStyle: CSSProperties = {
   color:          "var(--warning, #ffd43b)",
   fontStyle:      "italic",
+};
+
+const bannerStyle: CSSProperties = {
+  padding:        "8px 10px",
+  marginBottom:   8,
+  borderLeft:     "3px solid var(--warning, #ffd43b)",
+  background:     "rgba(255, 212, 59, 0.08)",
+  borderRadius:   "var(--radius-sm, 4px)",
+  fontSize:       11,
+  color:          "var(--fg-secondary)",
+  lineHeight:     1.45,
 };
 
 const chipNameStyle: CSSProperties = {
