@@ -8,7 +8,7 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.9.0 cut below.)
+- (None this release — `[Unreleased]` reopens after the v0.9.1 cut below.)
 
 ### Changed
 
@@ -25,6 +25,67 @@ The plugin C ABI version is tracked separately and is independent of the project
 ### Security
 
 - (None this release.)
+
+---
+
+## [0.9.1] - 2026-05-12
+
+**First dot-release after the public alpha.** Sprint 13 closes here. See
+[`docs/retros/sprint-13.md`](docs/retros/sprint-13.md) for the
+keep/fix/one-ADR-worthy-decision/risk/capacity. **Tag:** `v0.9.1`. **ABI:**
+v1.3 frozen (unchanged). **Tool contract:** v1 frozen final at 18 tools
+(unchanged).
+
+### Added
+
+- **ADR-0017** ratifying the public-alpha bug-discovery model
+  (external-first + synthetic-load-augmented). New
+  `scripts/synth-load/run.sh` driver + golden-fingerprint corpus
+  framework; wired into eval-nightly as a non-blocking check
+  until the first `--refresh-golden` lands.
+- **ADR-0018** for the Rust ⇄ C++ FFI surface. New
+  `libsouxmar-c-bridge.a` static library with a six-function
+  schema=1 C ABI declared in
+  `include/souxmar-c-bridge/pipeline.h`; ABI-version byte
+  cross-checked on every call.
+- **First real FFI** — `pipeline_introspection` flips structural
+  in `BridgeFeatureSet`. Inspector panel renders real pipeline
+  stages parsed through the C bridge when built with the
+  `real-ffi` cargo feature.
+- **Auto-generated `/agents/tools` page** via new `souxmar agent
+  list --json` flag + `scripts/docs-site/gen-agent-tools.py`.
+  Eval-nightly verifies drift with `--check-only`.
+- **VTU consumer-conformance test** (Sprint 11 carry-over):
+  `tests/integration/test_vtu_consumer_conformance.cpp` exercises
+  the writer output through seven structural invariants every
+  conforming consumer (ParaView, future VTK adapter) relies on.
+- **Visual-regression baselines policy** doc
+  (`tests/visual/BASELINES.md`) — Sprint 11/12 carry-over.
+- **Per-patch BC routing** in the cfd-stub (Sprint 10 carry-over).
+  Honours `patches: [{ name, tag, bc }, ...]` with
+  `wall > inlet > outlet > bulk` precedence.
+- **`docs/bug-reports/` record convention** — first entry
+  documents the cfd-stub fix; format codifies the ADR-0017
+  triage record shape.
+
+### Changed
+
+- `eval-nightly` workflow now also builds the `souxmar` CLI
+  binary, runs the synth-load harness, and verifies the
+  auto-generated agent docs are in sync.
+- `BridgeFeatureSet::default()` reports
+  `pipeline_introspection = true` when built with `real-ffi`;
+  the `bridge_protocol_version` field now sources from
+  `ffi::EXPECTED_ABI_VERSION` to keep the cross-check named in
+  one place.
+- `souxmar-bridge` crate gains a `build.rs` + the `real-ffi`
+  cargo feature; default-off so `cargo check` works without a
+  C++ build.
+
+### Fixed
+
+- cfd-stub no longer ignores `patches:` input. See the bug-report
+  record at `docs/bug-reports/2026-05-12-cfd-stub-bcs.md`.
 
 ---
 
