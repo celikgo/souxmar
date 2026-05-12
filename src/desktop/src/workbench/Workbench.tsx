@@ -27,6 +27,7 @@ import { Chat } from "../chat/Chat";
 import { Viewport } from "./Viewport";
 import { ModelViewer } from "./ModelViewer";
 import { MarkdownViewer, isMarkdownPath } from "./MarkdownViewer";
+import { YamlViewer, isYamlPath } from "./YamlViewer";
 import { ProjectTree } from "./ProjectTree";
 import { Terminal } from "./Terminal";
 import { TitleBar } from "./TitleBar";
@@ -178,7 +179,9 @@ export function Workbench() {
             // previous viewer stays mounted.
             const lower = rel.toLowerCase();
             const viewable =
-              VIEWABLE_EXTS.some(ext => lower.endsWith(ext)) || isMarkdownPath(rel);
+              VIEWABLE_EXTS.some(ext => lower.endsWith(ext)) ||
+              isMarkdownPath(rel) ||
+              isYamlPath(rel);
             if (viewable) setActiveModel(rel);
           }}
         />
@@ -195,6 +198,8 @@ export function Workbench() {
           ) : activeModel ? (
             isMarkdownPath(activeModel) ? (
               <MarkdownViewer projectPath={projectId} relPath={activeModel} />
+            ) : isYamlPath(activeModel) ? (
+              <YamlViewer projectPath={projectId} relPath={activeModel} />
             ) : (
               <ModelViewer
                 projectPath={projectId}
@@ -287,11 +292,14 @@ export function Workbench() {
 }
 
 function findFirstViewable(node: FileEntry, projectRoot: string): string | null {
-  // Prefer a renderable 3D model; fall back to README.md / any markdown so
-  // a freshly-opened project without geometry still shows *something*.
-  return findMatching(node, projectRoot, n =>
-    VIEWABLE_EXTS.some(ext => n.endsWith(ext)),
-  ) ?? findMatching(node, projectRoot, isMarkdownPath);
+  // Prefer a renderable 3D model; fall back to README.md, then any
+  // pipeline YAML, so a freshly-opened project without geometry still
+  // shows *something*.
+  return (
+    findMatching(node, projectRoot, n => VIEWABLE_EXTS.some(ext => n.endsWith(ext))) ??
+    findMatching(node, projectRoot, isMarkdownPath) ??
+    findMatching(node, projectRoot, isYamlPath)
+  );
 }
 
 function findMatching(
