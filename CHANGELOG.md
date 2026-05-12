@@ -8,7 +8,7 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.9.3 cut below.)
+- (None this release — `[Unreleased]` reopens after the v0.9.4 cut below.)
 
 ### Changed
 
@@ -25,6 +25,36 @@ The plugin C ABI version is tracked separately and is independent of the project
 ### Security
 
 - (None this release.)
+
+---
+
+## [0.9.4] - 2026-05-15
+
+Sprint 16 closes here. See [`docs/retros/sprint-16.md`](docs/retros/sprint-16.md).
+**Tag:** `v0.9.4`. **ABI:** v1.3 frozen (unchanged). **Tool contract:** v1
+frozen final at 18 tools (unchanged). **Bridge ABI:** stays at v3 (no new FFI
+surfaces this sprint).
+
+### Added
+
+- **ADR-0022 (MVC-via-subprocess)** ratifies the pattern Sprint 15 push 4
+  used inline for `auto_updater_menu`: state-machine surfaces expose READ
+  through FFI; APPLY through subprocess shell-out.
+- **ADR-0023 + plugin-marketplace v1 scaffold** for paid plugins.
+- **ADR-0024 + billing service scaffold** mediating Stripe for both the
+  proxy quota counter and the marketplace license issuance.
+- **`souxmar plugin install <id>`** CLI subcommand with `--license
+  <sxm_lic_*>` + `--json` output. CLI surface ratchets; the actual
+  download + verify + extract loop lands in Sprint 17 push 2.
+- **INFRA_STATUS.md stale-counter** on every wired-but-empty gate. When
+  the counter passes 5 sprints, the line escalates to "what to fix" in
+  the next retro.
+
+### Changed
+
+- The desktop client's flow for state-machine operations (update apply,
+  plugin install, account refresh, cloud sync) is now subprocess-based
+  per ADR-0022. FFI exposes only the read side.
 
 ---
 
