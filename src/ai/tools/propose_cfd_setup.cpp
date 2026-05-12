@@ -148,14 +148,14 @@ Tool make_propose_cfd_setup_tool() {
     // ['inlet','walls','outlet'] trio; with tags, it picks the matching
     // first/last.
     std::vector<std::string> tags;
-    if (const auto* t = find(inputs, "tags")) {
-      if (t->kind() != pipeline::Value::Kind::List) {
+    if (const auto* tags_node = find(inputs, "tags")) {
+      if (tags_node->kind() != pipeline::Value::Kind::List) {
         return ToolResult{
             pipeline::Value::null_value(),
             "tags must be a list",
             ToolError{"INVALID_ARGUMENT", "`tags` must be a list of strings when set"}};
       }
-      for (const auto& s : t->as_list()) {
+      for (const auto& s : tags_node->as_list()) {
         if (s.kind() != pipeline::Value::Kind::String) {
           return ToolResult{
               pipeline::Value::null_value(),

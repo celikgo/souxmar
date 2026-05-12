@@ -248,7 +248,7 @@ ManifestLoadResult parse_manifest_file(const fs::path& path) {
     return err;
   } catch (const std::exception& e) {
     ManifestParseError err;
-    err.message = std::string(path.string()) + ": " + e.what();
+    err.message = path.string() + ": " + e.what();
     return err;
   }
 }
