@@ -133,6 +133,123 @@ TEST(CfdStubEndToEnd, ProducesUniformVelocityField) {
   }
 }
 
+// Sprint 13 push 4 — per-patch BC routing carry-over from Sprint 10.
+// Drives the cfd-stub with a small tet mesh whose face tags wire a
+// wall patch + an inlet patch; asserts the velocity field at the
+// matching nodes is the routed value (zero for the wall, the
+// patch's inlet velocity for the inlet).
+TEST(CfdStubEndToEnd, PerPatchBcRoutingAppliesWallAndInlet) {
+  const fs::path plugins_root =
+      fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
+  const auto discovery = plugin::discover_plugins({plugins_root});
+  plugin::Registry      registry;
+  plugin::PluginLoader  loader(registry, "test-host/0.0.0");
+  auto _hello = load_by_id(loader, discovery, "dev.souxmar.examples.hello-mesher");
+  auto _cfd   = load_by_id(loader, discovery, "dev.souxmar.examples.cfd-stub");
+
+  pipeline::RegistryDispatcher dispatcher(registry);
+  std::map<std::string, std::shared_ptr<void>> upstream;
+
+  // hello-mesher → one tet, 4 nodes (0,1,2,3). Tet face conventions
+  // (Gmsh):
+  //   face 0: nodes (1,2,3)
+  //   face 1: nodes (0,3,2)
+  //   face 2: nodes (0,1,3)
+  //   face 3: nodes (0,2,1)
+  auto mesh_dr = dispatcher.dispatch(
+      pipeline::DispatchContext{"mesher.tetra.hello",
+                                pipeline::Value::map({}),
+                                upstream});
+  ASSERT_TRUE(std::holds_alternative<pipeline::DispatchSuccess>(mesh_dr));
+  auto mesh_payload = std::get<pipeline::DispatchSuccess>(mesh_dr);
+  upstream.emplace("__mesh__", mesh_payload);
+  auto* mesh_so_mut =
+      const_cast<pipeline::StageOutput*>(
+        static_cast<const pipeline::StageOutput*>(mesh_payload.get()));
+  ASSERT_NE(mesh_so_mut->mesh, nullptr);
+
+  // Stamp face_tags: face 0 → wall (tag 7); face 2 → inlet (tag 9).
+  mesh_so_mut->mesh->set_face_tag(souxmar::core::CellIndex{0}, 0,
+                                   souxmar::core::EntityTag{7});
+  mesh_so_mut->mesh->set_face_tag(souxmar::core::CellIndex{0}, 2,
+                                   souxmar::core::EntityTag{9});
+
+  // Build the per-patch BC list. The cfd-stub reads list-of-maps.
+  std::vector<pipeline::Value> patches;
+
+  {
+    std::map<std::string, pipeline::Value> bc;
+    bc.emplace("type", pipeline::Value::string("wall"));
+    std::map<std::string, pipeline::Value> entry;
+    entry.emplace("name", pipeline::Value::string("the-wall"));
+    entry.emplace("tag",  pipeline::Value::number(7));
+    entry.emplace("bc",   pipeline::Value::map(std::move(bc)));
+    patches.push_back(pipeline::Value::map(std::move(entry)));
+  }
+  {
+    std::vector<pipeline::Value> vel = {
+        pipeline::Value::number(4.0),
+        pipeline::Value::number(0.0),
+        pipeline::Value::number(0.0),
+    };
+    std::map<std::string, pipeline::Value> bc;
+    bc.emplace("type",     pipeline::Value::string("inlet"));
+    bc.emplace("velocity", pipeline::Value::list(std::move(vel)));
+    std::map<std::string, pipeline::Value> entry;
+    entry.emplace("name", pipeline::Value::string("the-inlet"));
+    entry.emplace("tag",  pipeline::Value::number(9));
+    entry.emplace("bc",   pipeline::Value::map(std::move(bc)));
+    patches.push_back(pipeline::Value::map(std::move(entry)));
+  }
+
+  // Bulk magnitude is 1.0 (default); inlet velocity is 4.0 in +x
+  // (overriding the bulk).
+  std::map<std::string, pipeline::Value> cfd_in;
+  cfd_in.emplace("mesh",    pipeline::Value::stage_ref("__mesh__"));
+  cfd_in.emplace("patches", pipeline::Value::list(std::move(patches)));
+
+  auto cfd_dr = dispatcher.dispatch(
+      pipeline::DispatchContext{"solver.cfd.simple",
+                                pipeline::Value::map(std::move(cfd_in)),
+                                upstream});
+  ASSERT_TRUE(std::holds_alternative<pipeline::DispatchSuccess>(cfd_dr));
+  auto cfd_payload = std::get<pipeline::DispatchSuccess>(cfd_dr);
+  const auto* cfd_out = static_cast<const pipeline::StageOutput*>(cfd_payload.get());
+  ASSERT_NE(cfd_out->field, nullptr);
+  const auto& field = *cfd_out->field;
+
+  // Routing precedence: wall > inlet > bulk. Nodes 1,2,3 sit on
+  // the wall face; node 0 sits on the inlet face. Node ordering
+  // from the hello-mesher's one tet is (0,1,2,3); face 0 covers
+  // (1,2,3) → wall; face 2 covers (0,1,3) → inlet; the wall wins
+  // for nodes 1 and 3 (intersection); node 0 is inlet-only; node
+  // 2 is wall-only.
+  auto u0 = field.at(0, 0);
+  auto u1 = field.at(1, 0);
+  auto u2 = field.at(2, 0);
+  auto u3 = field.at(3, 0);
+
+  // Node 0 — inlet only.
+  EXPECT_DOUBLE_EQ(u0[0], 4.0);
+  EXPECT_DOUBLE_EQ(u0[1], 0.0);
+  EXPECT_DOUBLE_EQ(u0[2], 0.0);
+
+  // Node 1 — wall ∩ inlet → wall dominates → (0,0,0).
+  EXPECT_DOUBLE_EQ(u1[0], 0.0);
+  EXPECT_DOUBLE_EQ(u1[1], 0.0);
+  EXPECT_DOUBLE_EQ(u1[2], 0.0);
+
+  // Node 2 — wall only.
+  EXPECT_DOUBLE_EQ(u2[0], 0.0);
+  EXPECT_DOUBLE_EQ(u2[1], 0.0);
+  EXPECT_DOUBLE_EQ(u2[2], 0.0);
+
+  // Node 3 — wall ∩ inlet → wall.
+  EXPECT_DOUBLE_EQ(u3[0], 0.0);
+  EXPECT_DOUBLE_EQ(u3[1], 0.0);
+  EXPECT_DOUBLE_EQ(u3[2], 0.0);
+}
+
 TEST(CfdStubEndToEnd, FlowDirectionInputAccepted) {
   const fs::path plugins_root =
       fs::path(SOUXMAR_TEST_HELLO_MESHER_DIR).parent_path();
