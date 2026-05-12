@@ -4,7 +4,7 @@
 # auto-updater (souxmar_update) is the first consumer; plugin
 # marketplace v1 (Sprint 16) + cloud sync (Sprint 15) will follow.
 
-find_package(unofficial-sodium CONFIG REQUIRED)
+include(SouxmarFindSodium)
 
 add_library(souxmar_crypto
   primitives.cpp
@@ -25,7 +25,7 @@ target_link_libraries(souxmar_crypto
   PRIVATE
     souxmar::warnings
     souxmar::sanitizers
-    unofficial-sodium::sodium
+    souxmar::sodium
 )
 
 install(TARGETS souxmar_crypto
