@@ -22,6 +22,11 @@ fn main() {
             commands::pipeline_summary,
             // Sprint 15 push 4 — third real FFI command.
             commands::update_menu_status,
+            // Workbench file-management surface.
+            commands::create_project,
+            commands::open_project,
+            commands::import_model,
+            commands::list_project_files,
         ])
         .run(tauri::generate_context!())
         .expect("error launching souxmar-desktop");
