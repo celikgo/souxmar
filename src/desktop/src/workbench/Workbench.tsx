@@ -25,6 +25,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { Chat } from "../chat/Chat";
 import { Viewport } from "./Viewport";
+import { ModelViewer } from "./ModelViewer";
 import { ProjectTree } from "./ProjectTree";
 import { Terminal } from "./Terminal";
 import { TitleBar } from "./TitleBar";
@@ -36,7 +37,9 @@ import { ImportModelDialog } from "./dialogs/ImportModelDialog";
 import { useBridgeFeatures } from "../store/features";
 import { useAppStore } from "../store/app";
 import { useLayoutStore } from "../store/layout";
-import { invokeCommand } from "../tauri/bridge";
+import { invokeCommand, type FileEntry } from "../tauri/bridge";
+
+const VIEWABLE_EXTS = [".obj", ".stl"];
 
 type DialogKind = "new" | "open" | "import" | null;
 
@@ -46,6 +49,30 @@ export function Workbench() {
   const [dialog, setDialog] = useState<DialogKind>(null);
 
   const features = useBridgeFeatures();
+  const [activeModel, setActiveModel] = useState<string | null>(null);
+
+  // Auto-discover the first viewable geometry file in the project on load
+  // and whenever the project root changes. The user can later switch via
+  // the project tree (handled by ProjectTree's onSelectFile callback).
+  useEffect(() => {
+    if (!projectId) {
+      setActiveModel(null);
+      return;
+    }
+    let cancelled = false;
+    invokeCommand<FileEntry>("list_project_files", { projectPath: projectId })
+      .then(root => {
+        if (cancelled) return;
+        const found = findFirstViewable(root, projectId);
+        setActiveModel(found);
+      })
+      .catch(() => {
+        if (!cancelled) setActiveModel(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
   const { leftOpen, rightOpen, bottomOpen, toggleLeft, toggleBottom, toggleRight } =
     useLayoutStore();
 
@@ -138,14 +165,16 @@ export function Workbench() {
 
       <div style={middleStyle}>
         <div style={viewportWrapStyle}>
-          {projectId ? (
-            <Viewport projectId={projectId} features={features} />
-          ) : (
+          {!projectId ? (
             <Welcome
               onNewProject={() => setDialog("new")}
               onOpenProject={() => setDialog("open")}
               onOpenSample={handleOpenSample}
             />
+          ) : activeModel ? (
+            <ModelViewer projectPath={projectId} relPath={activeModel} />
+          ) : (
+            <Viewport projectId={projectId} features={features} />
           )}
         </div>
         {bottomOpen && (
@@ -203,11 +232,35 @@ export function Workbench() {
               }
               return next;
             });
+            // If the imported file is renderable, drop it straight into the
+            // viewer — saves the user a project-tree click after import.
+            const lower = result.rel_path.toLowerCase();
+            if (VIEWABLE_EXTS.some(ext => lower.endsWith(ext))) {
+              setActiveModel(result.rel_path);
+            }
           }}
         />
       )}
     </div>
   );
+}
+
+function findFirstViewable(node: FileEntry, projectRoot: string): string | null {
+  if (!node.is_dir) {
+    const lower = node.name.toLowerCase();
+    if (VIEWABLE_EXTS.some(ext => lower.endsWith(ext))) {
+      // Return the path *relative* to the project root so the bridge command
+      // can resolve it against the project's geometry/ directory safely.
+      const prefix = projectRoot.endsWith("/") ? projectRoot : projectRoot + "/";
+      return node.path.startsWith(prefix) ? node.path.slice(prefix.length) : node.path;
+    }
+    return null;
+  }
+  for (const c of node.children ?? []) {
+    const hit = findFirstViewable(c, projectRoot);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 const titleRowStyle: CSSProperties = {
