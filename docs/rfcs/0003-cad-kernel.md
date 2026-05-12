@@ -67,7 +67,7 @@ The conformance suite gains a `cad.*` plugin type with tests for: open / close a
 
 ```
  *   v1.6  Sprint 28 push 1 — BREP session surface + cad.* plugin type
- *                            (souxmar-c/brep.h); ADR-NNNN.
+ *                            (souxmar-c/brep.h); ADR-0039.
 ```
 
 Additive minor under the ADR-0008 ratchet. Existing plugins compiled against v1.0–v1.5 link and load unchanged. Function prototypes are bare (no `SOUXMAR_API` decoration), matching the existing `geometry.h` / `mesh.h` convention.
@@ -250,7 +250,7 @@ Four PRs in Sprint 28.
 - [ ] **PR 4 — Mesher input.** Document the `cad_session` / `cad_body_id` value-bag keys; `examples/plugins/gmsh-mesher` consumes them when present and refines on the BREP analytic surface.
 - [ ] New doc: `docs/LICENSING.md` (OCCT relink-rights compliance story).
 - [ ] `releasing-souxmar` skill: add the OCCT-binary-publish step.
-- [ ] ADR filed at `docs/adr/NNNN-abi-v1-6-brep-ratchet.md` — records the v1.6 minor bump under the ADR-0008 ratchet. Filed with PR 1.
+- [ ] ADR-0039 filed at `docs/adr/0039-abi-v1-6-brep-ratchet.md` — records the v1.6 minor bump under the ADR-0008 ratchet. Filed with PR 1.
 - [ ] ADR filed at `docs/adr/NNNN-occt-version-pin.md` (Open question 6).
 - [ ] `docs/PLUGIN_SDK.md` updated: new `cad.*` plugin type section.
 

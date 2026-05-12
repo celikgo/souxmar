@@ -39,7 +39,7 @@ The plugin contract is small: receive a list of primitives + constraints, mutate
 
 ```
  *   v1.7  Sprint 29 push 1 — 2D sketch surface
- *                            (souxmar-c/sketch.h); ADR-NNNN.
+ *                            (souxmar-c/sketch.h); ADR-0040.
 ```
 
 Additive minor under the ADR-0008 ratchet. Existing plugins compiled against v1.0–v1.6 link and load unchanged. Function prototypes are bare (no `SOUXMAR_API` decoration).
@@ -361,7 +361,7 @@ Six PRs in Sprint 29.
 - [ ] **PR 4 — Bridge surface.** Rust commands; Tauri registration; React hook `useSketch(sketch_id)`.
 - [ ] **PR 5 — Sketcher UI.** Mode toggle in Viewport; orthographic camera; grid + snap; primitive drawing tools; dimension toolbar; solver status strip.
 - [ ] **PR 6 — Agent tools.** 16 `sketch.*` tools wired through the dispatcher; eval cases for each; "your first sketch" tutorial.
-- [ ] ADR filed at `docs/adr/NNNN-abi-v1-7-sketch-ratchet.md` — records the v1.7 minor bump under the ADR-0008 ratchet. Filed with PR 1.
+- [ ] ADR-0040 filed at `docs/adr/0040-abi-v1-7-sketch-ratchet.md` — records the v1.7 minor bump under the ADR-0008 ratchet. Filed with PR 1.
 - [ ] ADR filed at `docs/adr/NNNN-sketch-solver-pin.md`.
 - [ ] Documentation: tutorial; `docs/AI_INTEGRATION.md` update.
 

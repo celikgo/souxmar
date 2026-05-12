@@ -85,7 +85,7 @@ Encoding follows whatever RFC-001 chose for chunk transport (open question 1 the
 
 ```
  *   v1.5  Sprint 27 push 1 — field-stream renderer surface
- *                            (souxmar-c/field_stream.h); ADR-NNNN.
+ *                            (souxmar-c/field_stream.h); ADR-0038.
 ```
 
 Additive minor under the ADR-0008 ratchet. Existing plugins compiled against v1.0–v1.4 link and load unchanged because nothing in this header is required of plugins; the field-stream entry points are host-side. Function prototypes are bare (no `SOUXMAR_API` decoration), matching the existing `field.h` / `mesh.h` convention.
@@ -221,7 +221,7 @@ Four PRs in Sprint 27, plus the reader plugin.
 - [ ] **PR 3 — Reader plugin.** `examples/plugins/vtu-reader/`; manifest, build, conformance round-trip on the cantilever VTU + on a multi-cell-type fixture.
 - [ ] **PR 4 — Renderer wiring.** Three.js vertex/face colour pipeline; glyph instancing; deformed-shape pass; threshold filter; colormap legend component. Lands the four agent tools.
 - [ ] Documentation update in `docs/DESKTOP_APP.md`, `docs/AI_INTEGRATION.md`, `docs/PLUGIN_SDK.md`.
-- [ ] ADR filed at `docs/adr/NNNN-abi-v1-5-field-stream-ratchet.md` — records the v1.5 minor bump under the ADR-0008 ratchet. Filed with PR 1.
+- [ ] ADR-0038 filed at `docs/adr/0038-abi-v1-5-field-stream-ratchet.md` — records the v1.5 minor bump under the ADR-0008 ratchet. Filed with PR 1.
 - [ ] ADR filed at `docs/adr/NNNN-field-units-accessor.md` (Open question 1 — depends on its resolution).
 - [ ] Tutorial: `docs/tutorials/inspecting-results.md`.
 

@@ -103,7 +103,7 @@ This is the same "regenerate from history" semantics as every parametric CAD too
 
 ```
  *   v1.8  Sprint 30 push 1 — BREP feature ops (extend brep.h);
- *                            ADR-NNNN.
+ *                            ADR-0041.
 ```
 
 Additive minor under the ADR-0008 ratchet. Existing plugins compiled against v1.0–v1.7 link and load unchanged. Function prototypes are bare (no `SOUXMAR_API` decoration), matching the rest of `brep.h`.
@@ -316,7 +316,7 @@ Seven PRs in Sprint 30 — the most PR-heavy sprint of the post-v1.0 block.
 - [ ] **PR 5 — Feature tree UI.** Panel; drag-reorder; rename/suppress/delete; selection promotion in feature dialogs.
 - [ ] **PR 6 — Parameter spreadsheet.** Read/write parameters; trigger regenerate; validation (no zero/negative on dimensional inputs by default).
 - [ ] **PR 7 — Agent tools + eval.** 10 `feature.*` tools; eval cases for each; the "design a bracket" end-to-end case.
-- [ ] ADR filed at `docs/adr/NNNN-abi-v1-8-feature-ops-ratchet.md` — records the v1.8 minor bump under the ADR-0008 ratchet. Filed with PR 1.
+- [ ] ADR-0041 filed at `docs/adr/0041-abi-v1-8-feature-ops-ratchet.md` — records the v1.8 minor bump under the ADR-0008 ratchet. Filed with PR 1.
 - [ ] ADR filed at `docs/adr/NNNN-design-yaml-v1-freeze.md`.
 - [ ] Documentation: tutorial "Modeling a bracket"; chat-driven variant; `docs/DESKTOP_APP.md` + `docs/AI_INTEGRATION.md` updates.
 - [ ] `v1.2` release notes drafted.

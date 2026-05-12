@@ -199,7 +199,7 @@ Shipping v1.x with the SVG placeholder is not viable; it blocks five subsequent 
 ## Drawbacks
 
 - **Bundle size:** adding Three.js + its loaders adds ~600 KB minified + brotli to the desktop bundle. Tracked against the perf budget in `docs/ENGINEERING_PRACTICES.md`; acceptable but a real number.
-- **Maintenance surface:** Three.js's major versions are not strictly semver-safe; we will pin to a specific minor and bump deliberately. The exact r-release is picked during PR 3 against the highest stable release available at Sprint 25 day 1, and ratified in ADR-0038 (see Implementation plan).
+- **Maintenance surface:** Three.js's major versions are not strictly semver-safe; we will pin to a specific minor and bump deliberately. The exact r-release is picked during PR 3 against the highest stable release available at Sprint 25 day 1, and ratified in ADR-0043 (see Implementation plan).
 - **Determinism story:** the renderer introduces a screenshot-level golden test (`viz-golden`) that is **not byte-exact** across OSes; only numeric solver output stays under the exact-byte determinism gate (R-015 in the post-v1.0 risk register, `docs/SPRINT_PLAN.md`).
 - **New ABI surface to support forever:** `surface_stream.h` joins the frozen v1 ABI as a v1.4 add. Once shipped, the function signatures cannot change without an RFC + a major bump.
 - **WebGPU drift:** WebGPU adoption rate may overtake our WebGL2 baseline within 18 months, at which point we carry two render paths longer than we'd like. Mitigation: a yearly "drop WebGL2?" review starting 2027-Q2.
@@ -233,7 +233,7 @@ Leading indicators to watch in the first six months:
 The implementation team needs to close these before the merge of PR 2 (chunk encoding) or PR 3 (Three.js pin). Items already resolved by this RFC are not listed here.
 
 1. **Chunk encoding.** Plain JSON arrays vs. base64'd `ArrayBuffer` vs. a Tauri-native binary IPC path (`tauri::ipc::Response::new(Vec<u8>)`). Decision rubric: pick the option that keeps the cantilever 250k-tri load under 200ms p95 on the integrated-GPU CI runner. **Closes in PR 2.**
-2. **Three.js version pin.** Pick the r-release on Sprint 25 day 1; ratify in ADR-0038. **Closes in PR 3.**
+2. **Three.js version pin.** Pick the r-release on Sprint 25 day 1; ratify in ADR-0043. **Closes in PR 3.**
 3. **WebGPU feature detection UX.** Auto-upgrade silently, or surface a "GPU acceleration: WebGPU / WebGL2" indicator in the settings panel? Lean toward surfacing — debuggability beats magic — but this is a UX call. **Closes in PR 3 review.**
 4. **Wayland-specific camera test.** What's the cheapest way to keep one in CI? (No Linux Wayland runner exists today.) For S25, the gate is a manual checkbox on the release-candidate checklist; full CI coverage deferred to a follow-up ADR after Sprint 26.
 
@@ -250,11 +250,11 @@ Five PRs, sized to fit in Sprint 25 (with a slip lane into S25.5 for the shared-
 
 - [ ] **PR 1 — ABI add.** New header `include/souxmar-c/surface_stream.h`; in-core implementation backing the entry points; `SOUXMAR_ABI_VERSION_MINOR` bump 3 → 4 with the new history line; conformance-suite additions covering `souxmar_surface_stream_*` round-trips. Commit message carries the `Ratchet: additive minor surface (ADR-0008)` marker. Reviewer load: ABI gate (`reviewing-abi-changes` skill).
 - [ ] **PR 2 — Bridge surface.** `souxmar-bridge` `surface_stream_open` + `surface_stream_chunk` Rust commands; Tauri command registration in `src/desktop/src-tauri/src/commands.rs`; flip `viewport_renderer` to `true` when the `real-ffi` feature is on; unit tests against the bridge skeleton path. **Closes Open Question 1 (chunk encoding).**
-- [ ] **PR 3 — Three.js scene + hook.** `useSurfaceStream` hook; Three.js scene mount; orbit controls; resize + HiDPI; perf budget gate in CI (`viz-golden`). No render-mode toggle UI yet. **Closes Open Questions 2 and 3 (Three.js pin + WebGPU UX); ADR-0038 filed for the pin.**
+- [ ] **PR 3 — Three.js scene + hook.** `useSurfaceStream` hook; Three.js scene mount; orbit controls; resize + HiDPI; perf budget gate in CI (`viz-golden`). No render-mode toggle UI yet. **Closes Open Questions 2 and 3 (Three.js pin + WebGPU UX); ADR-0043 filed for the pin.**
 - [ ] **PR 4 — Render modes + picking.** All four render modes wired into the canvas (UI toggle lands in S26); raycaster picking; `viz.*` agent tools wired through the dispatcher with eval cases in `tests/agent-eval/`.
 - [ ] **PR 5 (S25.5 slip lane) — Shared mmap path.** Falls in if PR 2 misses the 200ms p95 target on the 1M-tri stress test.
 - [ ] ADR-0037 filed at `docs/adr/0037-abi-v1-4-surface-stream-ratchet.md` — records the v1.4 minor bump under the ADR-0008 ratchet. Filed with PR 1.
-- [ ] ADR-0038 filed at `docs/adr/0038-three-js-pin.md` — records the Three.js r-release pin chosen in PR 3.
+- [ ] ADR-0043 filed at `docs/adr/0043-three-js-pin.md` — records the Three.js r-release pin chosen in PR 3.
 - [ ] Documentation update in `docs/DESKTOP_APP.md` (Viewport section rewrite) and `docs/AI_INTEGRATION.md` (three new `viz.*` tools). Filed alongside PR 4.
 - [ ] Tutorial update in `docs/tutorials/` ("Viewing a mesh") — slips to S26 if S25 is tight; S26 lists this as a Desktop story already.
 

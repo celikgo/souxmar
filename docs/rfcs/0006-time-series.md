@@ -52,7 +52,7 @@ Picked because it's the de-facto standard for time-series VTU and Paraview / Vis
 
 ```
  *   v1.9  Sprint 32 push 1 — time-series stream surface
- *                            (souxmar-c/timeseries.h); ADR-NNNN.
+ *                            (souxmar-c/timeseries.h); ADR-0042.
 ```
 
 Additive minor under the ADR-0008 ratchet. Existing plugins compiled against v1.0–v1.8 link and load unchanged. Function prototypes are bare (no `SOUXMAR_API` decoration), matching the existing `field.h` convention.
@@ -299,7 +299,7 @@ Six PRs in Sprint 32.
 - [ ] **PR 4 — Playback UI.** Playback strip below viewport; per-frame deformed-shape / color-by-field / threshold re-evaluation; performance gate (24 fps on 250k tris on the CI integrated-GPU runner).
 - [ ] **PR 5 — `video-ffmpeg` plugin.** Subprocess-driven; conformance round-trip ("export a 24-frame test series, decode and compare frame hashes within tolerance"); error UX for ffmpeg-not-found.
 - [ ] **PR 6 — Agent tools + reference solver + example.** Five `viz.*` tools; `examples/plugins/solver-dyn` (Newmark-β linear-elastic dynamics); `examples/dynamic-beam` example case; "A dynamic beam" tutorial; v1.3 release notes.
-- [ ] ADR filed at `docs/adr/NNNN-abi-v1-9-timeseries-ratchet.md` — records the v1.9 minor bump under the ADR-0008 ratchet. Filed with PR 1.
+- [ ] ADR-0042 filed at `docs/adr/0042-abi-v1-9-timeseries-ratchet.md` — records the v1.9 minor bump under the ADR-0008 ratchet. Filed with PR 1.
 - [ ] ADR filed at `docs/adr/NNNN-pvd-as-canonical-timeseries.md`.
 - [ ] Documentation: tutorial; release notes; `docs/INFRA_STATUS.md` ffmpeg dependency note.
 
