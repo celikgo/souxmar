@@ -37,7 +37,8 @@ import { ImportModelDialog } from "./dialogs/ImportModelDialog";
 import { useBridgeFeatures } from "../store/features";
 import { useAppStore } from "../store/app";
 import { useLayoutStore } from "../store/layout";
-import { invokeCommand, type FileEntry } from "../tauri/bridge";
+import { invokeCommand, type FileEntry, type LoadSpec } from "../tauri/bridge";
+import type { Overlay } from "./ModelViewer";
 
 const VIEWABLE_EXTS = [".obj", ".stl"];
 
@@ -50,6 +51,12 @@ export function Workbench() {
 
   const features = useBridgeFeatures();
   const [activeModel, setActiveModel] = useState<string | null>(null);
+  const [loads, setLoads] = useState<LoadSpec[]>([]);
+  const overlays: Overlay[] = loads.map(l =>
+    l.kind === "force"
+      ? { kind: "force" as const, face: l.face, vector: l.vector ?? [0, 0, 0], magnitude: 1 }
+      : { kind: "fixed" as const, face: l.face }
+  );
 
   // Auto-discover the first viewable geometry file in the project on load
   // and whenever the project root changes. The user can later switch via
@@ -172,7 +179,16 @@ export function Workbench() {
               onOpenSample={handleOpenSample}
             />
           ) : activeModel ? (
-            <ModelViewer projectPath={projectId} relPath={activeModel} />
+            <ModelViewer
+              projectPath={projectId}
+              relPath={activeModel}
+              overlays={overlays}
+              onSimplified={newRel => {
+                setActiveModel(newRel);
+                const ts = new Date().toLocaleTimeString();
+                setLog(prev => [...prev, `[${ts}] simplified → ${newRel}`]);
+              }}
+            />
           ) : (
             <Viewport projectId={projectId} features={features} />
           )}
@@ -184,6 +200,13 @@ export function Workbench() {
               features={features}
               onOpenProject={setProjectId}
               log={log}
+              hasModel={Boolean(activeModel)}
+              loads={loads}
+              setLoads={setLoads}
+              onLog={line => {
+                const ts = new Date().toLocaleTimeString();
+                setLog(prev => [...prev, `[${ts}] ${line}`]);
+              }}
             />
           </div>
         )}

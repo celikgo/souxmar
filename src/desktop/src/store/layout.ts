@@ -7,7 +7,7 @@
 
 import { create } from "zustand";
 
-export type BottomTab = "terminal" | "inspector" | "problems";
+export type BottomTab = "terminal" | "inspector" | "problems" | "loads";
 
 interface LayoutState {
   leftOpen: boolean;

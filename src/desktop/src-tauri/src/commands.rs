@@ -14,7 +14,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::settings::{Settings, settings_path};
 
@@ -200,6 +200,137 @@ stages:\n\
   - id: write\n\
     plugin: writer.vtu\n";
 
+/// Boundary-condition spec received from the React workbench. `face` is
+/// one of the named bbox faces (+x/-x/+y/-y/+z/-z); `vector` is only
+/// meaningful when kind=force.
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum LoadKind {
+    Force,
+    Fixed,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct LoadSpec {
+    pub face:   String,
+    pub kind:   LoadKind,
+    pub vector: Option<[f64; 3]>,
+}
+
+/// Write the given loads into `<project>/pipeline.yaml` under the first
+/// `solver.*` stage as a `loads:` array. Existing loads block is replaced
+/// whole — partial merges would surprise the user. Returns a short summary.
+#[tauri::command]
+pub fn apply_loads_to_pipeline(
+    project_path: String,
+    loads:        Vec<LoadSpec>,
+) -> Result<String, String> {
+    let project = PathBuf::from(project_path.trim());
+    let yaml_path = project.join("pipeline.yaml");
+    if !yaml_path.is_file() {
+        return Err(format!("{} has no pipeline.yaml", project.to_string_lossy()));
+    }
+    let yaml = fs::read_to_string(&yaml_path)
+        .map_err(|e| format!("read pipeline.yaml: {}", e))?;
+
+    // Build the new `loads:` block string (6-space indent matching the
+    // surrounding `input:` body in the scaffold).
+    let mut loads_block = String::from("      loads:\n");
+    for load in &loads {
+        match load.kind {
+            LoadKind::Force => {
+                let v = load.vector.unwrap_or([0.0, 0.0, 0.0]);
+                loads_block.push_str(&format!(
+                    "        - {{face: '{}', kind: force, vector: [{}, {}, {}]}}\n",
+                    load.face, v[0], v[1], v[2],
+                ));
+            }
+            LoadKind::Fixed => {
+                loads_block.push_str(&format!(
+                    "        - {{face: '{}', kind: fixed}}\n",
+                    load.face,
+                ));
+            }
+        }
+    }
+
+    // Find the first `solver.` stage; insert/replace its loads block.
+    let solver_off = yaml
+        .find("plugin: solver.")
+        .ok_or_else(|| "no solver.* stage in pipeline.yaml".to_string())?;
+
+    // Find the end of that stage = either the next `  - id:` line or EOF.
+    let after_solver = &yaml[solver_off..];
+    let stage_end_rel = after_solver
+        .match_indices("\n  - id:")
+        .next()
+        .map(|(i, _)| i + 1)
+        .unwrap_or(after_solver.len());
+    let stage_end = solver_off + stage_end_rel;
+    let stage_text = &yaml[solver_off..stage_end];
+
+    // If the stage already has an `input:` line, replace any existing
+    // `loads:` block under it; otherwise append `input:\n<loads>` to the stage.
+    let new_stage = if stage_text.contains("    input:") {
+        // Strip any existing `loads:` block from the stage text.
+        let stripped = strip_loads_block(stage_text);
+        // Append our new loads block right after the `    input:` line.
+        if let Some(input_at) = stripped.find("    input:") {
+            let nl = stripped[input_at..].find('\n').unwrap_or(stripped.len() - input_at);
+            let mut s = String::with_capacity(stripped.len() + loads_block.len());
+            s.push_str(&stripped[..input_at + nl + 1]);
+            s.push_str(&loads_block);
+            s.push_str(&stripped[input_at + nl + 1..]);
+            s
+        } else {
+            stripped
+        }
+    } else {
+        // No input: block — append one (use 4-space indent matching stage body).
+        let trimmed = stage_text.trim_end_matches('\n');
+        format!("{}\n    input:\n{}", trimmed, loads_block)
+    };
+
+    let mut out = String::with_capacity(yaml.len() + new_stage.len());
+    out.push_str(&yaml[..solver_off]);
+    out.push_str(&new_stage);
+    if !new_stage.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(&yaml[stage_end..]);
+    fs::write(&yaml_path, out).map_err(|e| format!("write pipeline.yaml: {}", e))?;
+
+    Ok(format!("wrote {} load(s) under the solver stage", loads.len()))
+}
+
+/// Remove any existing `      loads:` block (six-space indent) from a stage
+/// snippet. The block runs from the `loads:` line up to the next line that
+/// starts at the four-space (stage-body) indent level or shallower.
+fn strip_loads_block(stage_text: &str) -> String {
+    let needle = "      loads:";
+    let Some(start) = stage_text.find(needle) else {
+        return stage_text.to_string();
+    };
+    // Find the end: scan lines after the loads: line, stop at first line
+    // that isn't more deeply indented than 6 spaces.
+    let after = &stage_text[start..];
+    let mut idx = after.find('\n').map(|i| i + 1).unwrap_or(after.len());
+    while idx < after.len() {
+        let nl = after[idx..].find('\n').map(|i| idx + i + 1).unwrap_or(after.len());
+        let line = &after[idx..nl];
+        let leading = line.chars().take_while(|c| *c == ' ').count();
+        if leading < 8 && !line.trim().is_empty() {
+            break;
+        }
+        idx = nl;
+    }
+    let end = start + idx;
+    let mut out = String::with_capacity(stage_text.len());
+    out.push_str(&stage_text[..start]);
+    out.push_str(&stage_text[end..]);
+    out
+}
+
 /// Read a geometry file off disk as raw bytes. The frontend three.js
 /// loaders parse this directly (OBJLoader from a UTF-8 string, STLLoader
 /// from an ArrayBuffer). Path is restricted to a project's `geometry/`
@@ -222,6 +353,34 @@ pub fn read_geometry_bytes(project_path: String, rel_path: String) -> Result<Vec
         return Err(format!("{} is not a file", abs.to_string_lossy()));
     }
     fs::read(&abs).map_err(|e| format!("read {}: {}", abs.to_string_lossy(), e))
+}
+
+/// Write text content (e.g. a simplified OBJ produced by the frontend
+/// three.js decimator) to a file inside the project. Path is restricted
+/// the same way as `read_geometry_bytes`: no traversal, must land under
+/// the project root.
+#[tauri::command]
+pub fn simplify_mesh(
+    project_path: String,
+    rel_path:     String,
+    content:      String,
+) -> Result<String, String> {
+    let project = PathBuf::from(project_path.trim());
+    if !project.is_dir() {
+        return Err(format!("project {} is not a directory", project.to_string_lossy()));
+    }
+    let rel = PathBuf::from(rel_path.trim());
+    for c in rel.components() {
+        if matches!(c, std::path::Component::ParentDir | std::path::Component::RootDir) {
+            return Err("rel_path must be inside the project".into());
+        }
+    }
+    let abs = project.join(&rel);
+    if let Some(parent) = abs.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("create dir: {}", e))?;
+    }
+    fs::write(&abs, content).map_err(|e| format!("write {}: {}", abs.to_string_lossy(), e))?;
+    Ok(abs.to_string_lossy().into_owned())
 }
 
 /// Open a native folder-picker dialog and return the chosen directory.
