@@ -82,6 +82,7 @@ void print_usage() {
       "  souxmar plugin list [--plugin-path <dir>]...\n"
       "  souxmar plugin search [<query>] [--capability <prefix>] [--index <path>]\n"
       "  souxmar plugin validate-index [--index <path>]\n"
+      "  souxmar plugin install <id> [--license <sxm_lic_...>] [--yes] [--json]\n"
       "  souxmar agent list [--json]\n"
       "  souxmar agent invoke <tool> [--input <yaml>] [--input-file <path>] [--yes]\n"
       "                              [--audit-log <path>] [--budget-config <path>]\n"
@@ -266,6 +267,111 @@ int cmd_plugin_search(const std::string&  query,
     fmt::print("\n");
   }
   fmt::print("{} match(es) in {}\n", matches.size(), index_path.string());
+  return kExitOk;
+}
+
+// Sprint 16 push 4 — `souxmar plugin install` ratchets the CLI side
+// of the marketplace plumbing (ADR-0023). The actual download +
+// extract loop is queued for Sprint 17 alongside the desktop's
+// shell-out per ADR-0022; this command's surface is the contract
+// the desktop client polls against.
+int cmd_plugin_install(const std::string& plugin_id,
+                        const std::string& license_key,
+                        bool               auto_yes,
+                        bool               json_output,
+                        const fs::path&    index_override) {
+  const fs::path index_path = resolve_index_path(index_override);
+  if (index_path.empty() || !fs::exists(index_path)) {
+    fmt::print(stderr,
+        "error: plugin index not found. Set $SOUXMAR_PLUGIN_INDEX or pass "
+        "--index <path>.\n");
+    return kExitUsage;
+  }
+  auto result = souxmar::plugin::load_index_file(index_path);
+  if (auto* err = std::get_if<souxmar::plugin::IndexParseError>(&result)) {
+    fmt::print(stderr, "error: failed to parse index: {}\n", err->message);
+    return kExitInternal;
+  }
+  const auto& entries = std::get<std::vector<souxmar::plugin::IndexEntry>>(result);
+
+  const souxmar::plugin::IndexEntry* hit = nullptr;
+  for (const auto& e : entries) {
+    if (e.id == plugin_id) { hit = &e; break; }
+  }
+  if (!hit) {
+    if (json_output) {
+      fmt::print(
+          "{{\"status\":\"error\",\"code\":\"not_found\",\"id\":\"{}\"}}\n",
+          plugin_id);
+    } else {
+      fmt::print(stderr, "error: plugin id '{}' not in index\n", plugin_id);
+    }
+    return kExitInputData;
+  }
+
+  // ADR-0023: paid plugins require a license key. Without one
+  // we refuse; the desktop's shell-out per ADR-0022 supplies
+  // `--license <sxm_lic_...>` after prompting the user.
+  if (hit->paid && license_key.empty()) {
+    if (json_output) {
+      fmt::print(
+          "{{\"status\":\"error\",\"code\":\"license_required\","
+          "\"id\":\"{}\",\"detail\":\"plugin is paid; pass --license <sxm_lic_...>\"}}\n",
+          plugin_id);
+    } else {
+      fmt::print(stderr,
+          "error: '{}' is a paid plugin; pass --license <sxm_lic_...>\n",
+          plugin_id);
+    }
+    return kExitInputData;
+  }
+  if (!license_key.empty() && license_key.find("sxm_lic_") != 0) {
+    if (json_output) {
+      fmt::print(
+          "{{\"status\":\"error\",\"code\":\"license_malformed\","
+          "\"id\":\"{}\"}}\n",
+          plugin_id);
+    } else {
+      fmt::print(stderr,
+          "error: license key must start with 'sxm_lic_'\n");
+    }
+    return kExitInputData;
+  }
+
+  // Sprint 16 push 4 — the actual install body (license check
+  // against marketplace.souxmar.dev + fetch + verify + extract)
+  // is queued for Sprint 17 push 2 when the marketplace service
+  // returns real responses instead of 503. The CLI surface
+  // already names the contract; the desktop client (per ADR-0022)
+  // shells out + polls the install-status read FFI for
+  // completion. Reporting honestly here.
+  if (json_output) {
+    fmt::print(
+        "{{\"status\":\"not_yet_wired\","
+        "\"code\":\"sprint_17_pending\","
+        "\"id\":\"{}\",\"version\":\"{}\","
+        "\"paid\":{},\"license_supplied\":{},"
+        "\"detail\":\"CLI surface in place; marketplace download + verify "
+        "loop lands in Sprint 17.\"}}\n",
+        hit->id, hit->souxmar_versions,
+        hit->paid ? "true" : "false",
+        license_key.empty() ? "false" : "true");
+  } else {
+    fmt::print(
+        "souxmar plugin install: {}\n"
+        "  paid:             {}\n"
+        "  license supplied: {}\n"
+        "  status:           not yet wired\n"
+        "\n"
+        "The CLI surface ratchets in Sprint 16 push 4 (this build); the\n"
+        "marketplace download + signature-verify + extract loop lands in\n"
+        "Sprint 17 push 2. The desktop's shell-out per ADR-0022 polls the\n"
+        "install-status read FFI for completion.\n",
+        hit->id,
+        hit->paid ? "yes" : "no",
+        license_key.empty() ? "no" : "yes");
+  }
+  (void)auto_yes;  // honoured once the actual install body lands
   return kExitOk;
 }
 
@@ -1226,6 +1332,9 @@ int main(int argc, char** argv) {
   fs::path                 budget_config_path;
   fs::path                 index_path_override;     // --index <path>
   std::string              capability_prefix;       // --capability <prefix>
+  // Sprint 16 push 4 — `souxmar plugin install` flags.
+  std::string              plugin_install_id;       // --id <plugin-id>
+  std::string              plugin_install_license;  // --license <sxm_lic_...>
   bool                     use_cache = true;
   bool                     auto_yes  = false;
   std::string              input_yaml;
@@ -1284,6 +1393,14 @@ int main(int argc, char** argv) {
       auto v = pop_value(args, i, "--capability");
       if (!v) return kExitUsage;
       capability_prefix = *v;
+    } else if (args[i] == "--id") {
+      auto v = pop_value(args, i, "--id");
+      if (!v) return kExitUsage;
+      plugin_install_id = *v;
+    } else if (args[i] == "--license") {
+      auto v = pop_value(args, i, "--license");
+      if (!v) return kExitUsage;
+      plugin_install_license = *v;
     } else if (args[i] == "--manifest") {
       auto v = pop_value(args, i, "--manifest");
       if (!v) return kExitUsage;
@@ -1375,6 +1492,21 @@ int main(int argc, char** argv) {
     }
     if (positionals[0] == "validate-index") {
       return cmd_plugin_validate(index_path_override);
+    }
+    if (positionals[0] == "install") {
+      // Sprint 16 push 4 — `--id` is required; positional plugin
+      // id is accepted as a shorthand (`souxmar plugin install
+      // <id>` is equivalent to `--id <id>`).
+      std::string id = plugin_install_id;
+      if (id.empty() && positionals.size() >= 2) id = positionals[1];
+      if (id.empty()) {
+        fmt::print(stderr,
+            "error: `souxmar plugin install` requires --id <plugin-id> or a positional id\n");
+        return kExitUsage;
+      }
+      return cmd_plugin_install(id, plugin_install_license,
+                                auto_yes, update_flags.json,
+                                index_path_override);
     }
     fmt::print(stderr, "error: unknown plugin action '{}'\n", positionals[0]);
     return kExitUsage;
