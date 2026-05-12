@@ -340,14 +340,12 @@ pub fn import_model(project_path: String, source_file: String) -> Result<ImportR
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_else(|_| format!("geometry/{}", dst.file_name().unwrap_or_default().to_string_lossy()));
 
-    // STL is the one reader plugin we can auto-wire today — reader.stl is
-    // ABI-stable and the scaffold pipeline.yaml has a known shape. Other
-    // formats need user-chosen reader plugins (OCCT for STEP, etc.), which
-    // we don't pick on the user's behalf yet.
-    let pipeline_change = if dst.extension().and_then(|e| e.to_str()).map(|s| s.eq_ignore_ascii_case("stl")).unwrap_or(false) {
-        auto_wire_stl_pipeline(&project, &rel_path)?
-    } else {
-        None
+    // Pick the right reader plugin for this extension. Maps to the
+    // `provides:` IDs of the in-tree reader plugins. Unknown / no
+    // extension means we leave pipeline.yaml alone.
+    let pipeline_change = match reader_plugin_for_extension(dst.extension().and_then(|e| e.to_str())) {
+        Some(plugin_id) => auto_wire_reader_pipeline(&project, &rel_path, plugin_id)?,
+        None => None,
     };
 
     Ok(ImportResult {
@@ -357,16 +355,36 @@ pub fn import_model(project_path: String, source_file: String) -> Result<ImportR
     })
 }
 
-/// Mutate `<project>/pipeline.yaml` so that `reader.stl` points at the just-imported
-/// STL. Three cases, in order:
-///   1. The pipeline already has a `plugin: reader.stl` stage — rewrite its `path:` line.
-///   2. The pipeline has the scaffold's `plugin: mesher.tetra.hello` placeholder —
-///      replace that line with `reader.stl` + the input block.
+/// Map a file extension (lowercase, no leading dot) to the in-tree reader
+/// plugin id that handles it. Returns `None` for extensions we don't ship
+/// a reader for.
+fn reader_plugin_for_extension(ext: Option<&str>) -> Option<&'static str> {
+    match ext.map(|s| s.to_ascii_lowercase()).as_deref() {
+        Some("stl")          => Some("reader.stl"),
+        Some("obj")          => Some("reader.obj"),
+        Some("step" | "stp") => Some("reader.step"),
+        Some("iges" | "igs") => Some("reader.iges"),
+        Some("blend")        => Some("reader.blend"),
+        _ => None,
+    }
+}
+
+/// Mutate `<project>/pipeline.yaml` so the named reader plugin points at
+/// the just-imported file. Three cases, in order:
+///   1. The pipeline already has a `plugin: <plugin_id>` stage — rewrite
+///      its `path:` line.
+///   2. The pipeline has the scaffold's `plugin: mesher.tetra.hello`
+///      placeholder — replace that line with the reader block.
 ///   3. Otherwise prepend a fresh `read` stage at the top of `stages:`.
 ///
-/// String manipulation (not YAML parsing) so user comments and formatting survive.
-/// Returns a human-readable summary of what changed.
-fn auto_wire_stl_pipeline(project: &Path, rel_path: &str) -> Result<Option<String>, String> {
+/// String manipulation (not YAML parsing) so user comments and formatting
+/// outside the touched lines survive. Returns a human-readable summary of
+/// what changed.
+fn auto_wire_reader_pipeline(
+    project:   &Path,
+    rel_path:  &str,
+    plugin_id: &str,
+) -> Result<Option<String>, String> {
     let yaml_path = project.join("pipeline.yaml");
     if !yaml_path.is_file() {
         return Ok(None);
@@ -374,11 +392,12 @@ fn auto_wire_stl_pipeline(project: &Path, rel_path: &str) -> Result<Option<Strin
     let yaml = fs::read_to_string(&yaml_path)
         .map_err(|e| format!("read pipeline.yaml: {}", e))?;
 
-    // Case 1: existing reader.stl — find it and rewrite the next `path:` line.
-    if let Some(stage_idx) = yaml.find("plugin: reader.stl") {
+    let needle = format!("plugin: {}", plugin_id);
+
+    // Case 1: existing reader stage of this plugin — rewrite the next `path:` line.
+    if let Some(stage_idx) = yaml.find(&needle) {
         let tail = &yaml[stage_idx..];
         if let Some(path_off) = tail.find("path:") {
-            // Replace from "path:" up to the end of that line.
             let abs_path = stage_idx + path_off;
             let line_end = yaml[abs_path..].find('\n').map(|i| abs_path + i).unwrap_or(yaml.len());
             let mut out = String::with_capacity(yaml.len() + rel_path.len());
@@ -386,23 +405,23 @@ fn auto_wire_stl_pipeline(project: &Path, rel_path: &str) -> Result<Option<Strin
             out.push_str(&format!("path: {}", rel_path));
             out.push_str(&yaml[line_end..]);
             fs::write(&yaml_path, out).map_err(|e| format!("write pipeline.yaml: {}", e))?;
-            return Ok(Some(format!("updated reader.stl path → {}", rel_path)));
+            return Ok(Some(format!("updated {} path → {}", plugin_id, rel_path)));
         }
-        // reader.stl stage without a path: line — fall through to insert.
+        // Stage without a path: line — fall through to insert.
     }
 
     // Case 2: scaffold's mesher.tetra.hello placeholder — replace it.
     let placeholder = "    plugin: mesher.tetra.hello";
     if yaml.contains(placeholder) {
         let replacement = format!(
-            "    plugin: reader.stl\n    input:\n      path: {}",
-            rel_path
+            "    plugin: {}\n    input:\n      path: {}",
+            plugin_id, rel_path
         );
         let out = yaml.replacen(placeholder, &replacement, 1);
         fs::write(&yaml_path, out).map_err(|e| format!("write pipeline.yaml: {}", e))?;
         return Ok(Some(format!(
-            "replaced mesher.tetra.hello placeholder with reader.stl → {}",
-            rel_path
+            "replaced mesher.tetra.hello placeholder with {} → {}",
+            plugin_id, rel_path
         )));
     }
 
@@ -412,15 +431,15 @@ fn auto_wire_stl_pipeline(project: &Path, rel_path: &str) -> Result<Option<Strin
         if let Some(nl) = after.find('\n') {
             let insert_at = stages_off + nl + 1;
             let block = format!(
-                "  - id: read\n    plugin: reader.stl\n    input:\n      path: {}\n",
-                rel_path
+                "  - id: read\n    plugin: {}\n    input:\n      path: {}\n",
+                plugin_id, rel_path
             );
             let mut out = String::with_capacity(yaml.len() + block.len());
             out.push_str(&yaml[..insert_at]);
             out.push_str(&block);
             out.push_str(&yaml[insert_at..]);
             fs::write(&yaml_path, out).map_err(|e| format!("write pipeline.yaml: {}", e))?;
-            return Ok(Some(format!("added reader.stl stage → {}", rel_path)));
+            return Ok(Some(format!("added {} stage → {}", plugin_id, rel_path)));
         }
     }
 
