@@ -55,7 +55,7 @@ jobs:
     outputs:
       version: ${{ steps.compute.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -86,7 +86,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: source-tarball
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install toolchain
         run: |
@@ -206,7 +206,7 @@ jobs:
     needs: source-tarball
     if: ${{ vars.SOUXMAR_ENABLE_MACOS_RELEASE == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install toolchain
         # autoconf-archive + libtool needed by vcpkg's libsodium port.
@@ -268,7 +268,7 @@ jobs:
     needs: source-tarball
     if: ${{ vars.SOUXMAR_ENABLE_WINDOWS_RELEASE == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up vcpkg
         uses: lukka/run-vcpkg@v11
@@ -319,7 +319,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: source-tarball
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v5
         with:
@@ -351,7 +351,7 @@ jobs:
     # (success || skipped)` lets the workflow proceed.
     if: ${{ always() && needs.source-tarball.result == 'success' && needs.linux-cli.result == 'success' && needs.python-sdist.result == 'success' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v5
         with:
