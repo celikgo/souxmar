@@ -8,7 +8,7 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.9.9 cut below.)
+- (None this release — `[Unreleased]` reopens after the v0.99-beta1 cut below.)
 
 ### Changed
 
@@ -25,6 +25,40 @@ The plugin C ABI version is tracked separately and is independent of the project
 ### Security
 
 - (None this release.)
+
+---
+
+## [0.99.0-beta1] - 2026-05-20
+
+**Public beta.** Sprint 22 closes here. See
+[`docs/retros/sprint-22.md`](docs/retros/sprint-22.md) + [ADR-0034](docs/adr/0034-v099-beta-scope.md)
+for the scope decision. **Tag:** `v0.99-beta1`. **ABI:** v1.3 frozen
+FINAL (unchanged). **Tool contract:** v1 frozen FINAL at 18 tools
+(unchanged). **Bridge ABI:** v3.
+
+First non-`-alpha`-suffixed tag in the project's history that precedes
+a final `v1.0.0`. The "v0.99" prefix communicates "almost there, not
+quite v1.0" to external readers.
+
+### Added
+
+- **[ADR-0034](docs/adr/0034-v099-beta-scope.md)** ratifies the
+  v0.99-beta1 scope: what ships, what doesn't, what carries to v1.0.
+- **Pro-tier services flip from scaffold to wired** for the chat
+  surface (Anthropic upstream live, Stripe-mode=test, account-portal
+  Postgres + Postmark live).
+- **Marketplace install body** wired (manifest fetch + signature
+  verify + payload extract). 5 free plugins available via the
+  storefront soft-open.
+- **Bug-bounty programme live** via HackerOne since Sprint 21.
+
+### Explicitly NOT in v0.99-beta1
+
+- Viewport rendering (`viewport_renderer` flag stays off; v1.0+).
+- Enterprise E2E cloud sync (v1.0.1).
+- In-app geometry edits (v1.0.x).
+- Live Stripe billing (Sprint 23 flips alongside v0.99-rc1).
+- Paid plugins (publisher onboarding waits on pen-test conclusion).
 
 ---
 

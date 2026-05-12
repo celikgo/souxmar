@@ -27,7 +27,9 @@ The free tier is the full product. You bring your own Anthropic / OpenAI / local
 
 ## Status
 
-**Public alpha — `v0.9.6` tagged 2026-05-16.** Sixth dot-release after the public alpha. Plugin C ABI **frozen FINAL at v1.3**; agent tool contract **frozen FINAL at v1** with 18 tools; bridge ABI v3. **New this release:** [ADR-0028](docs/adr/0028-pipeline-execution-router.md) ratifies the pipeline ExecutionRouter for hosted-compute routing; [ADR-0029](docs/adr/0029-multi-window-isolation.md) ratifies the multi-window desktop model + the five-rule data-isolation invariant. Sprint 18 retro: [`docs/retros/sprint-18.md`](docs/retros/sprint-18.md). Architecture-decision-only sprint by design; implementations ship with consumers in Sprint 19+.
+**Public beta — `v0.99-beta1` tagged 2026-05-20.** First non-`-alpha`-suffixed tag in the project's history that precedes a final `v1.0.0`. Plugin C ABI **frozen FINAL at v1.3**; agent tool contract **frozen FINAL at v1** with 18 tools; bridge ABI v3. **New this release:** [ADR-0034](docs/adr/0034-v099-beta-scope.md) ratifies the v0.99 scope; the Pro-tier service surface flips from scaffold to wired for the chat path (Anthropic upstream live; Stripe-mode=test); the marketplace storefront soft-opens with 5 free plugins; the HackerOne bug-bounty programme is live (since Sprint 21). Sprint 22 retro: [`docs/retros/sprint-22.md`](docs/retros/sprint-22.md). **External bug reports remain the most useful contribution.** v1.0.0 targeted for Sprint 24.
+
+**Explicitly not in v0.99-beta1:** viewport rendering (`viewport_renderer` flag stays off — v1.0+); Enterprise E2E cloud sync (v1.0.1); in-app geometry edits (v1.0.x); live Stripe billing (Sprint 23 flips alongside v0.99-rc1); paid plugins (publisher onboarding waits on pen-test conclusion).
 
 What changed since v0.9.5 (Sprint 18 in full):
 
