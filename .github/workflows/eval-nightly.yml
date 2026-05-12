@@ -20,6 +20,8 @@ on:
       - 'evals/v1/**'
       - 'src/ai/**'
       - 'include/souxmar/ai/**'
+      - 'scripts/synth-load/**'
+      - 'examples/**'
       - '.github/workflows/eval-nightly.yml'
   workflow_dispatch:
 
@@ -105,3 +107,32 @@ jobs:
           path: |
             eval-report.txt
             eval-latency.json
+
+      # Sprint 13 push 1 — ADR-0017 synthetic-load harness.
+      # Runs every example pipeline + the deterministic-output
+      # subset of the eval catalogue, diffs against the golden
+      # corpus in scripts/synth-load/golden/. On the first run the
+      # corpus is empty (placeholder hashes) — the harness exits
+      # non-zero and the rotation initialises the corpus by running
+      # --refresh-golden locally + reviewing the diff. After that,
+      # drift here is treated as a P1 triage item per the
+      # COMMUNITY.md SLA.
+      - name: Synthetic-load harness (ADR-0017)
+        if: always()
+        # `continue-on-error` while the starter corpus is empty.
+        # Sprint 14 push 1 flips this to a hard gate once the
+        # first --refresh-golden lands.
+        continue-on-error: true
+        run: |
+          scripts/synth-load/run.sh \
+            --engine    build/ci-linux-clang/tools/souxmar/souxmar \
+            --eval      build/ci-linux-clang/tools/eval/souxmar-eval \
+            --json-out  synth-load-report.json \
+            --verbose
+
+      - name: Upload synth-load report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synth-load-report
+          path: synth-load-report.json
