@@ -8,7 +8,7 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.99-rc1 cut below.)
+- (None this release — `[Unreleased]` reopens after the v1.0.0 cut below.)
 
 ### Changed
 
@@ -25,6 +25,33 @@ The plugin C ABI version is tracked separately and is independent of the project
 ### Security
 
 - (None this release.)
+
+---
+
+## [1.0.0] - 2026-05-22
+
+🎉 **First stable release.** End of the v0.x window. Sprint 24 closes
+here. See [`docs/retros/sprint-24.md`](docs/retros/sprint-24.md) +
+[ADR-0036](docs/adr/0036-v1-final-freeze.md) for the final freeze.
+
+**Tag:** `v1.0.0`. **Plugin ABI:** v1.3 **FINAL** (frozen forever within v1.x).
+**Tool contract:** v1 **FINAL** at 18 tools (frozen forever within v1.x).
+**On-disk pipeline format:** v1 **FINAL**. **Update manifest:** v1
+**FINAL**. **Bridge ABI:** v3 (additive Tier-0 evolution allowed
+through v1.x).
+
+24 sprints. ~150 pushes. 36 ADRs. Apache-2.0. BYOK default; Pro
+tier opt-in. Six Pro-tier services live. Three desktop FFI
+surfaces (4th lands in v1.1.0). The next ABI break is v2.0 —
+post-v1.0 future-sprint scope.
+
+### Added
+
+- **[ADR-0036](docs/adr/0036-v1-final-freeze.md)** — v1.0.0 final
+  freeze. Names what's FROZEN at v1.0 (4 contracts) + what evolves
+  under additive Tier-0 (4 contracts). Names the v1.x release
+  cadence (v1.0.1 E2E cloud sync, v1.0.2 paid plugins, v1.1.0
+  viewport rendering).
 
 ---
 

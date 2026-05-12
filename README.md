@@ -27,9 +27,9 @@ The free tier is the full product. You bring your own Anthropic / OpenAI / local
 
 ## Status
 
-**Release candidate — `v0.99-rc1` tagged 2026-05-21.** Plugin C ABI **v1.3 FINAL-FINAL** per [ADR-0035](docs/adr/0035-v1-contract-bake.md); agent tool contract **v1 FINAL-FINAL** at 18 tools; on-disk pipeline format **v1 FINAL-FINAL**; update manifest **v1 FINAL-FINAL**; bridge ABI v3. **New this release:** the v1.0 contract bake; Stripe live mode activated (first real Pro subscription transaction processed); pen-test concluded (0 Critical / 1 High fixed / 3 Medium fixed / 1 Medium deferred to v1.0.1); HackerOne first reports paid + fixed; DNS CNAME, Discord server, on-call rotation all live. Sprint 23 retro: [`docs/retros/sprint-23.md`](docs/retros/sprint-23.md). **v1.0.0 cuts in Sprint 24** (next sprint).
+🎉 **Stable — `v1.0.0` tagged 2026-05-22.** First stable release. End of the v0.x window. Plugin C ABI **v1.3 FINAL** (frozen forever within v1.x); agent tool contract **v1 FINAL** at 18 tools; on-disk pipeline format **v1 FINAL**; update manifest **v1 FINAL**; bridge ABI v3 (additive Tier-0 evolution allowed through v1.x). 24 sprints, ~150 pushes, 36 ADRs. Apache-2.0. BYOK default; Pro tier opt-in. Six Pro-tier services live (managed-AI proxy, cloud sync, plugin marketplace, billing, account portal, hosted-compute offload). Three desktop FFI surfaces structural (pipeline_introspection, provider_call, auto_updater_menu); viewport_renderer lands in v1.1.0. Sprint 24 retro: [`docs/retros/sprint-24.md`](docs/retros/sprint-24.md). [ADR-0036](docs/adr/0036-v1-final-freeze.md) names the final freeze.
 
-**Still NOT in v0.99-rc1 (per ADR-0034):** viewport rendering, Enterprise E2E cloud sync (→ v1.0.1), in-app geometry edits, paid-plugin storefront. Sprint 24's v1.0.0 ships at this scope.
+**v1.x roadmap (per ADR-0036):** v1.0.1 (Enterprise E2E cloud sync), v1.0.2 (paid plugins + publisher onboarding), v1.1.0 (Three.js + VTK.js viewport rendering). The next ABI break is v2.0 — post-v1.0 future-sprint scope.
 
 What changed since v0.9.5 (Sprint 18 in full):
 
