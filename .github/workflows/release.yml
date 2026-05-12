@@ -91,7 +91,10 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build clang-17 lld-17
+          # autoconf/autoconf-archive/automake/libtool: required by
+          # vcpkg's libsodium port (builds from source via autotools).
+          sudo apt-get install -y ninja-build clang-17 lld-17 \
+                                  autoconf autoconf-archive automake libtool
 
       - name: Set up vcpkg
         run: |
@@ -206,7 +209,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install toolchain
-        run: brew install ninja
+        # autoconf-archive + libtool needed by vcpkg's libsodium port.
+        run: brew install ninja autoconf autoconf-archive automake libtool
 
       - name: Set up vcpkg
         uses: lukka/run-vcpkg@v11

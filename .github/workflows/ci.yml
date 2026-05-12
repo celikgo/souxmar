@@ -40,7 +40,12 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build pkg-config curl zip unzip tar
+          # autoconf/autoconf-archive/automake/libtool are required by
+          # vcpkg's libsodium port (2026.04.27 baseline builds from
+          # source via autotools — the pre-built archive the 2020
+          # baseline shipped no longer exists upstream).
+          sudo apt-get install -y ninja-build pkg-config curl zip unzip tar \
+                                  autoconf autoconf-archive automake libtool
           if [ "${{ matrix.preset }}" = "ci-linux-clang" ]; then
             wget -q https://apt.llvm.org/llvm.sh
             chmod +x llvm.sh
@@ -50,7 +55,10 @@ jobs:
 
       - name: Install macOS toolchain
         if: runner.os == 'macOS'
-        run: brew install ninja pkg-config
+        # autoconf-archive + libtool required by vcpkg's libsodium port
+        # (see Linux step). autoconf + automake ship with Xcode CLT but
+        # libtoolize is provided by Homebrew's `libtool`.
+        run: brew install ninja pkg-config autoconf autoconf-archive automake libtool
 
       - name: Install Windows toolchain
         if: runner.os == 'Windows'

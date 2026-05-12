@@ -59,8 +59,11 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
+          # autoconf/autoconf-archive/automake/libtool: required by
+          # vcpkg's libsodium port (builds from source via autotools).
           sudo apt-get install -y ninja-build pkg-config curl zip unzip tar \
-                                  build-essential python3
+                                  build-essential python3 \
+                                  autoconf autoconf-archive automake libtool
           wget -q https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 17
