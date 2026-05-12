@@ -169,11 +169,11 @@ TEST(AiToolDispatch, ConfirmOncePromptsOnce) {
   };
 
   ASSERT_FALSE(
-      ai::dispatch_tool(r, "once", pl::Value::null_value(), ctx, policy).error.has_value());
+      (void)ai::dispatch_tool(r, "once", pl::Value::null_value(), ctx, policy).error.has_value());
   ASSERT_FALSE(
-      ai::dispatch_tool(r, "once", pl::Value::null_value(), ctx, policy).error.has_value());
+      (void)ai::dispatch_tool(r, "once", pl::Value::null_value(), ctx, policy).error.has_value());
   ASSERT_FALSE(
-      ai::dispatch_tool(r, "once", pl::Value::null_value(), ctx, policy).error.has_value());
+      (void)ai::dispatch_tool(r, "once", pl::Value::null_value(), ctx, policy).error.has_value());
   EXPECT_EQ(prompt_count, 1) << "ConfirmOnce should prompt only on the first call";
   EXPECT_TRUE(policy.confirmed_once.contains("once"));
 }
@@ -583,8 +583,8 @@ TEST(AiTools_ApplyPipelineDiff, AddStageAndReValidate) {
   input.emplace("base", pl::Value::map(std::move(base_map)));
   input.emplace("ops", pl::Value::list(std::move(ops)));
 
-  auto out =
-      ai::dispatch_tool(r, "apply_pipeline_diff", pl::Value::map(std::move(input)), ctx, policy);
+  auto out = (void)ai::dispatch_tool(
+      r, "apply_pipeline_diff", pl::Value::map(std::move(input)), ctx, policy);
   ASSERT_FALSE(out.error.has_value()) << (out.error ? out.error->message : "");
   EXPECT_EQ(out.data.find("parsed_stages")->as_number(), 2.0);
   EXPECT_EQ(out.data.find("ops_applied")->as_number(), 1.0);
@@ -626,8 +626,8 @@ TEST(AiTools_ApplyPipelineDiff, DanglingReferenceTripsParser) {
   input.emplace("base", pl::Value::map(std::move(base_map)));
   input.emplace("ops", pl::Value::list(std::move(ops)));
 
-  auto out =
-      ai::dispatch_tool(r, "apply_pipeline_diff", pl::Value::map(std::move(input)), ctx, policy);
+  auto out = (void)ai::dispatch_tool(
+      r, "apply_pipeline_diff", pl::Value::map(std::move(input)), ctx, policy);
   ASSERT_TRUE(out.error.has_value());
   EXPECT_EQ(out.error->code, "INVALID_ARGUMENT");
 }
@@ -1194,15 +1194,15 @@ TEST(AiTools_ValidateBcs, FullSetupIsOk) {
   policy.overrides["apply_wall"] = ai::Confirmation::Auto;
   policy.overrides["apply_outlet"] = ai::Confirmation::Auto;
 
-  ai::dispatch_tool(
+  (void)ai::dispatch_tool(
       r,
       "apply_inlet",
       pl::Value::map({{"tag", pl::Value::string("in")}, {"velocity", pl::Value::number(1.0)}}),
       ctx,
       policy);
-  ai::dispatch_tool(
+  (void)ai::dispatch_tool(
       r, "apply_wall", pl::Value::map({{"tag", pl::Value::string("walls")}}), ctx, policy);
-  ai::dispatch_tool(
+  (void)ai::dispatch_tool(
       r,
       "apply_outlet",
       pl::Value::map({{"tag", pl::Value::string("out")}, {"pressure", pl::Value::number(0.0)}}),
@@ -1226,7 +1226,7 @@ TEST(AiTools_ValidateBcs, NoInletAndNoOutletEmitWarnings) {
   policy.overrides["apply_wall"] = ai::Confirmation::Auto;
 
   // Stage only walls.
-  ai::dispatch_tool(
+  (void)ai::dispatch_tool(
       r, "apply_wall", pl::Value::map({{"tag", pl::Value::string("walls")}}), ctx, policy);
 
   auto out = ai::dispatch_tool(r, "validate_bcs", pl::Value::null_value(), ctx, policy);
@@ -1255,13 +1255,13 @@ TEST(AiTools_ValidateBcs, DuplicateTagWithConflictingTypesIsError) {
 
   // Same tag once as inlet, then as outlet — apply_* tools do not
   // dedupe, so the staged bag has the duplicate.
-  ai::dispatch_tool(
+  (void)ai::dispatch_tool(
       r,
       "apply_inlet",
       pl::Value::map({{"tag", pl::Value::string("port")}, {"velocity", pl::Value::number(1.0)}}),
       ctx,
       policy);
-  ai::dispatch_tool(
+  (void)ai::dispatch_tool(
       r,
       "apply_outlet",
       pl::Value::map({{"tag", pl::Value::string("port")}, {"pressure", pl::Value::number(0.0)}}),
@@ -1300,7 +1300,7 @@ TEST(AiTools_CfdBcChain, InletWallOutletCoexistOnOneSession) {
                                  policy)
                    .error.has_value());
   ASSERT_FALSE(
-      ai::dispatch_tool(
+      (void)ai::dispatch_tool(
           r, "apply_wall", pl::Value::map({{"tag", pl::Value::string("walls")}}), ctx, policy)
           .error.has_value());
   ASSERT_FALSE(ai::dispatch_tool(r,
