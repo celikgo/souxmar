@@ -10,6 +10,8 @@ add_executable(souxmar_unit_tests
   test_topology.cpp
   test_mesh.cpp
   test_field.cpp
+  # Sprint 25 push 1 (post-v1.0) — surface_stream (ADR-0037, RFC-001).
+  test_surface_stream.cpp
   test_manifest.cpp
   test_discovery.cpp
   test_registry.cpp

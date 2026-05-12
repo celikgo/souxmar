@@ -18,14 +18,15 @@ add_library(souxmar_core
   # Sprint 6 push 1 — mesh-quality metrics (Tet4 + Tri3 in v1).
   mesh_quality.cpp
   # Post-v1.0 block (Sprints 25-32) — ABI scaffold for the six minor
-  # ratchets v1.4-v1.9. Each .cpp lands as a stub returning
+  # ratchets v1.4-v1.9. The .cpp files marked "stub" return
   # SOUXMAR_E_NOT_IMPLEMENTED; per-sprint PR 2 of each sprint replaces
-  # the stub with the real backing.
+  # each stub with the real backing.
+  surface_stream.cpp        # v1.4 — real impl (S25 PR 1)
   c_abi_surface_stream.cpp  # v1.4 — ADR-0037, RFC-001 (S25)
-  c_abi_field_stream.cpp    # v1.5 — ADR-0038, RFC-002 (S27)
-  c_abi_brep.cpp            # v1.6 + v1.8 — ADRs 0039 / 0041, RFCs 003 / 005 (S28 / S30)
-  c_abi_sketch.cpp          # v1.7 — ADR-0040, RFC-004 (S29)
-  c_abi_timeseries.cpp      # v1.9 — ADR-0042, RFC-006 (S32)
+  c_abi_field_stream.cpp    # v1.5 — ADR-0038, RFC-002 (S27)   [stub]
+  c_abi_brep.cpp            # v1.6 + v1.8 — ADRs 0039 / 0041   [stub]
+  c_abi_sketch.cpp          # v1.7 — ADR-0040, RFC-004 (S29)   [stub]
+  c_abi_timeseries.cpp      # v1.9 — ADR-0042, RFC-006 (S32)   [stub]
 )
 add_library(souxmar::core ALIAS souxmar_core)
 
