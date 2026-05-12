@@ -16,6 +16,7 @@
 #include <cstring>
 #include <memory>
 #include <new>
+#include <stdexcept>
 
 namespace {
 

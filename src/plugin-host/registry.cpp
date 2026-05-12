@@ -7,6 +7,7 @@
 #include <fmt/core.h>
 
 #include <algorithm>
+#include <mutex>
 #include <utility>
 
 namespace souxmar::plugin {

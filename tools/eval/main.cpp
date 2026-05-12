@@ -679,13 +679,15 @@ int main(int argc, char** argv) {
     const double rate = static_cast<double>(passed) /
                         static_cast<double>(total);
     if (rate < *min_pass_rate) {
+      // fmt 11's stricter compile-time format-spec parser rejects
+      // `{:.1%}`; multiply * 100 and use `{:.1f}%` instead.
       fmt::print(stderr,
-          "\nERROR: pass rate {:.1%} below gate {:.1%} ({} / {} passed)\n",
-          rate, *min_pass_rate, passed, total);
+          "\nERROR: pass rate {:.1f}% below gate {:.1f}% ({} / {} passed)\n",
+          rate * 100.0, *min_pass_rate * 100.0, passed, total);
       return kExitPassRateGate;
     }
-    fmt::print("  pass-rate gate: {:.1%} ≥ {:.1%} (ok)\n",
-               rate, *min_pass_rate);
+    fmt::print("  pass-rate gate: {:.1f}% ≥ {:.1f}% (ok)\n",
+               rate * 100.0, *min_pass_rate * 100.0);
   }
 
   return passed == total ? kExitOk : kExitTaskFailed;
