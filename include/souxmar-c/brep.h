@@ -35,6 +35,11 @@ SOUXMAR_C_BEGIN
 
 typedef struct souxmar_brep_session_t souxmar_brep_session_t;
 
+/* Forward declaration — souxmar_sketch_t is fully defined in
+ * souxmar-c/sketch.h (v1.7). Feature ops below take sketches by
+ * opaque pointer; users invoking feature ops include sketch.h. */
+struct souxmar_sketch_t;
+
 /* Sentinel for "no body" — returned by feature ops on failure.
  * Body IDs of value 0 are never assigned to a real body. */
 #define SOUXMAR_INVALID_ID ((uint64_t)0)
