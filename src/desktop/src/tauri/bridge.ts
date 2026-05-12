@@ -73,3 +73,20 @@ export interface PipelineSummary {
   stage_count: number;
   stages:      PipelineStageSummary[];
 }
+
+// Sprint 14 push 4 — chat_send return shape. Mirrors
+// souxmar_bridge::ChatSummary. The `error` field is populated
+// when the upstream provider returned a typed ProviderError;
+// the FFI wrapper itself succeeded.
+export interface ChatErrorSummary {
+  kind: string;
+  text: string;
+}
+
+export interface ChatSummary {
+  reply_text: string;
+  provider:   string;   // "stub" | "anthropic" | "openai" | "ollama" | "managed" | "unknown"
+  tokens_in:  number;
+  tokens_out: number;
+  error:      ChatErrorSummary | null;
+}

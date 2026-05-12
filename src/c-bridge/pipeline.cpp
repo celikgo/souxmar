@@ -44,11 +44,15 @@ struct souxmar_bridge_pipeline_t {
 };
 
 extern "C" uint32_t souxmar_bridge_abi_version(void) {
-  // Bumps on every signature-breaking change in pipeline.h. Tied
-  // to the BridgeFeatureSet.bridge_protocol_version on the Rust
-  // side — they advance together to keep a single name for
-  // "this build's bridge surface."
-  return 1;
+  // Bumps on every signature-breaking change *or surface-growth*
+  // change in the bridge headers. Tied to the
+  // BridgeFeatureSet.bridge_protocol_version on the Rust side —
+  // they advance together to keep a single name for "this build's
+  // bridge surface."
+  //
+  // v1 (Sprint 13 push 3): pipeline introspection surface.
+  // v2 (Sprint 14 push 4): + provider_call surface.
+  return 2;
 }
 
 extern "C"

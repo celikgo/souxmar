@@ -53,6 +53,8 @@ add_executable(souxmar_integration_tests
   # regression net for the bridge surface declared in
   # include/souxmar-c-bridge/pipeline.h (ADR-0018).
   test_c_bridge_pipeline.cpp
+  # Sprint 14 push 4 — provider_call surface (bridge ABI v2).
+  test_c_bridge_provider.cpp
 )
 
 target_include_directories(souxmar_integration_tests

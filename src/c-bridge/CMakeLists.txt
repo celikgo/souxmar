@@ -14,6 +14,8 @@
 
 add_library(souxmar_c_bridge STATIC
   pipeline.cpp
+  # Sprint 14 push 4 — second real FFI surface: provider_call.
+  provider.cpp
 )
 
 add_library(souxmar::c_bridge ALIAS souxmar_c_bridge)
@@ -31,6 +33,9 @@ target_link_libraries(souxmar_c_bridge
     souxmar::public_headers
   PRIVATE
     souxmar::pipeline
+    # Sprint 14 push 4 — provider.cpp routes through the
+    # engine's Provider abstraction (libsouxmar-ai).
+    souxmar::ai
     souxmar::warnings
     souxmar::sanitizers
 )

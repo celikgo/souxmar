@@ -11,7 +11,11 @@
 // bridge FFI crate arrives (Sprint 12+).
 
 import { useState, useRef, useEffect } from "react";
-import { invokeCommand, type BridgeFeatureSet } from "../tauri/bridge";
+import {
+  invokeCommand,
+  type BridgeFeatureSet,
+  type ChatSummary,
+} from "../tauri/bridge";
 
 type Role = "user" | "assistant" | "tool" | "system";
 
@@ -57,14 +61,29 @@ export function Chat({ projectId, features }: Props) {
     setMessages((m) => [...m, userMsg]);
 
     try {
-      // Sprint 12+ wires this to a real provider call through the
-      // souxmar-bridge crate. Today the command is a stub returning
-      // a deterministic reply so the UI can be exercised in dev.
-      const reply = await invokeCommand<string>("chat_send", {
+      // Sprint 14 push 4 — chat_send now returns a typed
+      // ChatSummary through the bridge. When the C bridge isn't
+      // linked (real-ffi off), the call comes back as
+      // FeatureNotWired which Tauri surfaces as a string error;
+      // otherwise we render reply_text + provider chip.
+      const summary = await invokeCommand<ChatSummary>("chat_send", {
         message: text,
         projectId: projectId || "",
       });
-      setMessages((m) => [...m, { role: "assistant", text: reply }]);
+      if (summary.error) {
+        setMessages((m) => [
+          ...m,
+          {
+            role: "assistant",
+            text: `(provider ${summary.provider} returned ${summary.error!.kind}: ${summary.error!.text})`,
+          },
+        ]);
+      } else {
+        setMessages((m) => [
+          ...m,
+          { role: "assistant", text: summary.reply_text },
+        ]);
+      }
     } catch (err) {
       setMessages((m) => [
         ...m,

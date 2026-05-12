@@ -98,7 +98,11 @@ impl Default for BridgeFeatureSet {
         BridgeFeatureSet {
             viewport_renderer:       false,
             pipeline_introspection:  ffi::is_real_ffi_compiled_in(),
-            provider_call:           false,
+            // Sprint 14 push 4 — second flag flips structural.
+            // Both `pipeline_introspection` and `provider_call`
+            // route through the same `libsouxmar-c-bridge` static
+            // archive; the feature flag turns both on together.
+            provider_call:           ffi::is_real_ffi_compiled_in(),
             keychain_write:          true,
             auto_updater_menu:       false,
             bridge_protocol_version: ffi::EXPECTED_ABI_VERSION,
@@ -167,15 +171,65 @@ impl Bridge {
         }
     }
 
-    /// Stub. Real implementation routes through
-    /// `libsouxmar_ai_chat()` returning a streaming handle.
+    /// Send one chat-completion request through the engine's
+    /// Provider abstraction (libsouxmar-ai).
+    ///
+    /// Sprint 14 push 4 — second real FFI call. Same template as
+    /// Sprint 13 push 3's pipeline_introspection. The engine
+    /// today routes to StubProvider; Sprint 15 push 1 swaps in
+    /// a per-project provider lookup.
     pub fn chat_send(
         &self,
-        _message: &str,
-        _project_id: &str,
-    ) -> Result<String, BridgeError> {
-        Err(BridgeError::FeatureNotWired("provider_call".into()))
+        request_json: &str,
+        project_id:   &str,
+    ) -> Result<ChatSummary, BridgeError> {
+        match ffi::chat_send(request_json, project_id) {
+            ffi::FfiOutcome::SkeletonNoFfi => {
+                Err(BridgeError::FeatureNotWired("provider_call".into()))
+            }
+            ffi::FfiOutcome::AbiMismatch { expected, actual } => {
+                Err(BridgeError::FfiCallFailed(format!(
+                    "souxmar-c-bridge ABI mismatch: bridge built against \
+                     v{}, library reports v{}", expected, actual
+                )))
+            }
+            ffi::FfiOutcome::FfiError(msg) => {
+                Err(BridgeError::FfiCallFailed(msg))
+            }
+            ffi::FfiOutcome::FfiOk(Ok(ok)) => Ok(ChatSummary {
+                reply_text: ok.reply_text,
+                provider:   format!("{:?}", ok.provider).to_lowercase(),
+                tokens_in:  ok.tokens_in,
+                tokens_out: ok.tokens_out,
+                error:      None,
+            }),
+            ffi::FfiOutcome::FfiOk(Err(err)) => Ok(ChatSummary {
+                reply_text: String::new(),
+                provider:   format!("{:?}", err.provider).to_lowercase(),
+                tokens_in:  0,
+                tokens_out: 0,
+                error: Some(ChatErrorSummary {
+                    kind: format!("{:?}", err.kind),
+                    text: err.text,
+                }),
+            }),
+        }
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ChatSummary {
+    pub reply_text: String,
+    pub provider:   String,
+    pub tokens_in:  i64,
+    pub tokens_out: i64,
+    pub error:      Option<ChatErrorSummary>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ChatErrorSummary {
+    pub kind: String,
+    pub text: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

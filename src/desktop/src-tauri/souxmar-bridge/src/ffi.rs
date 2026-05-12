@@ -23,6 +23,11 @@ pub struct souxmar_bridge_pipeline_t {
     _private: [u8; 0],
 }
 
+#[repr(C)]
+pub struct souxmar_bridge_chat_response_t {
+    _private: [u8; 0],
+}
+
 // Declared once. Only resolved at link time when `real-ffi` is on
 // (build.rs gates the `cargo:rustc-link-lib`); when the feature
 // is off, the high-level wrappers never call these, so the
@@ -50,14 +55,33 @@ extern "C" {
     pub fn souxmar_bridge_pipeline_free(p: *mut souxmar_bridge_pipeline_t);
 
     pub fn souxmar_bridge_free_string(s: *mut c_char);
+
+    // Sprint 14 push 4 — provider_call surface (bridge ABI v2).
+    pub fn souxmar_bridge_chat_send(
+        request_json: *const c_char,
+        project_id:   *const c_char,
+        out_err:      *mut *mut c_char,
+    ) -> *mut souxmar_bridge_chat_response_t;
+
+    pub fn souxmar_bridge_chat_error_kind(r: *const souxmar_bridge_chat_response_t) -> i32;
+    pub fn souxmar_bridge_chat_error_text(r: *const souxmar_bridge_chat_response_t) -> *const c_char;
+    pub fn souxmar_bridge_chat_reply_text(r: *const souxmar_bridge_chat_response_t) -> *const c_char;
+    pub fn souxmar_bridge_chat_provider  (r: *const souxmar_bridge_chat_response_t) -> i32;
+    pub fn souxmar_bridge_chat_tokens_in (r: *const souxmar_bridge_chat_response_t) -> i64;
+    pub fn souxmar_bridge_chat_tokens_out(r: *const souxmar_bridge_chat_response_t) -> i64;
+
+    pub fn souxmar_bridge_chat_response_free(r: *mut souxmar_bridge_chat_response_t);
 }
 
 /// Bridge ABI version this Rust crate was built against. Compared
-/// against `souxmar_bridge_abi_version()` at startup to refuse a
+/// against `souxmar_bridge_abi_version()` at every call to refuse a
 /// mismatched library. Aligned with
 /// `BridgeFeatureSet::bridge_protocol_version` so that one number
 /// names the bridge surface.
-pub const EXPECTED_ABI_VERSION: u32 = 1;
+///
+/// v1 (Sprint 13 push 3): pipeline introspection.
+/// v2 (Sprint 14 push 4): + provider_call.
+pub const EXPECTED_ABI_VERSION: u32 = 2;
 
 /// Outcome of a real FFI call. The `Skeleton*` variants are
 /// returned when the `real-ffi` feature is off; the `Ffi*`
@@ -151,7 +175,143 @@ pub fn parse_pipeline_stages(_yaml: &str) -> FfiOutcome<Vec<ParsedStage>> {
 }
 
 /// Returns whether this build is using the real FFI path or the
-/// skeleton. Surfaced through `BridgeFeatureSet.pipeline_introspection`.
+/// skeleton. Surfaced through `BridgeFeatureSet.pipeline_introspection`
+/// + `provider_call`.
 pub const fn is_real_ffi_compiled_in() -> bool {
     cfg!(feature = "real-ffi")
+}
+
+// ---- Sprint 14 push 4 — provider_call wrappers --------------------
+
+/// Provider the engine resolved for this call. Mirrors the
+/// SOUXMAR_BRIDGE_PROVIDER_* C constants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatProvider {
+    Unknown,
+    Stub,
+    Anthropic,
+    OpenAI,
+    Ollama,
+    Managed,
+}
+
+impl From<i32> for ChatProvider {
+    fn from(v: i32) -> Self {
+        match v {
+            1 => Self::Stub,
+            2 => Self::Anthropic,
+            3 => Self::OpenAI,
+            4 => Self::Ollama,
+            5 => Self::Managed,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+/// Typed error returned by the chat-send FFI. Mirrors the
+/// SOUXMAR_BRIDGE_PE_* C constants + adds a Skeleton variant for
+/// the no-real-ffi case (same shape as FfiOutcome above).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChatErrorKind {
+    Ok,
+    HttpError,
+    Timeout,
+    InvalidResponse,
+    Unauthorized,
+    RateLimited,
+    QuotaExhausted,
+    NotConfigured,
+    Internal,
+    Unknown(i32),
+}
+
+impl From<i32> for ChatErrorKind {
+    fn from(v: i32) -> Self {
+        match v {
+            0 => Self::Ok,
+            1 => Self::HttpError,
+            2 => Self::Timeout,
+            3 => Self::InvalidResponse,
+            4 => Self::Unauthorized,
+            5 => Self::RateLimited,
+            6 => Self::QuotaExhausted,
+            7 => Self::NotConfigured,
+            8 => Self::Internal,
+            n => Self::Unknown(n),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ChatOk {
+    pub reply_text: String,
+    pub provider:   ChatProvider,
+    pub tokens_in:  i64,
+    pub tokens_out: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChatErr {
+    pub kind:       ChatErrorKind,
+    pub text:       String,
+    pub provider:   ChatProvider,
+}
+
+#[cfg(feature = "real-ffi")]
+pub fn chat_send(request_json: &str, project_id: &str) -> FfiOutcome<Result<ChatOk, ChatErr>> {
+    let actual = unsafe { souxmar_bridge_abi_version() };
+    if actual != EXPECTED_ABI_VERSION {
+        return FfiOutcome::AbiMismatch {
+            expected: EXPECTED_ABI_VERSION,
+            actual,
+        };
+    }
+
+    let creq = match CString::new(request_json) {
+        Ok(c) => c,
+        Err(_) => return FfiOutcome::FfiError("request_json contains an interior NUL byte".into()),
+    };
+    let cpid = match CString::new(project_id) {
+        Ok(c) => c,
+        Err(_) => return FfiOutcome::FfiError("project_id contains an interior NUL byte".into()),
+    };
+
+    let mut err: *mut c_char = ptr::null_mut();
+    let handle = unsafe {
+        souxmar_bridge_chat_send(creq.as_ptr(), cpid.as_ptr(), &mut err as *mut _)
+    };
+    if handle.is_null() {
+        let msg = if err.is_null() {
+            "souxmar-c-bridge: chat_send returned NULL with no error message".to_string()
+        } else {
+            let m = unsafe { CStr::from_ptr(err) }.to_string_lossy().into_owned();
+            unsafe { souxmar_bridge_free_string(err) };
+            m
+        };
+        return FfiOutcome::FfiError(msg);
+    }
+
+    let kind_i  = unsafe { souxmar_bridge_chat_error_kind(handle) };
+    let kind    = ChatErrorKind::from(kind_i);
+    let provider = ChatProvider::from(unsafe { souxmar_bridge_chat_provider(handle) });
+
+    let result = if kind == ChatErrorKind::Ok {
+        let reply = unsafe { CStr::from_ptr(souxmar_bridge_chat_reply_text(handle)) }
+            .to_string_lossy().into_owned();
+        let tin   = unsafe { souxmar_bridge_chat_tokens_in(handle) };
+        let tout  = unsafe { souxmar_bridge_chat_tokens_out(handle) };
+        Ok(ChatOk { reply_text: reply, provider, tokens_in: tin, tokens_out: tout })
+    } else {
+        let txt = unsafe { CStr::from_ptr(souxmar_bridge_chat_error_text(handle)) }
+            .to_string_lossy().into_owned();
+        Err(ChatErr { kind, text: txt, provider })
+    };
+
+    unsafe { souxmar_bridge_chat_response_free(handle) };
+    FfiOutcome::FfiOk(result)
+}
+
+#[cfg(not(feature = "real-ffi"))]
+pub fn chat_send(_request_json: &str, _project_id: &str) -> FfiOutcome<Result<ChatOk, ChatErr>> {
+    FfiOutcome::SkeletonNoFfi
 }

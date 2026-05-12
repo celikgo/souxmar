@@ -113,27 +113,35 @@ pub fn pipeline_summary(
 }
 
 #[tauri::command]
-pub fn chat_send(message: String, project_id: String) -> Result<String, String> {
-    // Sprint 11 push 4 stub. The real implementation routes through
-    // the souxmar-bridge FFI crate (queued for Sprint 12+) into
-    // libsouxmar-ai's Provider abstraction (Sprint 10 push 9). For
-    // now we return a deterministic acknowledgement so the chat panel
-    // is exercisable in `tauri dev`.
-    let suffix = if project_id.is_empty() {
-        String::new()
-    } else {
-        format!(" (project: {})", project_id)
-    };
+pub fn chat_send(
+    message:    String,
+    project_id: String,
+) -> Result<souxmar_bridge::ChatSummary, String> {
+    // Sprint 14 push 4 — chat_send routes through the C bridge.
+    // The Sprint 11 stub becomes the no-real-ffi fallback path:
+    // when the bridge crate was built without `real-ffi`, the
+    // Bridge wrapper returns FeatureNotWired which we surface as
+    // a typed error to the React side. With real-ffi on, the
+    // call goes through to the engine's StubProvider today;
+    // Sprint 15 push 1 swaps in the configured per-project
+    // provider.
     if message.trim().is_empty() {
         return Err("empty message".into());
     }
-    Ok(format!(
-        "(scaffolding) I received: \"{}\"{}. The real provider call \
-         lands when the souxmar-bridge FFI crate wires this command \
-         to libsouxmar-ai (Sprint 12+).",
-        message.trim(),
-        suffix,
-    ))
+
+    // Render the one-message request to the proxy's openapi.yaml
+    // ChatRequest shape. The bridge's regex-based extractor reads
+    // model + messages; sampling knobs default. Sprint 15 push 1
+    // replaces the hand-rolled JSON with a serde_json::to_string
+    // once the openapi-generator wires up.
+    let request_json = format!(
+        r#"{{"model":"stub-model","messages":[{{"role":"user","content":"{}"}}]}}"#,
+        message.trim().replace('"', "\\\"")
+    );
+
+    souxmar_bridge::Bridge::new()
+        .chat_send(&request_json, &project_id)
+        .map_err(|e| e.to_string())
 }
 
 fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> std::io::Result<()> {
