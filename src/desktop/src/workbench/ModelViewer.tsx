@@ -13,10 +13,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import * as THREE from "three";
-import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
-import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { SimplifyModifier } from "three/addons/modifiers/SimplifyModifier.js";
+import { applyClayMaterial, loadGeometry } from "./geometryLoaders";
 import { invokeCommand } from "../tauri/bridge";
 
 interface Props {
@@ -141,57 +140,23 @@ export function ModelViewer({ projectPath, relPath, overlays, onSimplified }: Pr
   // Re-load whenever the active file changes.
   useEffect(() => {
     if (!projectPath || !relPath) return;
-    const ref = sceneRef.current;
-    if (!ref) return;
+    if (!sceneRef.current) return;
 
     let disposed = false;
     setError(null);
     setStats(null);
 
+    const dotIdx = relPath.lastIndexOf(".");
+    const ext = dotIdx >= 0 ? relPath.slice(dotIdx + 1).toLowerCase() : "";
+
     invokeCommand<number[]>("read_geometry_bytes", {
       projectPath,
       relPath,
     })
-      .then(bytes => {
+      .then(bytes => loadGeometry(new Uint8Array(bytes), ext))
+      .then(mesh => {
         if (disposed || !sceneRef.current) return;
-        const buf = new Uint8Array(bytes).buffer;
-        const lower = relPath.toLowerCase();
-        let mesh: THREE.Object3D | null = null;
-        if (lower.endsWith(".obj")) {
-          const text = new TextDecoder().decode(buf);
-          mesh = new OBJLoader().parse(text);
-        } else if (lower.endsWith(".stl")) {
-          const geom = new STLLoader().parse(buf);
-          geom.computeVertexNormals();
-          const mat = new THREE.MeshStandardMaterial({
-            color: 0x6ecbff,
-            metalness: 0.1,
-            roughness: 0.55,
-            flatShading: false,
-            side: THREE.DoubleSide,
-          });
-          mesh = new THREE.Mesh(geom, mat);
-        } else {
-          setError(`No viewer for ${relPath} yet. Today only .obj and .stl render here.`);
-          return;
-        }
-
-        if (!mesh) return;
-
-        // Apply a consistent clay material to OBJ groups (they may carry
-        // their own materials we don't want here).
-        mesh.traverse(c => {
-          const m = c as THREE.Mesh;
-          if (m.isMesh) {
-            m.material = new THREE.MeshStandardMaterial({
-              color: 0x6ecbff,
-              metalness: 0.1,
-              roughness: 0.55,
-              flatShading: false,
-              side: THREE.DoubleSide,
-            });
-          }
-        });
+        applyClayMaterial(mesh);
 
         // Centre + scale the model so any input fits the 10-unit grid.
         const bbox = new THREE.Box3().setFromObject(mesh);
