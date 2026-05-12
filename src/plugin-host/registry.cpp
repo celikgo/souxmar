@@ -22,14 +22,13 @@ Registry::~Registry() = default;
 // caller is responsible for serialising any concurrent use across the
 // move — Registry is a one-owner type in practice.
 Registry::Registry(Registry&& other) noexcept
-    : entries_(std::move(other.entries_)),
-      current_plugin_id_(std::move(other.current_plugin_id_)),
+    : entries_(std::move(other.entries_)), current_plugin_id_(std::move(other.current_plugin_id_)),
       current_plugin_threading_(other.current_plugin_threading_) {}
 
 Registry& Registry::operator=(Registry&& other) noexcept {
   if (this != &other) {
-    entries_                  = std::move(other.entries_);
-    current_plugin_id_        = std::move(other.current_plugin_id_);
+    entries_ = std::move(other.entries_);
+    current_plugin_id_ = std::move(other.current_plugin_id_);
     current_plugin_threading_ = other.current_plugin_threading_;
   }
   return *this;
