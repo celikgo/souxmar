@@ -23,6 +23,9 @@ import { ThreeMFLoader }  from "three/addons/loaders/3MFLoader.js";
 import { ColladaLoader }  from "three/addons/loaders/ColladaLoader.js";
 import { TDSLoader }      from "three/addons/loaders/TDSLoader.js";
 import { VTKLoader }      from "three/addons/loaders/VTKLoader.js";
+import occtInit           from "occt-import-js";
+import occtWasmUrl        from "occt-import-js/dist/occt-import-js.wasm?url";
+import { parseVtu }       from "./vtuReader";
 
 const CLAY_COLOUR = 0x6ecbff;
 
@@ -134,7 +137,76 @@ const LOADERS: Record<string, GeometryLoader> = {
     const gltf = await new GLTFLoader().parseAsync(text, "");
     return gltf.scene;
   },
+
+  // --- STEP / IGES via occt-import-js (WASM, OpenCASCADE port) ---------
+  // First load triggers a ~5 MB wasm fetch + initialise; subsequent loads
+  // reuse the cached module.
+  step: async bytes => occtToThree(bytes, "step"),
+  stp:  async bytes => occtToThree(bytes, "step"),
+  iges: async bytes => occtToThree(bytes, "iges"),
+  igs:  async bytes => occtToThree(bytes, "iges"),
+
+  // --- VTU (VTK UnstructuredGrid) --------------------------------------
+  // Built-in reader targets the ASCII dialect souxmar's `writer.vtu`
+  // plugin emits. Format="binary"/"appended" surface a typed error.
+  vtu: textOnly(text => parseVtu(text)),
+
+  // --- BLEND -----------------------------------------------------------
+  // .blend is Blender's native binary format. There's no in-browser
+  // parser worth shipping (the format is non-public and version-coupled).
+  // The reader plugin uses headless Blender on the engine side. Surface
+  // a clear "export to OBJ/glTF first" error rather than pretending.
+  blend: async () => {
+    throw new Error(
+      ".blend files can't render in the viewer directly. Export from Blender to .glb (recommended) or .obj first, then import that.",
+    );
+  },
 };
+
+// ---------------------------------------------------------------------------
+// occt-import-js bridge.
+//
+// The wasm module is lazy + memoised — opening a non-CAD file should never
+// pay for the 5 MB fetch. Once initialised we keep the OcctModule alive for
+// the lifetime of the app; subsequent STEP/IGES opens parse in-process.
+// ---------------------------------------------------------------------------
+
+let occtPromise: Promise<Awaited<ReturnType<typeof occtInit>>> | null = null;
+
+function getOcct() {
+  if (!occtPromise) {
+    occtPromise = occtInit({ locateFile: () => occtWasmUrl });
+  }
+  return occtPromise;
+}
+
+async function occtToThree(bytes: Uint8Array, kind: "step" | "iges"): Promise<THREE.Object3D> {
+  const occt = await getOcct();
+  const params = { linearUnit: "millimeter" as const };
+  const result = kind === "step"
+    ? occt.ReadStepFile(bytes, params)
+    : occt.ReadIgesFile(bytes, params);
+  if (!result.success) {
+    throw new Error(`occt-import-js could not parse the ${kind.toUpperCase()} file`);
+  }
+  if (result.meshes.length === 0) {
+    throw new Error(`${kind.toUpperCase()} file produced no triangulated meshes`);
+  }
+  // Each occt mesh corresponds to one b-rep solid/face; combine into a
+  // single Group so the camera-fit logic in ModelViewer sees one bbox.
+  const group = new THREE.Group();
+  for (const m of result.meshes) {
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.Float32BufferAttribute(m.attributes.position.array, 3));
+    if (m.attributes.normal) {
+      geom.setAttribute("normal", new THREE.Float32BufferAttribute(m.attributes.normal.array, 3));
+    }
+    geom.setIndex(m.index.array);
+    if (!m.attributes.normal) geom.computeVertexNormals();
+    group.add(meshFromGeometry(geom));
+  }
+  return group;
+}
 
 /** Lower-case extension list the viewer can render (no leading dot). */
 export function viewableExtensions(): string[] {
