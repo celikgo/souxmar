@@ -8,7 +8,7 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.9.5 cut below.)
+- (None this release — `[Unreleased]` reopens after the v0.9.6 cut below.)
 
 ### Changed
 
@@ -25,6 +25,26 @@ The plugin C ABI version is tracked separately and is independent of the project
 ### Security
 
 - (None this release.)
+
+---
+
+## [0.9.6] - 2026-05-16
+
+Sprint 18 closes here. See [`docs/retros/sprint-18.md`](docs/retros/sprint-18.md).
+**Tag:** `v0.9.6`. **ABI:** v1.3 frozen (unchanged). **Tool contract:** v1
+frozen final at 18 tools (unchanged). **Bridge ABI:** stays at v3.
+
+### Added
+
+- **[ADR-0028](docs/adr/0028-pipeline-execution-router.md)** ratifies the
+  pipeline-runner ExecutionRouter for per-stage local-vs-managed dispatch.
+  Picks Option 2 (routing decided at parse time, per-stage dispatcher).
+- **[ADR-0029](docs/adr/0029-multi-window-isolation.md)** ratifies the
+  multi-window desktop model + the five-rule data-isolation invariant
+  between concurrent project windows.
+
+Architecture-decision-only sprint by design; implementations ship with
+their consumers in Sprint 19+.
 
 ---
 
