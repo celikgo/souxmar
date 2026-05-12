@@ -43,15 +43,19 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build clang-17 lld-17
+          # autoconf/autoconf-archive/automake/libtool: required by
+          # vcpkg's libsodium port (builds from source via autotools).
+          sudo apt-get install -y ninja-build clang-17 lld-17 \
+                                  autoconf autoconf-archive automake libtool
 
       - name: Set up vcpkg
-        run: |
-          if [ -z "$VCPKG_ROOT" ]; then
-            git clone --depth 1 https://github.com/microsoft/vcpkg "$HOME/vcpkg"
-            "$HOME/vcpkg/bootstrap-vcpkg.sh"
-            echo "VCPKG_ROOT=$HOME/vcpkg" >> "$GITHUB_ENV"
-          fi
+        uses: lukka/run-vcpkg@v11
+        with:
+          # Pin to the same baseline as ci.yml — the previous
+          # `git clone --depth 1` left vcpkg unable to resolve ports
+          # against the baseline commit pinned in vcpkg.json.
+          vcpkgGitCommitId: 56bb2411609227288b70117ead2c47585ba07713
+          runVcpkgInstall: false
 
       - name: Cache vcpkg binary archives
         uses: actions/cache@v4
