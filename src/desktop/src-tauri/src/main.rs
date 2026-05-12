@@ -32,6 +32,8 @@ fn main() {
             commands::read_geometry_bytes,
             commands::apply_loads_to_pipeline,
             commands::simplify_mesh,
+            commands::write_text_file,
+            commands::list_solver_capabilities,
         ])
         .run(tauri::generate_context!())
         .expect("error launching souxmar-desktop");

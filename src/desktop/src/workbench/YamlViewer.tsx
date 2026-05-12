@@ -1,23 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Lightweight, dependency-free YAML viewer for the workbench. Reads
-// the file off disk via the existing `read_geometry_bytes` Tauri
-// command, applies a token-level highlighter, and renders into a
-// monospace pane with line numbers.
+// In-workbench YAML editor with token highlighting. Reads the file
+// via `read_geometry_bytes`, lets the user edit it inline, and saves
+// back through `write_text_file` (both Tauri commands are path-
+// restricted to the project root). The highlighter is a transparent
+// overlay behind a textarea, so the editing UX is plain-old textarea
+// with caret/selection/IME handled by the platform, while the
+// rendered pane carries the syntax colors.
 //
-// Why no `js-yaml` or `prismjs`: we are not parsing YAML — we are
-// *displaying* it. Pipeline files are short (tens to low hundreds of
-// lines), the regex-based highlighter below covers the constructs
-// souxmar pipelines actually use (keys, scalars, comments, anchors,
-// flow markers, document separators), and pulling in either dep
-// adds bytes the desktop bundle does not need.
-//
-// HTML escaping is unconditional. The highlighter never emits raw
-// HTML; each token's text passes through React as a child node.
+// When the open file is pipeline.yaml (or any pipeline*.yaml), the
+// SolversPanel renders above the editor so the user can swap the
+// `kind:` line of the solve stage with a click — read+write through
+// the same buffer so changes go through Save like any other edit.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { invokeCommand } from "../tauri/bridge";
+import { SolversPanel } from "./SolversPanel";
 
 interface Props {
   projectPath: string;
@@ -26,22 +25,29 @@ interface Props {
 }
 
 export function YamlViewer({ projectPath, relPath }: Props) {
-  const [text, setText] = useState<string | null>(null);
+  const [originalText, setOriginalText] = useState<string | null>(null);
+  const [text, setText] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const preRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setText(null);
+    setOriginalText(null);
+    setText("");
     setError(null);
-    invokeCommand<number[]>("read_geometry_bytes", {
-      projectPath,
-      relPath,
-    })
+    setSaveError(null);
+    setSavedAt(null);
+    invokeCommand<number[]>("read_geometry_bytes", { projectPath, relPath })
       .then(bytes => {
         if (cancelled) return;
         try {
           const decoded = new TextDecoder("utf-8", { fatal: false })
             .decode(new Uint8Array(bytes));
+          setOriginalText(decoded);
           setText(decoded);
         } catch (e) {
           setError(`decode: ${String(e)}`);
@@ -55,37 +61,124 @@ export function YamlViewer({ projectPath, relPath }: Props) {
     };
   }, [projectPath, relPath]);
 
-  const rows = useMemo(
-    () => (text === null ? null : highlightYaml(text)),
-    [text],
-  );
+  const rows = useMemo(() => highlightYaml(text), [text]);
+  const dirty = originalText !== null && text !== originalText;
+  const isPipeline = /(?:^|\/)pipeline.*\.ya?ml$/i.test(relPath);
+
+  const handleSave = async () => {
+    if (!dirty || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await invokeCommand<void>("write_text_file", {
+        projectPath,
+        relPath,
+        content: text,
+      });
+      setOriginalText(text);
+      setSavedAt(Date.now());
+    } catch (e) {
+      setSaveError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Cmd/Ctrl+S → save.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        void handleSave();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // handleSave closes over current text/dirty; effect intentionally
+    // re-binds per change so the latest closure is used.
+  });
+
+  // Keep the highlighter overlay scrolled in sync with the textarea.
+  const handleScroll = () => {
+    if (!preRef.current || !textareaRef.current) return;
+    preRef.current.scrollTop = textareaRef.current.scrollTop;
+    preRef.current.scrollLeft = textareaRef.current.scrollLeft;
+  };
 
   return (
     <div style={wrapStyle}>
       <header style={headerStyle}>
-        <span style={pathStyle}>{relPath}</span>
-        {text !== null && (
-          <span style={metaStyle}>{text.split("\n").length} lines</span>
-        )}
+        <span style={pathStyle}>
+          {relPath}
+          {dirty && <span style={dirtyDotStyle} title="Unsaved changes">●</span>}
+        </span>
+        <div style={headerRightStyle}>
+          {text && <span style={metaStyle}>{text.split("\n").length} lines</span>}
+          {saveError && <span style={saveErrorStyle} title={saveError}>save failed</span>}
+          {savedAt && !dirty && !saveError && (
+            <span style={savedStyle}>saved</span>
+          )}
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={!dirty || saving}
+            style={{
+              ...saveButtonStyle,
+              opacity: !dirty || saving ? 0.5 : 1,
+              cursor: !dirty || saving ? "default" : "pointer",
+            }}
+            title="Save (⌘S)"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
       </header>
+
+      {isPipeline && originalText !== null && (
+        <SolversPanel
+          projectPath={projectPath}
+          currentText={text}
+          onChange={(next) => setText(next)}
+        />
+      )}
+
       <div style={bodyStyle}>
         {error ? (
           <pre style={errorStyle}>{error}</pre>
-        ) : rows === null ? (
+        ) : originalText === null ? (
           <div style={mutedStyle}>Loading…</div>
         ) : (
-          <pre style={preStyle}>
-            <code>
-              {rows.map((tokens, idx) => (
-                <div key={idx} style={lineStyle}>
-                  <span style={gutterStyle}>{idx + 1}</span>
-                  <span style={lineContentStyle}>
-                    {tokens.length === 0 ? " " : tokens}
-                  </span>
+          <div style={editorWrapStyle}>
+            <pre ref={preRef} style={highlightStyle} aria-hidden="true">
+              <code>
+                {rows.map((tokens, idx) => (
+                  <div key={idx} style={lineStyle}>
+                    <span style={gutterStyle}>{idx + 1}</span>
+                    <span style={lineContentStyle}>
+                      {tokens.length === 0 ? " " : tokens}
+                    </span>
+                  </div>
+                ))}
+                {/* Trailing newline → ghost row so the textarea's
+                    visible content matches the overlay exactly. */}
+                <div style={lineStyle}>
+                  <span style={gutterStyle}>{" "}</span>
+                  <span style={lineContentStyle}>{" "}</span>
                 </div>
-              ))}
-            </code>
-          </pre>
+              </code>
+            </pre>
+            <textarea
+              ref={textareaRef}
+              value={text}
+              spellCheck={false}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              onChange={e => setText(e.target.value)}
+              onScroll={handleScroll}
+              style={textareaStyle}
+            />
+          </div>
         )}
       </div>
     </div>
@@ -101,7 +194,6 @@ function highlightYaml(src: string): ReactNode[][] {
 }
 
 function highlightLine(line: string): ReactNode[] {
-  // Document separators / end markers.
   if (/^(---|\.\.\.)\s*$/.test(line)) {
     return [span(line, "doc", 0)];
   }
@@ -111,14 +203,12 @@ function highlightLine(line: string): ReactNode[] {
   let key = 0;
   const nextKey = () => key++;
 
-  // Leading indent — preserved verbatim.
   const indentMatch = /^(\s+)/.exec(line);
   if (indentMatch) {
     out.push(span(indentMatch[1], "plain", nextKey()));
     i = indentMatch[1].length;
   }
 
-  // Block-list marker `- ` (dash followed by space or EOL).
   if (line[i] === "-" && (line[i + 1] === " " || line.length === i + 1)) {
     out.push(span("-", "marker", nextKey()));
     i += 1;
@@ -128,14 +218,11 @@ function highlightLine(line: string): ReactNode[] {
     }
   }
 
-  // Whole-line comment (after any leading indent / dash).
   if (line[i] === "#") {
     out.push(span(line.slice(i), "comment", nextKey()));
     return out;
   }
 
-  // Try key: value at the current position. A YAML key here is
-  // anything up to an unquoted colon followed by space or EOL.
   const rest = line.slice(i);
   const keyMatch = /^("(?:\\.|[^"\\])*"|'(?:''|[^'])*'|[^:#\n]+?)(\s*:)(\s|$)/.exec(rest);
   if (keyMatch) {
@@ -148,17 +235,14 @@ function highlightLine(line: string): ReactNode[] {
     }
   }
 
-  // Value / tail of the line — tokenise spaces, comments, scalars.
   while (i < line.length) {
     const ch = line[i];
 
-    // Inline comment.
     if (ch === "#" && (i === 0 || /\s/.test(line[i - 1]))) {
       out.push(span(line.slice(i), "comment", nextKey()));
       return out;
     }
 
-    // Whitespace run.
     if (ch === " " || ch === "\t") {
       let j = i;
       while (j < line.length && (line[j] === " " || line[j] === "\t")) j++;
@@ -167,7 +251,6 @@ function highlightLine(line: string): ReactNode[] {
       continue;
     }
 
-    // Double-quoted string.
     if (ch === '"') {
       const m = /^"(?:\\.|[^"\\])*"/.exec(line.slice(i));
       if (m) {
@@ -177,7 +260,6 @@ function highlightLine(line: string): ReactNode[] {
       }
     }
 
-    // Single-quoted string.
     if (ch === "'") {
       const m = /^'(?:''|[^'])*'/.exec(line.slice(i));
       if (m) {
@@ -187,7 +269,6 @@ function highlightLine(line: string): ReactNode[] {
       }
     }
 
-    // Flow markers — { } [ ] , and the pipe / gt block-scalar markers.
     if ("{}[],".includes(ch)) {
       out.push(span(ch, "punct", nextKey()));
       i += 1;
@@ -198,7 +279,6 @@ function highlightLine(line: string): ReactNode[] {
       return out;
     }
 
-    // Anchor / alias / tag.
     if (ch === "&" || ch === "*" || ch === "!") {
       const m = /^[&*!][\w.\-/:]+/.exec(line.slice(i));
       if (m) {
@@ -208,7 +288,6 @@ function highlightLine(line: string): ReactNode[] {
       }
     }
 
-    // Scalar — read until next space / flow marker / comment marker.
     let j = i;
     while (
       j < line.length &&
@@ -270,13 +349,14 @@ const headerStyle: CSSProperties = {
   display:        "flex",
   alignItems:     "center",
   justifyContent: "space-between",
-  height:         28,
+  height:         32,
   padding:        "0 var(--space-3)",
   borderBottom:   "1px solid var(--border-subtle)",
   background:     "var(--bg-panel)",
   fontSize:       11,
   color:          "var(--fg-tertiary)",
   flexShrink:     0,
+  gap:            12,
 };
 
 const pathStyle: CSSProperties = {
@@ -284,27 +364,101 @@ const pathStyle: CSSProperties = {
   whiteSpace:     "nowrap",
   overflow:       "hidden",
   textOverflow:   "ellipsis",
+  display:        "flex",
+  alignItems:     "center",
+  gap:            6,
+  minWidth:       0,
+};
+
+const dirtyDotStyle: CSSProperties = {
+  color:    "var(--accent-default, #1d9bf0)",
+  fontSize: 10,
+};
+
+const headerRightStyle: CSSProperties = {
+  display:    "flex",
+  alignItems: "center",
+  gap:        10,
+  flexShrink: 0,
 };
 
 const metaStyle: CSSProperties = {
-  flexShrink:     0,
-  marginLeft:     12,
+  whiteSpace: "nowrap",
+};
+
+const savedStyle: CSSProperties = {
+  color:      "var(--success, #67d984)",
+  whiteSpace: "nowrap",
+};
+
+const saveErrorStyle: CSSProperties = {
+  color:      "var(--danger, #f5365c)",
+  whiteSpace: "nowrap",
+  cursor:     "help",
+};
+
+const saveButtonStyle: CSSProperties = {
+  fontSize:       11,
+  padding:        "3px 10px",
+  border:         "1px solid var(--border-subtle)",
+  borderRadius:   "var(--radius-sm, 4px)",
+  background:     "var(--accent-default, #1d9bf0)",
+  color:          "#fff",
+  fontWeight:     500,
 };
 
 const bodyStyle: CSSProperties = {
   flex:           1,
-  overflow:       "auto",
+  overflow:       "hidden",
+  position:       "relative",
 };
 
-const preStyle: CSSProperties = {
+const editorWrapStyle: CSSProperties = {
+  position:       "relative",
+  height:         "100%",
+  width:          "100%",
+};
+
+// Shared pre/textarea metrics — fonts and line heights MUST match so
+// the overlay aligns with the caret. Padding lives only on the
+// container so both layers scroll over identical content geometry.
+
+const sharedCodeStyle: CSSProperties = {
   margin:         0,
   padding:        "8px 0",
   fontFamily:     "var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)",
   fontSize:       12.5,
-  lineHeight:     1.55,
+  lineHeight:     "1.55em",
   background:     "transparent",
   whiteSpace:     "pre",
   tabSize:        2,
+  letterSpacing:  0,
+};
+
+const highlightStyle: CSSProperties = {
+  ...sharedCodeStyle,
+  position:       "absolute",
+  inset:          0,
+  overflow:       "auto",
+  pointerEvents:  "none",
+};
+
+const textareaStyle: CSSProperties = {
+  ...sharedCodeStyle,
+  position:       "absolute",
+  inset:          0,
+  width:          "100%",
+  height:         "100%",
+  border:         "none",
+  outline:        "none",
+  resize:         "none",
+  paddingLeft:    44 + 10, // gutterStyle width + paddingRight
+  color:          "transparent",
+  caretColor:     "var(--fg-primary)",
+  background:     "transparent",
+  // Keep selection visible against the dim canvas.
+  // (Tauri's webview honors ::selection from a stylesheet; the inline
+  //  variant here is the safest fallback for an isolated component.)
 };
 
 const lineStyle: CSSProperties = {
@@ -343,13 +497,13 @@ const errorStyle: CSSProperties = {
 const tokenStyles: Record<TokenKind, CSSProperties> = {
   plain:    { color: "var(--fg-primary)" },
   key:      { color: "var(--accent-default, #1d9bf0)", fontWeight: 500 },
-  string:   { color: "#a3e08a" },          // soft green — matches the dim palette's success-ish hue
+  string:   { color: "#a3e08a" },
   scalar:   { color: "var(--fg-primary)" },
-  number:   { color: "#f0a060" },          // amber for numerics
-  keyword:  { color: "#c594ff", fontWeight: 500 }, // mauve for true/false/null
+  number:   { color: "#f0a060" },
+  keyword:  { color: "#c594ff", fontWeight: 500 },
   comment:  { color: "var(--fg-tertiary)", fontStyle: "italic" },
   punct:    { color: "var(--fg-tertiary)" },
-  marker:   { color: "#f0a060" },          // dashes, block-scalar markers — share the amber
+  marker:   { color: "#f0a060" },
   anchor:   { color: "#f0a060", fontStyle: "italic" },
   doc:      { color: "var(--fg-tertiary)", fontStyle: "italic" },
 };
@@ -364,4 +518,24 @@ export function isYamlPath(relPath: string): boolean {
   const dot = lower.lastIndexOf(".");
   if (dot < 0) return false;
   return YAML_EXTS.has(lower.slice(dot + 1));
+}
+
+// Exported for SolversPanel's swap-the-kind-line logic.
+export function replaceSolverKind(yaml: string, newCapability: string): string {
+  // Match the *first* `kind:` line whose value starts with `solver.`.
+  // Keep the indent, the `kind:` literal, and any trailing comment.
+  const lines = yaml.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(\s*kind:\s*)(['"]?)solver\.[\w.\-]+(['"]?)(\s*(#.*)?)$/.exec(lines[i]);
+    if (m) {
+      const quote = m[2] || "";
+      const tail  = m[4] || "";
+      lines[i] = `${m[1]}${quote}${newCapability}${quote}${tail}`;
+      return lines.join("\n");
+    }
+  }
+  // No existing solver stage — append a hint comment. Conservative: we
+  // do not invent a new stage; the user gets a visible TODO.
+  return yaml + (yaml.endsWith("\n") ? "" : "\n") +
+    `# TODO: no solver.* stage found; add e.g. "kind: ${newCapability}"\n`;
 }

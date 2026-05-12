@@ -385,6 +385,225 @@ pub fn simplify_mesh(
     Ok(abs.to_string_lossy().into_owned())
 }
 
+/// Save edited text content (e.g. pipeline.yaml from the workbench
+/// YAML editor) back to a file inside the project. Path is restricted
+/// the same way as `read_geometry_bytes`: no traversal, must land
+/// under the project root. The file must already exist — callers
+/// editing existing files should not silently create new ones.
+#[tauri::command]
+pub fn write_text_file(
+    project_path: String,
+    rel_path:     String,
+    content:      String,
+) -> Result<(), String> {
+    let project = PathBuf::from(project_path.trim());
+    if !project.is_dir() {
+        return Err(format!("project {} is not a directory", project.to_string_lossy()));
+    }
+    let rel = PathBuf::from(rel_path.trim());
+    for c in rel.components() {
+        if matches!(c, std::path::Component::ParentDir | std::path::Component::RootDir) {
+            return Err("rel_path must be inside the project".into());
+        }
+    }
+    let abs = project.join(&rel);
+    if !abs.is_file() {
+        return Err(format!(
+            "{} does not exist; refusing to create a new file from the editor",
+            abs.to_string_lossy()
+        ));
+    }
+    fs::write(&abs, content).map_err(|e| format!("write {}: {}", abs.to_string_lossy(), e))
+}
+
+/// Solver capability discovered in an on-disk plugin manifest.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SolverCapability {
+    /// Capability id, e.g. "solver.elasticity.linear".
+    pub capability:  String,
+    /// Plugin id from the manifest's `[plugin]` section.
+    pub plugin_id:   String,
+    /// Display name from the manifest's `[plugin].name`.
+    pub plugin_name: String,
+    /// Directory containing the souxmar-plugin.toml that declared it.
+    pub plugin_dir:  String,
+    /// `true` for plugins shipped in-tree under examples/plugins/.
+    pub in_tree:     bool,
+}
+
+/// List solver-capability ids discovered in souxmar-plugin.toml files
+/// under, in order of preference:
+///   1. `<project>/plugins/*/souxmar-plugin.toml`        (project-local)
+///   2. paths listed in `SOUXMAR_PLUGINS_PATH`            (env, ':'-separated)
+///   3. `<repo>/examples/plugins/*/souxmar-plugin.toml`   (in-tree, dev)
+///
+/// The repo root is the parent of `src/desktop/src-tauri/` walked up by
+/// CARGO_MANIFEST_DIR at compile time — present only in dev builds.
+/// In release builds the in-tree path is skipped silently.
+///
+/// Duplicates (same capability id from multiple manifests) are kept
+/// once, preferring the first occurrence in the search order above.
+#[tauri::command]
+pub fn list_solver_capabilities(project_path: String) -> Result<Vec<SolverCapability>, String> {
+    let mut out: Vec<SolverCapability> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    let project = PathBuf::from(project_path.trim());
+    if project.is_dir() {
+        scan_plugin_dir(&project.join("plugins"), false, &mut seen, &mut out);
+    }
+
+    if let Ok(env) = std::env::var("SOUXMAR_PLUGINS_PATH") {
+        for raw in env.split(':') {
+            let p = PathBuf::from(raw.trim());
+            if p.is_dir() {
+                scan_plugin_dir(&p, false, &mut seen, &mut out);
+            }
+        }
+    }
+
+    if let Some(in_tree) = in_tree_examples_plugins() {
+        scan_plugin_dir(&in_tree, true, &mut seen, &mut out);
+    }
+
+    Ok(out)
+}
+
+fn in_tree_examples_plugins() -> Option<PathBuf> {
+    // CARGO_MANIFEST_DIR is .../src/desktop/src-tauri; the repo root is
+    // four parents up (src-tauri → desktop → src → repo). Only present
+    // under cargo-built dev binaries.
+    let manifest = env!("CARGO_MANIFEST_DIR");
+    let repo = Path::new(manifest)
+        .parent()? // desktop
+        .parent()? // src
+        .parent()?; // repo root
+    let candidate = repo.join("examples/plugins");
+    if candidate.is_dir() { Some(candidate) } else { None }
+}
+
+fn scan_plugin_dir(
+    root:    &Path,
+    in_tree: bool,
+    seen:    &mut std::collections::HashSet<String>,
+    out:     &mut Vec<SolverCapability>,
+) {
+    let entries = match fs::read_dir(root) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let dir = entry.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        let manifest = dir.join("souxmar-plugin.toml");
+        if !manifest.is_file() {
+            continue;
+        }
+        let body = match fs::read_to_string(&manifest) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        let (plugin_id, plugin_name, provides) = parse_plugin_manifest(&body);
+        if provides.is_empty() {
+            continue;
+        }
+        for cap in provides {
+            if !cap.starts_with("solver.") {
+                continue;
+            }
+            if !seen.insert(cap.clone()) {
+                continue;
+            }
+            out.push(SolverCapability {
+                capability:  cap,
+                plugin_id:   plugin_id.clone(),
+                plugin_name: plugin_name.clone(),
+                plugin_dir:  dir.to_string_lossy().into_owned(),
+                in_tree,
+            });
+        }
+    }
+}
+
+/// Tiny ad-hoc TOML reader for the three fields we care about. Avoids
+/// pulling a TOML crate in just for plugin discovery; the souxmar
+/// plugin manifests are hand-written and follow a stable shape.
+///
+/// Returns (plugin_id, plugin_name, provides[]).
+fn parse_plugin_manifest(body: &str) -> (String, String, Vec<String>) {
+    let mut plugin_id = String::new();
+    let mut plugin_name = String::new();
+    let mut provides: Vec<String> = Vec::new();
+
+    let mut section = "";
+    let mut in_provides = false;
+    let mut provides_buf = String::new();
+
+    for raw in body.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            section = line.trim_matches(|c| c == '[' || c == ']');
+            in_provides = false;
+            continue;
+        }
+        if in_provides {
+            provides_buf.push_str(line);
+            if line.contains(']') {
+                in_provides = false;
+                for tok in provides_buf.trim_matches(|c| c == '[' || c == ']').split(',') {
+                    let t = tok.trim().trim_matches(|c| c == '"' || c == '\'');
+                    if !t.is_empty() {
+                        provides.push(t.to_string());
+                    }
+                }
+                provides_buf.clear();
+            }
+            continue;
+        }
+        if let Some((k, v)) = split_kv(line) {
+            let key = k.trim();
+            let val = v.trim();
+            match (section, key) {
+                ("plugin", "id")   => plugin_id   = strip_quotes(val).to_string(),
+                ("plugin", "name") => plugin_name = strip_quotes(val).to_string(),
+                ("plugin.capabilities", "provides") => {
+                    // Either inline `provides = ["a", "b"]` or
+                    // multi-line starting with `[`.
+                    if val.starts_with('[') && val.contains(']') {
+                        let inner = val.trim_matches(|c| c == '[' || c == ']');
+                        for tok in inner.split(',') {
+                            let t = tok.trim().trim_matches(|c| c == '"' || c == '\'');
+                            if !t.is_empty() {
+                                provides.push(t.to_string());
+                            }
+                        }
+                    } else if val.starts_with('[') {
+                        in_provides = true;
+                        provides_buf.push_str(val);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    (plugin_id, plugin_name, provides)
+}
+
+fn split_kv(line: &str) -> Option<(&str, &str)> {
+    let eq = line.find('=')?;
+    Some((&line[..eq], &line[eq + 1..]))
+}
+
+fn strip_quotes(s: &str) -> &str {
+    let s = s.trim();
+    s.trim_matches(|c: char| c == '"' || c == '\'')
+}
+
 /// Open a native folder-picker dialog and return the chosen directory.
 /// Returns `Ok(None)` if the user cancelled. The `start_dir` parameter is
 /// the directory the picker opens at; an empty string means "platform

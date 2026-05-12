@@ -33,7 +33,9 @@ export type CommandName =
   | "pick_file"
   | "read_geometry_bytes"
   | "apply_loads_to_pipeline"
-  | "simplify_mesh";
+  | "simplify_mesh"
+  | "write_text_file"
+  | "list_solver_capabilities";
 
 // Sprint 12 push 2 — BridgeFeatureSet mirror of the Rust struct.
 // Renaming or removing fields here without a matching change to
@@ -140,4 +142,15 @@ export interface LoadSpec {
   kind:    "force" | "fixed";
   /** Force vector in Newtons (any units the solver expects). Ignored when kind=fixed. */
   vector?: [number, number, number];
+}
+
+// Mirrors the Rust SolverCapability struct returned by
+// list_solver_capabilities. Discovered by scanning souxmar-plugin.toml
+// files; the "kind:" line in a pipeline stage references `capability`.
+export interface SolverCapability {
+  capability:  string;
+  plugin_id:   string;
+  plugin_name: string;
+  plugin_dir:  string;
+  in_tree:     boolean;
 }
