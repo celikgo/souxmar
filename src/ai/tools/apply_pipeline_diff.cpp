@@ -53,17 +53,6 @@ std::vector<pl::Value> stages_of(const pl::Value& base) {
   return out;
 }
 
-const std::string* stage_id_of(const pl::Value& stage) {
-  if (stage.kind() != pl::Value::Kind::Map)
-    return nullptr;
-  const auto* id = stage.find("id");
-  if (!id || id->kind() != pl::Value::Kind::String)
-    return nullptr;
-  // Returns a pointer to a string we *would* like to return, but
-  // as_string() is string_view. Caller compares as string_view.
-  return nullptr;
-}
-
 std::string_view stage_id_view(const pl::Value& stage) {
   const auto* id = stage.find("id");
   return (id && id->kind() == pl::Value::Kind::String) ? id->as_string() : std::string_view{};

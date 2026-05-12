@@ -170,7 +170,7 @@ souxmar_status_t souxmar_geometry_bounding_box(const souxmar_geometry_t* g, doub
   if (!g || !out_box)
     return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT, "NULL pointer");
   auto box = as_cpp(g)->bounding_box();
-  for (int i = 0; i < 6; ++i)
+  for (std::size_t i = 0; i < 6; ++i)
     out_box[i] = box[i];
   return souxmar_status_ok();
 }

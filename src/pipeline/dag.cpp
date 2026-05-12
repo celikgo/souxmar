@@ -3,6 +3,7 @@
 #include "souxmar/pipeline/dag.h"
 
 #include <fmt/core.h>
+#include <fmt/ranges.h>  // fmt::join lives here since fmt v9
 
 #include <algorithm>
 #include <unordered_map>

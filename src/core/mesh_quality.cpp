@@ -140,7 +140,7 @@ double tet_min_dihedral_rad(const Vec3& n0,
                             const Vec3& n2,
                             const Vec3& n3) noexcept {
   // (edge_a, edge_b, opp_c, opp_d) for each of the 6 edges of a tet.
-  const std::array<std::array<int, 4>, 6> edges_with_opposites = {{
+  const std::array<std::array<std::size_t, 4>, 6> edges_with_opposites = {{
       {0, 1, 2, 3},
       {0, 2, 1, 3},
       {0, 3, 1, 2},
