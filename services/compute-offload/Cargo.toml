@@ -1,0 +1,20 @@
+[package]
+name        = "compute-offload"
+version     = "0.1.0"
+description = "souxmar Pro-tier hosted-compute job queue (MVP scaffold)"
+edition     = "2021"
+license     = "Apache-2.0"
+
+# Sprint 17 push 3 scaffold. ADR-0027 documents the architecture.
+
+[[bin]]
+name = "compute-offload"
+path = "src/main.rs"
+
+[dependencies]
+axum               = "0.7"
+tokio              = { version = "1", features = ["full"] }
+serde              = { version = "1", features = ["derive"] }
+serde_json         = "1"
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
