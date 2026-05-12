@@ -13,8 +13,8 @@
 # ADR-0013 § "Signing key compromise" lists the risk model that
 # justifies pinning to one curve.
 
-find_package(tomlplusplus     CONFIG REQUIRED)
-find_package(unofficial-sodium CONFIG REQUIRED)
+find_package(tomlplusplus CONFIG REQUIRED)
+include(SouxmarFindSodium)
 
 # Sprint 10 push 8 — embedded trust store. The release pipeline
 # injects the official release ed25519 public key via
@@ -130,10 +130,10 @@ target_link_libraries(souxmar_update
     # because the verifier.cpp forwarder still includes <sodium.h>'s
     # crypto_sign_VERIFYBYTES etc. via souxmar/crypto/primitives.h
     # transitive; if a future cleanup drops that transitivity, the
-    # unofficial-sodium link can be dropped here.
+    # souxmar::sodium link can be dropped here.
     souxmar::crypto
     tomlplusplus::tomlplusplus
-    unofficial-sodium::sodium
+    souxmar::sodium
 )
 
 install(TARGETS souxmar_update
