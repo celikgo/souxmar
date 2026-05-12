@@ -37,6 +37,20 @@ scripts/release/dev-signing-key.local.txt
 
 # Tauri
 src-tauri/target/
+# Tauri 2 autogenerates platform config + ACL schema files under
+# src-tauri/gen/ on first build — derived from tauri.conf.json so
+# they're not part of the source tree.
+src/desktop/src-tauri/gen/
+
+# Desktop (vite + tauri) build outputs and lockfiles. The repo doesn't
+# track Cargo.lock or package-lock.json today — leave dependency
+# resolution to the developer's local toolchain.
+src/desktop/dist/
+src/desktop/package-lock.json
+src/desktop/src-tauri/Cargo.lock
+
+# Claude Code IDE local settings (per-user allowlist of tool calls).
+.claude/settings.local.json
 
 # Coverage
 coverage/
