@@ -68,16 +68,37 @@ above.
 
 ## Cross-platform variance
 
-Today the workflow runs Chromium-on-Linux-CI only. macOS / Windows
-font rendering differs. Sprint 14 push 1 introduces:
+Sprint 14 push 1 wired the per-platform baseline plumbing:
 
-- Per-platform snapshot directories
-  (`*.spec.ts-snapshots-linux/`, `-darwin/`, `-windows/`).
-- A matrix run in the CI workflow.
-- Per-platform re-bless flow.
+- Per-platform snapshot directories via Playwright's
+  `snapshotPathTemplate`:
+  `*.spec.ts-snapshots-linux/`, `-darwin/`, `-win32/`.
+- New matrix workflow `.github/workflows/visual-regression.yml`
+  runs the suite on ubuntu-22.04 + macos-14 + windows-2022 on
+  every PR that touches `src/desktop/**` or `tests/visual/**`.
+- Each platform produces its own `visual-regression-<os>`
+  artefact for review.
 
-Until then: do not run the visual suite locally and commit a
-baseline. Trust the CI artefact only.
+**Initial-baselines flow (Sprint 14+ valid):**
+
+1. Trigger the workflow (auto on a relevant PR, or manually via
+   `workflow_dispatch`).
+2. Three artefacts produce: one per OS. Download all three.
+3. For each artefact, extract the `test-results/<spec>/<test>-actual.png`
+   renders.
+4. Confirm by eye that every render is the *intended* visual.
+5. Move each render to its matching per-platform snapshot dir:
+   - Linux artefact → `*-snapshots-linux/`
+   - macOS artefact → `*-snapshots-darwin/`
+   - Windows artefact → `*-snapshots-win32/`
+6. Commit all three platforms' baselines in a single PR titled
+   `tests(visual): initial CI baselines for Sprint 14`.
+7. Sprint 15 push 1 flips the workflow's
+   `continue-on-error: true` to `false` — the gate goes live
+   once the corpus is seeded.
+
+Until step 6 lands, do not run the visual suite locally and
+commit a baseline. Trust the CI artefact only.
 
 ## Related
 

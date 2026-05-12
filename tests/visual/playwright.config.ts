@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // Sprint 11 push 1 — Playwright config for the desktop visual-regression
-// suite. The suite runs against `vite preview` of the React frontend
+// suite. Sprint 14 push 1 — per-platform snapshot directories.
+//
+// The suite runs against `vite preview` of the React frontend
 // (not the full Tauri binary) because:
 //
 //   1. The wizard's UX is browser-resolvable — the Tauri commands are
@@ -13,9 +15,11 @@
 //      CI runner without needing a Linux-on-Linux / macOS-on-macOS
 //      matrix.
 //
-// The baselines live alongside the spec files (Playwright's default).
+// The baselines live alongside the spec files under per-platform
+// snapshot directories (`*.spec.ts-snapshots-{linux,darwin,win32}/`)
+// so font-rendering variance between OSes doesn't false-positive.
 // Update them with `npm run update-baselines` when a deliberate token
-// change lands.
+// change lands; see `BASELINES.md` for the policy.
 
 import { defineConfig, devices } from "@playwright/test";
 
@@ -48,11 +52,19 @@ export default defineConfig({
         reuseExistingServer: !process.env.CI,
       },
 
+  // Sprint 14 push 1 — per-platform snapshot template. Playwright
+  // substitutes `{platform}` with `linux`, `darwin`, or `win32`.
+  // Each OS keeps its own baseline directory; cross-OS font /
+  // antialiasing variance does not false-positive.
+  snapshotPathTemplate:
+    "{testDir}/{testFilePath}-snapshots-{platform}/{arg}{ext}",
+
   expect: {
     // Loose pixel comparison — anti-aliasing differences across
-    // platforms eat a few thousand pixels easily. Tightening this
-    // is a Sprint-12+ concern; for the initial baselines, "the
-    // shape is right" is the bar.
+    // platforms eat a few thousand pixels easily. The per-platform
+    // snapshot template + this budget together give the suite
+    // enough slack to survive runner-to-runner variance without
+    // hiding real regressions.
     toHaveScreenshot: {
       maxDiffPixels: 1500,
     },

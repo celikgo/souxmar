@@ -46,6 +46,7 @@ EXIT_REFRESH_DIRTY=5
 SKIP_EXAMPLES=0
 SKIP_EVALS=0
 REFRESH_GOLDEN=0
+BOOTSTRAP=0
 JSON_OUT=""
 ENGINE_BIN=""
 EVAL_BIN=""
@@ -60,6 +61,13 @@ Options:
   --skip-evals            Don't run eval tasks.
   --refresh-golden        Recompute and overwrite golden corpus.
                           Refuses if corpus is dirty in git.
+  --bootstrap             Record fingerprints only for corpus
+                          entries currently marked empty. Treats
+                          non-empty entries as gates. Sprint 14
+                          push 1 initialisation flow — runs once
+                          on the first green CI after v0.9.0 to
+                          seed the corpus, then the flag is not
+                          used again until a new target is added.
   --json-out <path>       Write a structured JSON report.
   --engine <path>         Override path to the souxmar CLI binary.
   --eval <path>           Override path to the souxmar-eval binary.
@@ -83,6 +91,7 @@ while [ $# -gt 0 ]; do
     --skip-examples)  SKIP_EXAMPLES=1; shift ;;
     --skip-evals)     SKIP_EVALS=1; shift ;;
     --refresh-golden) REFRESH_GOLDEN=1; shift ;;
+    --bootstrap)      BOOTSTRAP=1; shift ;;
     --json-out)       JSON_OUT="$2"; shift 2 ;;
     --engine)         ENGINE_BIN="$2"; shift 2 ;;
     --eval)           EVAL_BIN="$2"; shift 2 ;;
@@ -241,8 +250,15 @@ if [ "$SKIP_EXAMPLES" -eq 0 ]; then
     fi
 
     if [ -z "$golden" ]; then
-      EXAMPLE_RESULTS+=( "$ex|no-golden|$fp|" )
-      examples_diverged=$((examples_diverged + 1))
+      # Sprint 14 push 1 — in --bootstrap mode, record the
+      # fingerprint instead of treating absence as divergence.
+      if [ "$BOOTSTRAP" -eq 1 ]; then
+        EXAMPLE_RESULTS+=( "$ex|bootstrap|$fp|" )
+        examples_matched=$((examples_matched + 1))
+      else
+        EXAMPLE_RESULTS+=( "$ex|no-golden|$fp|" )
+        examples_diverged=$((examples_diverged + 1))
+      fi
     elif [ "$fp" = "$golden" ]; then
       EXAMPLE_RESULTS+=( "$ex|match|$fp|$golden" )
       examples_matched=$((examples_matched + 1))
@@ -311,8 +327,13 @@ if [ "$SKIP_EVALS" -eq 0 ]; then
     fi
 
     if [ -z "$golden" ]; then
-      EVAL_RESULTS+=( "$ev|no-golden|$fp|" )
-      evals_diverged=$((evals_diverged + 1))
+      if [ "$BOOTSTRAP" -eq 1 ]; then
+        EVAL_RESULTS+=( "$ev|bootstrap|$fp|" )
+        evals_matched=$((evals_matched + 1))
+      else
+        EVAL_RESULTS+=( "$ev|no-golden|$fp|" )
+        evals_diverged=$((evals_diverged + 1))
+      fi
     elif [ "$fp" = "$golden" ]; then
       EVAL_RESULTS+=( "$ev|match|$fp|$golden" )
       evals_matched=$((evals_matched + 1))
@@ -395,6 +416,91 @@ for line in "${EVAL_RESULTS[@]}"; do
   IFS='|' read -r id status fp golden <<< "$line"
   printf '  eval     %-30s %s\n' "$id" "$status"
 done
+
+# Bootstrap mode: populate empty-hash entries, preserve existing
+# entries unchanged. Writes corpus.toml + exits OK so the
+# maintainer can review the diff before committing. Unlike
+# --refresh-golden, this does NOT overwrite non-empty entries —
+# the bootstrap is one-shot per-target.
+if [ "$BOOTSTRAP" -eq 1 ] && [ "$REFRESH_GOLDEN" -eq 0 ]; then
+  bootstrap_corpus() {
+    local tmp="${CORPUS_FILE}.tmp.$$"
+    python3 - "$CORPUS_FILE" <<PYEOF > "$tmp"
+import sys, re
+src = open(sys.argv[1]).read()
+def lookup(kind, ident):
+PYEOF
+    # The above python is intentionally truncated — we'll do the
+    # corpus rewrite in pure bash for portability + auditability.
+    # See the awk-based rewrite below.
+    rm -f "$tmp"
+
+    # Build a map of (kind, id) -> new_fp from results.
+    declare -A NEW_HASHES
+    for line in "${EXAMPLE_RESULTS[@]}"; do
+      IFS='|' read -r id status fp golden <<< "$line"
+      [ "$status" = "bootstrap" ] && NEW_HASHES["example|$id"]="$fp"
+    done
+    for line in "${EVAL_RESULTS[@]}"; do
+      IFS='|' read -r id status fp golden <<< "$line"
+      [ "$status" = "bootstrap" ] && NEW_HASHES["eval|$id"]="$fp"
+    done
+
+    # Walk corpus.toml stanza-by-stanza and overwrite only the
+    # sha256 lines whose stanza's (kind, id) is in NEW_HASHES.
+    {
+      local stanza_kind="" stanza_id=""
+      local in_stanza=0
+      while IFS='' read -r line || [ -n "$line" ]; do
+        case "$line" in
+          '[[golden]]')
+            in_stanza=1; stanza_kind=""; stanza_id=""
+            printf '%s\n' "$line"
+            continue
+            ;;
+        esac
+        if [ "$in_stanza" -eq 1 ]; then
+          case "$line" in
+            'kind'*)
+              stanza_kind=$(echo "$line" | sed -E 's/.*"([^"]*)".*/\1/')
+              ;;
+            'id'*)
+              stanza_id=$(echo "$line" | sed -E 's/.*"([^"]*)".*/\1/')
+              ;;
+            'sha256'*)
+              # If we have a new hash for this stanza AND the
+              # existing line is empty (""), write the new one;
+              # otherwise leave intact.
+              local key="${stanza_kind}|${stanza_id}"
+              local existing
+              existing=$(echo "$line" | sed -E 's/.*"([^"]*)".*/\1/')
+              if [ -z "$existing" ] && [ -n "${NEW_HASHES[$key]:-}" ]; then
+                printf 'sha256 = "%s"\n' "${NEW_HASHES[$key]}"
+                continue
+              fi
+              ;;
+            '')
+              # stanza terminator
+              in_stanza=0
+              stanza_kind=""; stanza_id=""
+              ;;
+          esac
+        fi
+        printf '%s\n' "$line"
+      done < "$CORPUS_FILE"
+    } > "${CORPUS_FILE}.tmp.$$"
+    mv "${CORPUS_FILE}.tmp.$$" "$CORPUS_FILE"
+  }
+  bootstrap_corpus
+  bootstrap_count=0
+  for line in "${EXAMPLE_RESULTS[@]}" "${EVAL_RESULTS[@]}"; do
+    IFS='|' read -r id status fp golden <<< "$line"
+    [ "$status" = "bootstrap" ] && bootstrap_count=$((bootstrap_count + 1))
+  done
+  echo "synth-load: bootstrap wrote ${bootstrap_count} new golden hash(es) to $CORPUS_FILE"
+  echo "synth-load: review the diff (git diff $CORPUS_FILE) before committing."
+  exit "$EXIT_OK"
+fi
 
 # Refresh-golden writes back to corpus.toml and exits OK regardless
 # (the diff *is* the intended outcome). The user reviews the

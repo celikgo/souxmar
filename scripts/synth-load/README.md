@@ -40,7 +40,34 @@ scripts/synth-load/run.sh --skip-evals
 # Refresh the golden corpus (use with care — only after intentional
 # behaviour change is reviewed):
 scripts/synth-load/run.sh --refresh-golden
+
+# Bootstrap: record hashes only for corpus entries currently empty,
+# leave non-empty entries alone. Used once per added target to seed
+# the corpus. Sprint 14 push 1 added this flag.
+scripts/synth-load/run.sh --bootstrap
 ```
+
+## Initialising the corpus (Sprint 14+ first run)
+
+The corpus that Sprint 13 push 1 shipped has placeholder hashes.
+To seed it on the first green CI after v0.9.1:
+
+1. Trigger the eval-nightly workflow (push to master / open PR /
+   manual `workflow_dispatch`).
+2. Wait for green; download the `synth-load-report` artefact.
+3. Locally:
+
+   ```sh
+   scripts/synth-load/run.sh --bootstrap
+   git diff scripts/synth-load/golden/corpus.toml
+   ```
+
+   Review the diff — every empty `sha256 = ""` becomes a real
+   hash. Commit if and only if the rendered output for every
+   target was the intended behaviour.
+
+4. Sprint 14 push 2 flips the eval-nightly workflow's
+   `continue-on-error: true` to `false` — gate goes live.
 
 ## Exit codes
 
