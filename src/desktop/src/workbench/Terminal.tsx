@@ -15,24 +15,39 @@
 import { useEffect, useRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Inspector } from "./Inspector";
-import type { BridgeFeatureSet } from "../tauri/bridge";
+import { LoadsPanel } from "./LoadsPanel";
+import type { BridgeFeatureSet, LoadSpec } from "../tauri/bridge";
 import { useLayoutStore, type BottomTab } from "../store/layout";
 import { IconClose } from "./icons";
 
 interface Props {
-  projectId: string;
-  features: BridgeFeatureSet;
-  onOpenProject: (path: string) => void;
-  log: string[];
+  projectId:      string;
+  features:       BridgeFeatureSet;
+  onOpenProject:  (path: string) => void;
+  log:            string[];
+  hasModel:       boolean;
+  loads:          LoadSpec[];
+  setLoads:       (next: LoadSpec[]) => void;
+  onLog:          (line: string) => void;
 }
 
 const TABS: { id: BottomTab; label: string }[] = [
   { id: "terminal", label: "Terminal" },
+  { id: "loads", label: "Loads" },
   { id: "inspector", label: "Inspector" },
   { id: "problems", label: "Problems" },
 ];
 
-export function Terminal({ projectId, features, onOpenProject, log }: Props) {
+export function Terminal({
+  projectId,
+  features,
+  onOpenProject,
+  log,
+  hasModel,
+  loads,
+  setLoads,
+  onLog,
+}: Props) {
   const { bottomTab, setBottomTab, toggleBottom } = useLayoutStore();
 
   return (
@@ -70,6 +85,15 @@ export function Terminal({ projectId, features, onOpenProject, log }: Props) {
 
       <div style={bodyStyle}>
         {bottomTab === "terminal" && <TerminalLog log={log} />}
+        {bottomTab === "loads" && (
+          <LoadsPanel
+            projectId={projectId}
+            hasModel={hasModel}
+            loads={loads}
+            setLoads={setLoads}
+            onLog={onLog}
+          />
+        )}
         {bottomTab === "inspector" && (
           <div style={inspectorWrapStyle}>
             <Inspector

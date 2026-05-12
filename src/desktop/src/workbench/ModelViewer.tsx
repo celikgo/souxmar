@@ -16,14 +16,18 @@ import * as THREE from "three";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { SimplifyModifier } from "three/addons/modifiers/SimplifyModifier.js";
 import { invokeCommand } from "../tauri/bridge";
 
 interface Props {
-  projectPath: string;
+  projectPath:    string;
   /** Path of the geometry file relative to the project root (e.g. "geometry/cube.stl"). */
-  relPath:     string;
+  relPath:        string;
   /** Optional overlay nodes — used by the BC panel to draw force arrows on top of the scene. */
-  overlays?:   Overlay[];
+  overlays?:      Overlay[];
+  /** Called when the user simplifies the mesh and saves it; the workbench
+   *  swaps the active model to the new path. */
+  onSimplified?:  (newRelPath: string) => void;
 }
 
 export type Overlay =
@@ -32,7 +36,7 @@ export type Overlay =
 
 export type BboxFace = "+x" | "-x" | "+y" | "-y" | "+z" | "-z";
 
-export function ModelViewer({ projectPath, relPath, overlays }: Props) {
+export function ModelViewer({ projectPath, relPath, overlays, onSimplified }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<{
     scene: THREE.Scene;
@@ -45,6 +49,9 @@ export function ModelViewer({ projectPath, relPath, overlays }: Props) {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<{ tris: number; verts: number } | null>(null);
+  const [simplifyOpen, setSimplifyOpen] = useState(false);
+  const [simplifyRatio, setSimplifyRatio] = useState(0.5);
+  const [simplifyBusy, setSimplifyBusy] = useState(false);
 
   // One-time scene setup. The renderer/camera/controls live across model
   // changes; only the mesh inside `objectGroup` swaps when relPath changes.
@@ -278,6 +285,82 @@ export function ModelViewer({ projectPath, relPath, overlays }: Props) {
     }
   }, [overlays]);
 
+  async function onSimplify() {
+    const ref = sceneRef.current;
+    if (!ref) return;
+    const model = ref.scene.getObjectByName("model");
+    if (!model) return;
+
+    setSimplifyBusy(true);
+    setError(null);
+    try {
+      // Walk the model, merge into a single BufferGeometry of triangles,
+      // then run SimplifyModifier with a target removal count derived
+      // from the slider ratio (1.0 = keep all, 0.0 = collapse to nothing).
+      const mod = new SimplifyModifier();
+      let totalRemoved = 0;
+      let newTris = 0;
+      let newVerts = 0;
+      const objLines: string[] = ["# Simplified by souxmar workbench (three.js SimplifyModifier)"];
+      let vOffset = 1; // OBJ indices are 1-based
+
+      model.traverse(c => {
+        const m = c as THREE.Mesh;
+        if (!m.isMesh || !m.geometry) return;
+        // SimplifyModifier needs a non-indexed BufferGeometry.
+        const src = m.geometry.toNonIndexed();
+        const startVerts = src.attributes.position.count;
+        const targetRemove = Math.floor(startVerts * (1 - simplifyRatio));
+        const simplified = targetRemove > 0 ? mod.modify(src, targetRemove) : src;
+        totalRemoved += startVerts - simplified.attributes.position.count;
+
+        // Replace in scene.
+        m.geometry.dispose();
+        m.geometry = simplified;
+
+        // Append to OBJ string. Position attribute is in *model-local* coords;
+        // we apply the mesh's world transform so the saved file matches
+        // visual world bounds.
+        const pos = simplified.attributes.position;
+        m.updateWorldMatrix(true, false);
+        const wm = m.matrixWorld;
+        const tmp = new THREE.Vector3();
+        for (let i = 0; i < pos.count; i++) {
+          tmp.fromBufferAttribute(pos, i).applyMatrix4(wm);
+          objLines.push(`v ${tmp.x} ${tmp.y} ${tmp.z}`);
+        }
+        for (let i = 0; i < pos.count; i += 3) {
+          objLines.push(`f ${vOffset + i} ${vOffset + i + 1} ${vOffset + i + 2}`);
+        }
+        vOffset += pos.count;
+
+        newVerts += pos.count;
+        newTris  += pos.count / 3;
+      });
+
+      setStats({ tris: Math.round(newTris), verts: newVerts });
+
+      // Save to disk: `<original-stem>-simplified.obj`.
+      const base = relPath.replace(/\.[^./]+$/, "");
+      const dstRel = `${base}-simplified.obj`;
+      const dst = await invokeCommand<string>("simplify_mesh", {
+        projectPath,
+        relPath:  dstRel,
+        content:  objLines.join("\n") + "\n",
+      });
+      setSimplifyOpen(false);
+      if (onSimplified) onSimplified(dstRel);
+      // Log via overlay HUD area would be nice, but we don't have one;
+      // the parent gets `onSimplified` and can update the terminal.
+      void dst;
+      void totalRemoved;
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSimplifyBusy(false);
+    }
+  }
+
   return (
     <div style={wrapStyle}>
       <div ref={mountRef} style={canvasStyle} />
@@ -289,6 +372,40 @@ export function ModelViewer({ projectPath, relPath, overlays }: Props) {
           </span>
         )}
         {error && <span style={errorStyle}>{error}</span>}
+      </div>
+      <div style={toolbarStyle}>
+        <button
+          type="button"
+          onClick={() => setSimplifyOpen(v => !v)}
+          style={toolButtonStyle}
+        >
+          Simplify…
+        </button>
+        {simplifyOpen && (
+          <div style={popoverStyle}>
+            <label style={popoverLabelStyle}>Keep {Math.round(simplifyRatio * 100)}% of vertices</label>
+            <input
+              type="range"
+              min={0.05}
+              max={0.95}
+              step={0.05}
+              value={simplifyRatio}
+              onChange={e => setSimplifyRatio(Number(e.target.value))}
+              style={{ width: "100%" }}
+            />
+            <button
+              type="button"
+              onClick={onSimplify}
+              disabled={simplifyBusy}
+              style={popoverApplyStyle}
+            >
+              {simplifyBusy ? "Simplifying…" : "Apply + save"}
+            </button>
+            <span style={popoverHintStyle}>
+              Writes <code>&lt;name&gt;-simplified.obj</code> to the project's geometry/ folder.
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -344,4 +461,58 @@ const mutedStyle: CSSProperties = {
 
 const errorStyle: CSSProperties = {
   color: "var(--error, #f85149)",
+};
+
+const toolbarStyle: CSSProperties = {
+  position: "absolute",
+  top: 8,
+  right: 8,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "flex-end",
+  gap: 6,
+};
+
+const toolButtonStyle: CSSProperties = {
+  padding: "4px 10px",
+  background: "rgba(15, 20, 25, 0.7)",
+  color: "var(--fg-primary)",
+  border: "1px solid var(--border-subtle)",
+  borderRadius: "var(--radius-sm)",
+  fontSize: 11,
+  cursor: "pointer",
+};
+
+const popoverStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  padding: 10,
+  width: 220,
+  background: "var(--bg-elevated)",
+  border: "1px solid var(--border-subtle)",
+  borderRadius: "var(--radius-md)",
+  boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+  fontSize: 11,
+};
+
+const popoverLabelStyle: CSSProperties = {
+  fontSize: 11,
+  color: "var(--fg-secondary)",
+};
+
+const popoverApplyStyle: CSSProperties = {
+  padding: "4px 8px",
+  background: "var(--accent-default)",
+  color: "white",
+  border: "none",
+  borderRadius: "var(--radius-sm)",
+  fontSize: 11,
+  fontWeight: 500,
+  cursor: "pointer",
+};
+
+const popoverHintStyle: CSSProperties = {
+  fontSize: 10,
+  color: "var(--fg-tertiary)",
 };

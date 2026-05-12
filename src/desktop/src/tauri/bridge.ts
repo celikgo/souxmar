@@ -31,7 +31,9 @@ export type CommandName =
   | "list_project_files"
   | "pick_directory"
   | "pick_file"
-  | "read_geometry_bytes";
+  | "read_geometry_bytes"
+  | "apply_loads_to_pipeline"
+  | "simplify_mesh";
 
 // Sprint 12 push 2 — BridgeFeatureSet mirror of the Rust struct.
 // Renaming or removing fields here without a matching change to
@@ -125,4 +127,17 @@ export interface ImportResult {
   dst_path:        string;
   rel_path:        string;
   pipeline_change: string | null;
+}
+
+// Boundary-condition / load spec passed to apply_loads_to_pipeline.
+// `face` is one of the six named bounding-box faces of the model
+// (+x/-x/+y/-y/+z/-z); the workbench picks faces via a dropdown so the
+// solver gets a stable name, not a raycast-derived element id.
+export type BboxFace = "+x" | "-x" | "+y" | "-y" | "+z" | "-z";
+
+export interface LoadSpec {
+  face:    BboxFace;
+  kind:    "force" | "fixed";
+  /** Force vector in Newtons (any units the solver expects). Ignored when kind=fixed. */
+  vector?: [number, number, number];
 }

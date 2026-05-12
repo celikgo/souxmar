@@ -30,6 +30,8 @@ fn main() {
             commands::pick_directory,
             commands::pick_file,
             commands::read_geometry_bytes,
+            commands::apply_loads_to_pipeline,
+            commands::simplify_mesh,
         ])
         .run(tauri::generate_context!())
         .expect("error launching souxmar-desktop");
