@@ -72,9 +72,9 @@ enum class Confirmation : std::uint8_t {
 // from these rather than retry blindly, so we always populate the
 // human-readable `message` plus an optional `suggestion`.
 struct ToolError {
-  std::string code;        // e.g. "INVALID_ARGUMENT" / "NOT_AVAILABLE" / "PLUGIN_NOT_FOUND"
-  std::string message;     // one-line human-readable explanation
-  std::string suggestion;  // optional remediation hint
+  std::string code;            // e.g. "INVALID_ARGUMENT" / "NOT_AVAILABLE" / "PLUGIN_NOT_FOUND"
+  std::string message;         // one-line human-readable explanation
+  std::string suggestion = "";  // optional remediation hint
 };
 
 // What a tool returns to the dispatcher (which forwards it to the agent

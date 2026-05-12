@@ -159,6 +159,12 @@ class Registry {
   // Drop every capability owned by `plugin_id`. Used at plugin unload.
   void remove_plugin(std::string_view plugin_id);
 
+  // Plugin id currently being registered — set by the loader before
+  // calling souxmar_plugin_register_v1, cleared afterwards. Read by the
+  // extern "C" trampolines so they can credit the active plugin without
+  // a friend declaration. Empty when no registration is in progress.
+  [[nodiscard]] std::string_view current_plugin_id() const noexcept;
+
   // -------- C ABI bridge --------
   //
   // Called by the extern "C" wrappers in registry.cpp. Not part of the

@@ -420,8 +420,11 @@ std::vector<ManifestValidationIssue> validate_manifest(const Manifest& m) {
   std::unordered_set<std::uint16_t> seen_pairs;
   for (std::size_t i = 0; i < m.artifacts.size(); ++i) {
     const auto& a = m.artifacts[i];
-    const std::uint16_t pair =
-        (static_cast<std::uint16_t>(a.os) << 8) | static_cast<std::uint16_t>(a.arch);
+    // (os << 8) | arch integer-promotes through int; cast back to
+    // uint16_t to satisfy -Wconversion. Both enums are uint8_t-backed
+    // (manifest.h), so the packed value always fits in 16 bits.
+    const std::uint16_t pair = static_cast<std::uint16_t>((static_cast<std::uint16_t>(a.os) << 8)
+                                                          | static_cast<std::uint16_t>(a.arch));
     if (!seen_pairs.insert(pair).second) {
       out.push_back({ManifestIssueSeverity::Error,
                      artifact_field(i, "os+arch"),

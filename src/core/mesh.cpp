@@ -75,7 +75,7 @@ NodeIndex Mesh::add_node(std::array<double, 3> position) {
 }
 
 CellIndex Mesh::add_cell(ElementType type, std::span<const NodeIndex> node_indices, EntityTag tag) {
-  const auto expected = num_nodes(type);
+  const auto expected = ::souxmar::core::num_nodes(type);
   if (node_indices.size() != expected) {
     throw std::invalid_argument("Mesh::add_cell: node count does not match element type");
   }

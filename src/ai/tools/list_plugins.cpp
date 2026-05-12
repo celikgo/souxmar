@@ -36,6 +36,8 @@ std::string_view kind_token(plugin::CapabilityKind k) noexcept {
       return "writer";
     case plugin::CapabilityKind::Postproc:
       return "postproc";
+    case plugin::CapabilityKind::Reader:
+      return "reader";
   }
   return "unknown";
 }

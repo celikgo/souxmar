@@ -76,7 +76,7 @@ souxmar_status_t souxmar_surface_stream_bounds(const souxmar_surface_stream_t* s
   }
   const auto bmin = as_cpp(s)->bounds_min();
   const auto bmax = as_cpp(s)->bounds_max();
-  for (int i = 0; i < 3; ++i) {
+  for (std::size_t i = 0; i < 3; ++i) {
     out_min[i] = bmin[i];
     out_max[i] = bmax[i];
   }

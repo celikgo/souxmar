@@ -13,8 +13,31 @@ namespace souxmar::plugin {
 
 Registry::Registry() = default;
 Registry::~Registry() = default;
-Registry::Registry(Registry&&) noexcept = default;
-Registry& Registry::operator=(Registry&&) noexcept = default;
+
+// `mu_` is a std::shared_mutex which is non-movable, so the compiler
+// would synthesise = delete for the defaulted moves (and newer clang
+// errors hard on `= default` for an implicitly-deleted function). The
+// movable state is the entries map + the current-plugin scratch fields;
+// the mutex is left default-constructed in the moved-to instance. The
+// caller is responsible for serialising any concurrent use across the
+// move — Registry is a one-owner type in practice.
+Registry::Registry(Registry&& other) noexcept
+    : entries_(std::move(other.entries_)),
+      current_plugin_id_(std::move(other.current_plugin_id_)),
+      current_plugin_threading_(other.current_plugin_threading_) {}
+
+Registry& Registry::operator=(Registry&& other) noexcept {
+  if (this != &other) {
+    entries_                  = std::move(other.entries_);
+    current_plugin_id_        = std::move(other.current_plugin_id_);
+    current_plugin_threading_ = other.current_plugin_threading_;
+  }
+  return *this;
+}
+
+std::string_view Registry::current_plugin_id() const noexcept {
+  return current_plugin_id_;
+}
 
 std::variant<std::monostate, RegistryError> Registry::add_mesher(
     std::string capability_id,
@@ -389,7 +412,7 @@ souxmar_status_t souxmar_registry_add_mesher(souxmar_registry_t* registry,
                                 "souxmar_registry_add_mesher: registry is NULL");
   }
   auto* reg = reinterpret_cast<souxmar::plugin::Registry*>(registry);
-  return reg->add_mesher_c(reg->current_plugin_id_, capability_id, vtable, user_data);
+  return reg->add_mesher_c(reg->current_plugin_id(), capability_id, vtable, user_data);
 }
 
 souxmar_status_t souxmar_registry_add_solver(souxmar_registry_t* registry,
@@ -401,7 +424,7 @@ souxmar_status_t souxmar_registry_add_solver(souxmar_registry_t* registry,
                                 "souxmar_registry_add_solver: registry is NULL");
   }
   auto* reg = reinterpret_cast<souxmar::plugin::Registry*>(registry);
-  return reg->add_solver_c(reg->current_plugin_id_, capability_id, vtable, user_data);
+  return reg->add_solver_c(reg->current_plugin_id(), capability_id, vtable, user_data);
 }
 
 souxmar_status_t souxmar_registry_add_writer(souxmar_registry_t* registry,
@@ -413,7 +436,7 @@ souxmar_status_t souxmar_registry_add_writer(souxmar_registry_t* registry,
                                 "souxmar_registry_add_writer: registry is NULL");
   }
   auto* reg = reinterpret_cast<souxmar::plugin::Registry*>(registry);
-  return reg->add_writer_c(reg->current_plugin_id_, capability_id, vtable, user_data);
+  return reg->add_writer_c(reg->current_plugin_id(), capability_id, vtable, user_data);
 }
 
 souxmar_status_t souxmar_registry_add_postproc(souxmar_registry_t* registry,
@@ -425,7 +448,7 @@ souxmar_status_t souxmar_registry_add_postproc(souxmar_registry_t* registry,
                                 "souxmar_registry_add_postproc: registry is NULL");
   }
   auto* reg = reinterpret_cast<souxmar::plugin::Registry*>(registry);
-  return reg->add_postproc_c(reg->current_plugin_id_, capability_id, vtable, user_data);
+  return reg->add_postproc_c(reg->current_plugin_id(), capability_id, vtable, user_data);
 }
 
 souxmar_status_t souxmar_registry_add_reader(souxmar_registry_t* registry,
@@ -437,7 +460,7 @@ souxmar_status_t souxmar_registry_add_reader(souxmar_registry_t* registry,
                                 "souxmar_registry_add_reader: registry is NULL");
   }
   auto* reg = reinterpret_cast<souxmar::plugin::Registry*>(registry);
-  return reg->add_reader_c(reg->current_plugin_id_, capability_id, vtable, user_data);
+  return reg->add_reader_c(reg->current_plugin_id(), capability_id, vtable, user_data);
 }
 
 }  // extern "C"

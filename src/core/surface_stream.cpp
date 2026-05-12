@@ -137,7 +137,7 @@ class SurfaceStream::Impl {
       positions[3 * i + 0] = static_cast<float>(p[0]);
       positions[3 * i + 1] = static_cast<float>(p[1]);
       positions[3 * i + 2] = static_cast<float>(p[2]);
-      for (int d = 0; d < 3; ++d) {
+      for (std::size_t d = 0; d < 3; ++d) {
         if (p[d] < bounds_min[d])
           bounds_min[d] = p[d];
         if (p[d] > bounds_max[d])

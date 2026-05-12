@@ -4,6 +4,9 @@
 
 #include "souxmar/plugin/guard.h"
 
+#include "souxmar-c/field.h"     // souxmar_field_free
+#include "souxmar-c/geometry.h"  // souxmar_geometry_free
+#include "souxmar-c/mesh.h"      // souxmar_mesh_free
 #include "souxmar-c/mesher.h"
 #include "souxmar-c/postproc.h"
 #include "souxmar-c/reader.h"
@@ -463,7 +466,7 @@ std::shared_ptr<void> deserialize_stage_output(std::span<const std::uint8_t> blo
     return nullptr;
 
   std::uint64_t len = 0;
-  for (int i = 0; i < 8; ++i) {
+  for (std::size_t i = 0; i < 8; ++i) {
     len |= static_cast<std::uint64_t>(blob[1 + i]) << (8 * i);
   }
   if (blob.size() != 9 + len)
