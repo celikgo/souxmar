@@ -39,8 +39,10 @@ import { useAppStore } from "../store/app";
 import { useLayoutStore } from "../store/layout";
 import { invokeCommand, type FileEntry, type LoadSpec } from "../tauri/bridge";
 import type { Overlay } from "./ModelViewer";
+import { viewableExtensions } from "./geometryLoaders";
 
-const VIEWABLE_EXTS = [".obj", ".stl"];
+// Sourced from the loaders module so this stays a single source of truth.
+const VIEWABLE_EXTS = viewableExtensions().map(ext => "." + ext);
 
 type DialogKind = "new" | "open" | "import" | null;
 
