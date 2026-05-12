@@ -8,7 +8,7 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.9.2 cut below.)
+- (None this release — `[Unreleased]` reopens after the v0.9.3 cut below.)
 
 ### Changed
 
@@ -25,6 +25,48 @@ The plugin C ABI version is tracked separately and is independent of the project
 ### Security
 
 - (None this release.)
+
+---
+
+## [0.9.3] - 2026-05-14
+
+Sprint 15 closes here. See [`docs/retros/sprint-15.md`](docs/retros/sprint-15.md).
+**Tag:** `v0.9.3`. **ABI:** v1.3 frozen (unchanged). **Tool
+contract:** v1 frozen final at 18 tools (unchanged). **Bridge ABI:**
+bumps 2 → 3 (additive — auto_updater_menu surface added).
+
+### Added
+
+- **ADR-0020 + per-project `project.ai.toml` provider override.** Sibling
+  file (gitignored by default) selects per-project AI provider; engine-side
+  `load_provider_config()` + bridge integration; Ollama config wire-up.
+- **managed-ai-proxy Anthropic forwarder.** `/v1/chat` now POSTs to
+  Anthropic via reqwest; typed UpstreamError mapped to specific HTTP
+  status codes.
+- **ADR-0021 + cloud-sync MVP scaffold.** Cloud sync architecture
+  decided (last-write-wins + per-tier encryption posture + separate
+  service); MVP returns honest 503s.
+- **Third real FFI: `auto_updater_menu` (bridge ABI v3).** Read-only
+  update-status surface; apply / rollback shell out to the CLI per
+  MVC-via-subprocess pattern (queued ADR-0022).
+- **services-build.yml CI workflow** compiles every Rust service under
+  `services/*/`.
+- **`docs/INFRA_STATUS.md`** cross-cutting status board for
+  wired-but-empty gates.
+
+### Changed
+
+- `souxmar_bridge_abi_version()` returns 3 (was 2). Old desktop builds
+  cross-check the byte and refuse mismatched calls cleanly.
+- `BridgeFeatureSet::auto_updater_menu` flips structural when real-ffi
+  is on. Three of six flags now structural.
+- `.gitignore` adds `project.ai.toml` (secrets-adjacent by ADR-0020).
+
+### Fixed
+
+- ADR-0017's two-week zero-volume trigger fires (R-015). The
+  launch-comms amendment is documented in this sprint's retro;
+  Sprint 16 push 1 schedules the HN + outreach pass.
 
 ---
 
