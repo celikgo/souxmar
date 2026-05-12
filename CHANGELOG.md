@@ -8,7 +8,7 @@ The plugin C ABI version is tracked separately and is independent of the project
 
 ### Added
 
-- (None this release — `[Unreleased]` reopens after the v0.9.6 cut below.)
+- (None this release — `[Unreleased]` reopens after the v0.9.7 cut below.)
 
 ### Changed
 
@@ -25,6 +25,23 @@ The plugin C ABI version is tracked separately and is independent of the project
 ### Security
 
 - (None this release.)
+
+---
+
+## [0.9.7] - 2026-05-17
+
+Sprint 19 closes here. See [`docs/retros/sprint-19.md`](docs/retros/sprint-19.md).
+**Tag:** `v0.9.7`. **ABI:** v1.3 frozen (unchanged). **Tool contract:** v1
+frozen final at 18 tools (unchanged). **Bridge ABI:** v3.
+
+### Added
+
+- **[ADR-0030](docs/adr/0030-lightweight-geometry-edits.md)** ratifies
+  the in-app geometry-edit surface: three operations (Reposition / Suppress
+  / Dimension) on a small EditOp shape. Explicitly NOT parametric
+  modelling / boolean operations / sketches / agent-driven edits.
+
+Single-push architecture sprint by design.
 
 ---
 
