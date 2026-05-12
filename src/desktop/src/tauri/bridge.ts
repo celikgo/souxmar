@@ -23,7 +23,12 @@ export type CommandName =
   // Sprint 13 push 3 — first real FFI: pipeline introspection.
   | "pipeline_summary"
   // Sprint 15 push 4 — third real FFI: auto-updater menu.
-  | "update_menu_status";
+  | "update_menu_status"
+  // Workbench file-management surface.
+  | "create_project"
+  | "open_project"
+  | "import_model"
+  | "list_project_files";
 
 // Sprint 12 push 2 — BridgeFeatureSet mirror of the Rust struct.
 // Renaming or removing fields here without a matching change to
@@ -100,4 +105,12 @@ export interface UpdateMenuStatus {
   current_version:   string;
   available_version: string;
   detail:            string;
+}
+
+// Workbench file-management — mirrors the Rust FileEntry struct.
+export interface FileEntry {
+  name:     string;
+  path:     string;
+  is_dir:   boolean;
+  children: FileEntry[];
 }
