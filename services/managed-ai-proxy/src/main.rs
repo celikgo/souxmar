@@ -32,9 +32,11 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use tracing::info;
+use tracing::{info, warn};
+
+use crate::upstream::{forward_anthropic, ChatMessage, ChatRequest, UpstreamError};
 
 #[derive(Serialize)]
 struct NotYetImplemented {
@@ -54,15 +56,59 @@ fn not_yet_implemented(endpoint: &'static str) -> impl IntoResponse {
     )
 }
 
-async fn handle_chat(_req: Request) -> impl IntoResponse {
-    info!("/v1/chat request received (stub)");
-    not_yet_implemented(
-        "managed-ai-proxy MVP scaffold (Sprint 14 push 3). \
-         The /v1/chat endpoint is documented in ADR-0019; the \
-         upstream forwarder lands in Sprint 15 push 1. Until \
-         then, configure your project to use BYOK (Anthropic / \
-         OpenAI / Ollama) in the desktop client's Settings.",
-    )
+#[derive(Deserialize)]
+struct ChatBody {
+    model:        String,
+    messages:     Vec<ChatMessage>,
+    #[serde(default)]
+    max_tokens:   Option<u32>,
+    #[serde(default)]
+    temperature:  Option<f32>,
+}
+
+#[derive(Serialize)]
+struct ChatProblem {
+    status: &'static str,
+    code:   &'static str,
+    detail: String,
+}
+
+async fn handle_chat(Json(body): Json<ChatBody>) -> impl IntoResponse {
+    info!(model = %body.model, msg_count = body.messages.len(), "/v1/chat");
+
+    let req = ChatRequest {
+        model:       body.model,
+        messages:    body.messages,
+        max_tokens:  body.max_tokens,
+        temperature: body.temperature,
+    };
+
+    match forward_anthropic(req).await {
+        Ok(resp) => (StatusCode::OK, Json(resp)).into_response(),
+        Err(e) => {
+            warn!(error = ?e, "anthropic forward failed");
+            let (status, code, detail) = upstream_to_http(&e);
+            (
+                status,
+                Json(ChatProblem { status: "error", code, detail }),
+            )
+                .into_response()
+        }
+    }
+}
+
+fn upstream_to_http(e: &UpstreamError) -> (StatusCode, &'static str, String) {
+    use UpstreamError::*;
+    match e {
+        NotConfigured(d)   => (StatusCode::SERVICE_UNAVAILABLE, "not_configured",   d.clone()),
+        Timeout            => (StatusCode::GATEWAY_TIMEOUT,     "upstream_timeout", String::new()),
+        Unauthorized       => (StatusCode::BAD_GATEWAY,         "upstream_unauthorized", "the proxy's upstream key is invalid; the user's souxmar token is unaffected".into()),
+        RateLimited        => (StatusCode::TOO_MANY_REQUESTS,   "upstream_rate_limited", String::new()),
+        BadRequest(d)      => (StatusCode::BAD_REQUEST,         "upstream_bad_request",  d.clone()),
+        HttpError(code, d) => (StatusCode::BAD_GATEWAY,         "upstream_http_error", format!("status={}, body={}", code, d)),
+        Transport(d)       => (StatusCode::BAD_GATEWAY,         "upstream_transport",  d.clone()),
+        MalformedResponse(d) => (StatusCode::BAD_GATEWAY,       "upstream_malformed",  d.clone()),
+    }
 }
 
 async fn handle_account(_req: Request) -> impl IntoResponse {

@@ -1,0 +1,22 @@
+[package]
+name        = "cloud-sync"
+version     = "0.1.0"
+description = "souxmar Pro/Team/Enterprise tier project synchronisation (MVP scaffold)"
+edition     = "2021"
+license     = "Apache-2.0"
+
+# Sprint 15 push 3 scaffold. ADR-0021 documents the architecture.
+# Standalone Rust binary; not part of the workspace, same pattern
+# as services/managed-ai-proxy/.
+
+[[bin]]
+name = "cloud-sync"
+path = "src/main.rs"
+
+[dependencies]
+axum               = "0.7"
+tokio              = { version = "1", features = ["full"] }
+serde              = { version = "1", features = ["derive"] }
+serde_json         = "1"
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

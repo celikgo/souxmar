@@ -1,0 +1,111 @@
+# OpenAPI 3.1 contract for cloud-sync v1.
+# Sprint 15 push 3. ADR-0021.
+
+openapi: 3.1.0
+info:
+  title:       cloud-sync
+  version:     v1
+  description: souxmar project synchronisation service. See ADR-0021.
+  license:
+    name:      Apache-2.0
+    url:       https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: https://sync.souxmar.dev
+    description: Production (Sprint 17+; today this URL 404s).
+  - url: http://127.0.0.1:8081
+    description: Local development.
+
+paths:
+  /v1/project/{project_id}/file/{file_name}:
+    parameters:
+      - in: path
+        name: project_id
+        required: true
+        schema: { type: string }
+      - in: path
+        name: file_name
+        required: true
+        schema: { type: string }
+    put:
+      summary:     Upload a project file.
+      operationId: putFile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Stored. Returns the new manifest entry.
+        '402':
+          description: Quota exhausted.
+        '503':
+          description: MVP scaffold — Sprint 16 push 1 lands write path.
+    get:
+      summary:     Download a project file.
+      operationId: getFile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: File contents.
+          content:
+            application/octet-stream: {}
+        '404':
+          description: File not found.
+        '503':
+          description: MVP scaffold — Sprint 16 push 1 lands read path.
+
+  /v1/project/{project_id}/manifest:
+    parameters:
+      - in: path
+        name: project_id
+        required: true
+        schema: { type: string }
+    get:
+      summary:     List files in the project + per-file server timestamps.
+      operationId: getManifest
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Manifest'
+        '503':
+          description: MVP scaffold.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type:    http
+      scheme:  bearer
+      bearerFormat: sxm_pro_<32-hex>
+
+  schemas:
+    Manifest:
+      type: object
+      required: [project_id, files]
+      properties:
+        project_id:
+          type: string
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileEntry'
+
+    FileEntry:
+      type: object
+      required: [name, size_bytes, server_updated_at, sha256]
+      properties:
+        name:              { type: string }
+        size_bytes:        { type: integer, format: int64 }
+        server_updated_at: { type: string, format: date-time }
+        sha256:            { type: string, description: "ciphertext sha256 for Pro/Team; plaintext sha256 not stored for Enterprise" }
