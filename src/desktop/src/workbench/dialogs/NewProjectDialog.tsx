@@ -78,12 +78,31 @@ export function NewProjectDialog({ onClose, onCreated }: Props) {
       </div>
       <div style={dialogFieldStyle}>
         <label style={dialogLabelStyle}>Parent directory (optional)</label>
-        <input
-          value={parent}
-          onChange={e => setParent(e.target.value)}
-          style={dialogInputStyle}
-          placeholder="~/souxmar-projects"
-        />
+        <div style={{ display: "flex", gap: 6 }}>
+          <input
+            value={parent}
+            onChange={e => setParent(e.target.value)}
+            style={{ ...dialogInputStyle, flex: 1 }}
+            placeholder="~/souxmar-projects"
+          />
+          <button
+            type="button"
+            onClick={async () => {
+              setError(null);
+              try {
+                const picked = await invokeCommand<string | null>("pick_directory", {
+                  startDir: parent,
+                });
+                if (picked) setParent(picked);
+              } catch (e) {
+                setError(String(e));
+              }
+            }}
+            style={secondaryButtonStyle}
+          >
+            Browse…
+          </button>
+        </div>
         <p style={{ marginTop: 4, marginBottom: 0, color: "var(--fg-tertiary)", fontSize: 11 }}>
           Leave blank to use <code>~/souxmar-projects</code>.
         </p>

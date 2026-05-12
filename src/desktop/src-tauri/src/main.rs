@@ -27,6 +27,8 @@ fn main() {
             commands::open_project,
             commands::import_model,
             commands::list_project_files,
+            commands::pick_directory,
+            commands::pick_file,
         ])
         .run(tauri::generate_context!())
         .expect("error launching souxmar-desktop");

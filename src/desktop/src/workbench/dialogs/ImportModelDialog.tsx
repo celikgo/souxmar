@@ -6,7 +6,7 @@
 // `import_model` Tauri command which copies it server-side so the
 // project is self-contained.
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   Modal,
   dialogErrorStyle,
@@ -18,6 +18,8 @@ import {
 } from "./Modal";
 import { invokeCommand, type ImportResult } from "../../tauri/bridge";
 
+const SUPPORTED_EXTS = ["stl", "obj", "step", "stp", "iges", "igs", "blend"];
+
 interface Props {
   projectPath: string;
   onClose:     () => void;
@@ -28,7 +30,6 @@ export function ImportModelDialog({ projectPath, onClose, onImported }: Props) {
   const [sourcePath, setSourcePath] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   async function onSubmit() {
     setBusy(true);
@@ -45,14 +46,17 @@ export function ImportModelDialog({ projectPath, onClose, onImported }: Props) {
     }
   }
 
-  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    // In Tauri, File.path is available; in a plain browser it isn't.
-    // We fall back to file.name (the user can edit the field to a
-    // full path manually).
-    const fileWithPath = file as File & { path?: string };
-    setSourcePath(fileWithPath.path ?? file.name);
+  async function onBrowse() {
+    setError(null);
+    try {
+      const picked = await invokeCommand<string | null>("pick_file", {
+        startDir:   "",
+        extensions: SUPPORTED_EXTS,
+      });
+      if (picked) setSourcePath(picked);
+    } catch (e) {
+      setError(String(e));
+    }
   }
 
   return (
@@ -83,27 +87,16 @@ export function ImportModelDialog({ projectPath, onClose, onImported }: Props) {
       </p>
       <div style={dialogFieldStyle}>
         <label style={dialogLabelStyle}>Source file</label>
-        <input
-          value={sourcePath}
-          onChange={e => setSourcePath(e.target.value)}
-          style={dialogInputStyle}
-          placeholder="/Users/you/cad/part.step"
-        />
-        <div style={{ marginTop: 6 }}>
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            style={secondaryButtonStyle}
-          >
+        <div style={{ display: "flex", gap: 6 }}>
+          <input
+            value={sourcePath}
+            onChange={e => setSourcePath(e.target.value)}
+            style={{ ...dialogInputStyle, flex: 1 }}
+            placeholder="/Users/you/cad/part.step"
+          />
+          <button type="button" onClick={onBrowse} style={secondaryButtonStyle}>
             Browse…
           </button>
-          <input
-            ref={fileRef}
-            type="file"
-            style={{ display: "none" }}
-            onChange={onPickFile}
-            accept=".stl,.obj,.step,.stp,.iges,.igs,.blend"
-          />
         </div>
       </div>
       {error && <div style={dialogErrorStyle}>{error}</div>}
