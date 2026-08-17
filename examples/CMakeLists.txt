@@ -52,3 +52,23 @@ add_subdirectory(plugins/obj-reader)
 if(SOUXMAR_WITH_BLENDER)
   add_subdirectory(plugins/blender-reader)
 endif()
+
+# Sprint 41 — manufacturing block (ADR-0044). Eight always-on plugins
+# providing eighteen capabilities across the additive-manufacturing and
+# marine/subsea verticals. All closed-form or heuristic models; every one
+# registers under an existing capability namespace, so the host needed no
+# ABI change (see docs/MANUFACTURING.md and docs/adr/0044-*.md).
+#
+# Geometry / mesh generation:
+add_subdirectory(plugins/am-layered-mesher)   # mesher.am.layered
+add_subdirectory(plugins/lattice-reader)      # reader.lattice
+# Metal AM process simulation:
+add_subdirectory(plugins/am-thermal)          # solver.am.thermal.lpbf + postproc.am.melt_pool
+add_subdirectory(plugins/am-distortion)       # solver.am.distortion.inherent_strain + postproc.am.residual_stress
+# Polymer AM process simulation:
+add_subdirectory(plugins/am-polymer)          # solver.am.polymer.fff + postproc.am.bond_strength
+# Design-for-AM checks and output:
+add_subdirectory(plugins/am-manufacturability) # solver.am.{overhang,printability,buildtime}
+add_subdirectory(plugins/am-slicer)           # writer.am.{gcode,cli,report}
+# Marine / subsea:
+add_subdirectory(plugins/marine)              # solver.marine.{hydrostatic,hull_collapse,corrosion} + writer.marine.qualification_report

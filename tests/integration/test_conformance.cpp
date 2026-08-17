@@ -175,6 +175,32 @@ TEST_F(ConformanceGateTest, ObjReaderPassesAllChecks) {
   expect_all_v1_checks_pass(plugin::run_conformance(*p));
 }
 
+// Sprint 41 — the manufacturing block (ADR-0044) adds eight always-on
+// in-tree plugins carrying eighteen capabilities across the additive-
+// manufacturing and marine/subsea verticals. The v1 conformance suite is
+// unchanged by that work, so every one of them clears exactly the same bar
+// as the eleven plugins above: 19 in-tree plugins green here.
+//
+// The ids come from AM_CONTRACT §1 (`dev.souxmar.examples.<plugin dir>`);
+// the loop keeps one assertion per plugin while still naming which one
+// failed.
+TEST_F(ConformanceGateTest, ManufacturingBlockPluginsPassAllChecks) {
+  for (const char* id : {
+           "dev.souxmar.examples.am-layered-mesher",     // mesher.am.layered
+           "dev.souxmar.examples.lattice-reader",        // reader.lattice
+           "dev.souxmar.examples.am-thermal",            // solver.am.thermal.lpbf + melt pool
+           "dev.souxmar.examples.am-distortion",         // inherent strain + residual stress
+           "dev.souxmar.examples.am-polymer",            // FFF thermal + bond strength
+           "dev.souxmar.examples.am-manufacturability",  // overhang / printability / buildtime
+           "dev.souxmar.examples.am-slicer",             // G-code / CLI / build report
+           "dev.souxmar.examples.marine",  // hydrostatic / collapse / corrosion / dossier
+       }) {
+    const auto* p = find_plugin(discovery_, id);
+    ASSERT_NE(p, nullptr) << "in-tree plugin not discovered: " << id;
+    expect_all_v1_checks_pass(plugin::run_conformance(*p));
+  }
+}
+
 // Negative: confirm that a deliberately-mismatched manifest (declared ABI
 // 99) trips C001 + Skips the rest. Builds on the discovered hello-mesher
 // to keep the test self-contained — we fabricate a DiscoveredPlugin in

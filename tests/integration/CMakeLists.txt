@@ -6,8 +6,11 @@
 # guess where the binary lives.
 
 # Sprint 10 push 6 — `souxmar update check` CLI integration test
-# generates ed25519 signatures at test time via libsodium.
-find_package(unofficial-sodium CONFIG REQUIRED)
+# generates ed25519 signatures at test time via libsodium. Resolved through
+# the project's own abstraction rather than naming the vcpkg target directly,
+# so a Homebrew / distro dev environment (pkg-config) configures too — same
+# rationale as src/crypto and src/updater; see cmake/SouxmarFindSodium.cmake.
+include(SouxmarFindSodium)
 
 # Two-pass generation: configure_file substitutes @CACHE_VAR@ tokens but does
 # not evaluate $<TARGET_FILE:...> generator expressions; file(GENERATE) does
@@ -57,6 +60,18 @@ add_executable(souxmar_integration_tests
   test_c_bridge_provider.cpp
   # Sprint 15 push 4 — auto_updater_menu surface (bridge ABI v3).
   test_c_bridge_updater.cpp
+  # Sprint 41 — manufacturing block (ADR-0044). One translation unit per
+  # plugin directory; each asserts its capability ids, kinds, output field
+  # shapes and one physically meaningful property against the frozen
+  # capability contract, plus a determinism check on the thermal,
+  # distortion and slicer paths.
+  test_am_meshers.cpp
+  test_am_thermal.cpp
+  test_am_distortion.cpp
+  test_am_polymer.cpp
+  test_am_manufacturability.cpp
+  test_am_slicer.cpp
+  test_marine.cpp
 )
 
 target_include_directories(souxmar_integration_tests
@@ -79,7 +94,7 @@ target_link_libraries(souxmar_integration_tests
     # Sprint 10 push 6 — the `update check` integration test signs
     # its own manifests with libsodium so no fixture .sig file ships
     # in the tree.
-    unofficial-sodium::sodium
+    souxmar::sodium
     GTest::gtest
     GTest::gtest_main
 )
@@ -92,7 +107,19 @@ add_dependencies(souxmar_integration_tests
   grid_mesher
   elasticity_stub
   cfd_stub
-  obj_reader)
+  obj_reader
+  # Sprint 41 — manufacturing block (ADR-0044). Eight always-on plugin
+  # targets behind test_am_*.cpp / test_marine.cpp; the discovery walk in
+  # those tests reads the binaries out of the build tree, so they must be
+  # linked before the suite runs.
+  am_layered_mesher
+  lattice_reader
+  am_thermal
+  am_distortion
+  am_polymer
+  am_manufacturability
+  am_slicer
+  marine_loads)
 if(SOUXMAR_BUILD_CLI AND TARGET souxmar_cli)
   add_dependencies(souxmar_integration_tests souxmar_cli)
 endif()

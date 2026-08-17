@@ -10,3 +10,17 @@
 #define SOUXMAR_TEST_VTU_WRITER_DIR   "@SOUXMAR_VTU_WRITER_DIR@"
 #define SOUXMAR_TEST_CLI_BINARY       "@SOUXMAR_CLI_BINARY@"
 #define SOUXMAR_TEST_SOURCE_ROOT      "@CMAKE_SOURCE_DIR@"
+
+// Sprint 41 — manufacturing block (ADR-0044). Eight always-on plugins; each
+// one's CMakeLists.txt publishes SOUXMAR_<TARGET>_DIR as a CACHE INTERNAL
+// generator expression, exactly like the plugins above. Every plugin builds
+// into a sibling directory under the same plugins root, so any one of these
+// also anchors a discovery walk over all of them.
+#define SOUXMAR_TEST_AM_LAYERED_MESHER_DIR   "@SOUXMAR_AM_LAYERED_MESHER_DIR@"
+#define SOUXMAR_TEST_LATTICE_READER_DIR      "@SOUXMAR_LATTICE_READER_DIR@"
+#define SOUXMAR_TEST_AM_THERMAL_DIR          "@SOUXMAR_AM_THERMAL_DIR@"
+#define SOUXMAR_TEST_AM_DISTORTION_DIR       "@SOUXMAR_AM_DISTORTION_DIR@"
+#define SOUXMAR_TEST_AM_POLYMER_DIR          "@SOUXMAR_AM_POLYMER_DIR@"
+#define SOUXMAR_TEST_AM_MANUFACTURABILITY_DIR "@SOUXMAR_AM_MANUFACTURABILITY_DIR@"
+#define SOUXMAR_TEST_AM_SLICER_DIR           "@SOUXMAR_AM_SLICER_DIR@"
+#define SOUXMAR_TEST_MARINE_LOADS_DIR        "@SOUXMAR_MARINE_LOADS_DIR@"

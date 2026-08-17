@@ -1,0 +1,24 @@
+[plugin]
+id            = "dev.souxmar.examples.lattice-reader"
+name          = "Parametric Strut-Lattice Reader"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/lattice-reader"
+
+description   = "Generates a periodic strut-lattice beam mesh (cubic / bcc / fcc / octet / diamond) from a lattice spec file. Edge2 cells, cell tag = strut family."
+documentation = "https://souxmar.dev/docs/plugins/lattice-reader"
+tags          = ["reader", "lattice", "additive-manufacturing", "am", "beam", "parametric"]
+min_souxmar_abi_minor = 0
+
+[plugin.binary]
+file          = "liblattice_reader.so"
+
+[plugin.capabilities]
+provides      = ["reader.lattice"]
+
+[plugin.threading]
+model         = "reentrant"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"
