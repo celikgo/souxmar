@@ -394,6 +394,24 @@ TEST(AiTools_Mesh, MissingCapabilityReturnsStructuredError) {
 TEST(AiTools_Solve, RequiresMeshFirst) {
   auto r = ai::default_v1_tools();
   souxmar::plugin::Registry registry;
+
+  // Register the capability so the existence check passes. Plugin-touching
+  // tools check in a fixed order — registry/dispatcher wiring (INTERNAL),
+  // then capability existence (PLUGIN_NOT_FOUND), then handle preconditions
+  // (PRECONDITION_FAILED) — so against an empty registry this test would
+  // stop at PLUGIN_NOT_FOUND and never reach the missing-mesh check it is
+  // named for. Same no-op-vtable trick the mesh tool's test uses above.
+  static souxmar_solver_vtable_t fake_solve_vt{
+      SOUXMAR_ABI_VERSION_MAJOR,
+      [](const souxmar_mesh_t*,
+         const souxmar_value_t*,
+         const souxmar_solver_options_t*,
+         souxmar_field_t**,
+         void*) -> souxmar_status_t { return souxmar_status_ok(); },
+      nullptr};
+  ASSERT_TRUE(std::holds_alternative<std::monostate>(registry.add_solver(
+      std::string{"solver.linear"}, "fake-plugin", &fake_solve_vt, nullptr)));
+
   FakeDispatcher dispatcher;
   ai::ToolContext ctx;
   ctx.registry = &registry;
@@ -405,6 +423,9 @@ TEST(AiTools_Solve, RequiresMeshFirst) {
   auto out = ai::dispatch_tool(r, "solve", input, ctx, policy);
   ASSERT_TRUE(out.error.has_value());
   EXPECT_EQ(out.error->code, "PRECONDITION_FAILED");
+  EXPECT_FALSE(out.error->suggestion.empty())
+      << "a missing mesh must come with the remediation: run `mesh` first";
+  EXPECT_TRUE(dispatcher.calls.empty()) << "must not reach the dispatcher";
 }
 
 TEST(AiTools_ScreenshotViewport, ReturnsNotAvailableInHeadlessBuild) {
