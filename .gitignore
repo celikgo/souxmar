@@ -73,3 +73,13 @@ tests/visual/.cache/
 # deliberately can `git add -f` it.
 project.ai.toml
 **/project.ai.toml
+
+# Sprint 41 — manufacturing block. Example pipelines write their results next
+# to the pipeline.yaml that produced them, the same way the older examples do.
+# The pipeline and the README are the deliverables; the run artefacts are not.
+examples/**/*.vtu
+examples/**/*.pvd
+examples/**/*.gcode
+examples/**/*.cli
+examples/am-*/[a-z]*-report.md
+examples/am-*/[a-z]*-dossier.md

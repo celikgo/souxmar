@@ -1,0 +1,48 @@
+# buoyancy-core.lattice — strut-lattice spec for `reader.lattice`.
+#
+# The internal core of a sealed AM buoyancy module that lives inside the
+# pressure-hull bay described by hull-ring.obj. The lattice is the crush
+# structure: it carries the external pressure so that the module's thin sealed
+# skin does not have to, and the buoyancy itself comes from the air trapped in
+# the cells. A solid or near-solid metal block would sink; the numbers below
+# are what make the module float. See README.md § "The buoyancy core" for the
+# displacement arithmetic.
+#
+# Format (see docs/MANUFACTURING.md, `reader.lattice`):
+#   * UTF-8 text, `#` starts a comment, one `key = value` per line.
+#   * Values are numbers, bare strings, or `[a, b, c]` lists.
+#   * Every key here is also a `reader.lattice` YAML input key, and a value in
+#     the pipeline's `input:` block OVERRIDES the value in this file. That is
+#     the intended way to run a sweep: keep the geometry here, sweep
+#     relative_density from the YAML.
+#   * Lengths are metres. Strictly SI, no exceptions in this file.
+
+# Envelope, [xmin, ymin, zmin, xmax, ymax, zmax]. A 0.30 x 0.30 x 0.40 m block
+# centred on the hull axis, inset from the 0.976 m bore so the module clears
+# the ring frames at both ends of the bay (the bay runs z = 0.0 .. 0.5).
+bbox = [-0.150, -0.150, 0.050, 0.150, 0.150, 0.450]
+
+# Octet truss: the stretch-dominated lattice topology, so its stiffness and
+# strength scale linearly with relative density rather than quadratically the
+# way a bending-dominated cubic cell does. That is why it is the usual choice
+# for a pressure-bearing core.
+unit_cell = octet
+
+# 50 mm cells over the envelope give exactly 6 x 6 x 8 cells. nx/ny/nz are
+# stated explicitly rather than left to derive from bbox/cell_size so the
+# strut count is pinned regardless of the reader's rounding convention.
+cell_size = 0.050
+nx = 6
+ny = 6
+nz = 8
+
+# 8% relative density in 316L => ~640 kg/m^3 bulk, i.e. the module displaces
+# more seawater than the lattice weighs. strut_diameter = 0 asks the reader to
+# derive the diameter from relative_density; set it directly (in metres) if you
+# want to pin the strut size instead.
+relative_density = 0.08
+strut_diameter = 0.0
+
+# Guard rail. The 6 x 6 x 8 octet lattice above is a few thousand Edge2 cells;
+# this cap exists to catch a fat-fingered cell_size, not to bind normal use.
+max_cells = 200000
