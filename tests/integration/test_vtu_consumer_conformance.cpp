@@ -136,7 +136,8 @@ std::string read_file(const fs::path& p) {
 // so a regex is sufficient — switching to a real XML parser would add
 // a vcpkg dep just for the conformance test; the regex strategy is the
 // same one the upstream ParaView quick-look reader uses.
-std::string extract_tag_text(const std::string& xml, const std::string& tag) {
+[[maybe_unused]] std::string extract_tag_text(const std::string& xml,
+                                             const std::string& tag) {
   std::regex re("<" + tag + "[^>]*>([\\s\\S]*?)</" + tag + ">");
   std::smatch m;
   if (std::regex_search(xml, m, re)) {

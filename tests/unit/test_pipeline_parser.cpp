@@ -153,4 +153,59 @@ TEST(Parser, MalformedYamlReportsLine) {
   EXPECT_TRUE(std::get<ParseError>(r).line.has_value());
 }
 
+// Quoting decides the type. Before this was honoured, every numeric-looking
+// quoted scalar arrived at the plugin as a Number, so a string-typed input
+// silently fell back to its default: `alloy: "2507"` selected 316L and the
+// marine corrosion model then reported confident numbers for the wrong
+// material. Plain (unquoted) numerics must keep parsing as numbers.
+TEST(Parser, QuotedNumericScalarStaysAString) {
+  auto r = parse_pipeline(R"yaml(
+version: 1
+stages:
+  - id: a
+    plugin: solver.marine.corrosion
+    input:
+      alloy: "2507"
+      single: '625'
+      plain_number: 2507
+      plain_float: 1.5e-4
+)yaml");
+  ASSERT_TRUE(std::holds_alternative<Pipeline>(r));
+  const auto& input = std::get<Pipeline>(r).stages[0].input;
+
+  ASSERT_NE(input.find("alloy"), nullptr);
+  EXPECT_EQ(input.find("alloy")->kind(), Value::Kind::String);
+  EXPECT_EQ(input.find("alloy")->as_string(), "2507");
+
+  ASSERT_NE(input.find("single"), nullptr);
+  EXPECT_EQ(input.find("single")->kind(), Value::Kind::String);
+  EXPECT_EQ(input.find("single")->as_string(), "625");
+
+  ASSERT_NE(input.find("plain_number"), nullptr);
+  EXPECT_EQ(input.find("plain_number")->kind(), Value::Kind::Number);
+  EXPECT_DOUBLE_EQ(input.find("plain_number")->as_number(), 2507.0);
+
+  ASSERT_NE(input.find("plain_float"), nullptr);
+  EXPECT_EQ(input.find("plain_float")->kind(), Value::Kind::Number);
+  EXPECT_DOUBLE_EQ(input.find("plain_float")->as_number(), 1.5e-4);
+}
+
+// Quoting must not turn the reserved boolean words into strings by accident
+// when they are written plain, nor leave them booleans when they are quoted.
+TEST(Parser, QuotingAlsoDecidesBooleanVersusString) {
+  auto r = parse_pipeline(R"yaml(
+version: 1
+stages:
+  - id: a
+    plugin: x
+    input:
+      plain: true
+      quoted: "true"
+)yaml");
+  ASSERT_TRUE(std::holds_alternative<Pipeline>(r));
+  const auto& input = std::get<Pipeline>(r).stages[0].input;
+  EXPECT_EQ(input.find("plain")->kind(), Value::Kind::Bool);
+  EXPECT_EQ(input.find("quoted")->kind(), Value::Kind::String);
+}
+
 }  // namespace

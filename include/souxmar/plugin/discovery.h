@@ -20,7 +20,12 @@ namespace souxmar::plugin {
 
 struct DiscoveredPlugin {
   std::filesystem::path manifest_path;  // path to the .toml file
-  std::filesystem::path binary_path;    // resolved absolute path to the .so/.dylib/.dll
+  // Resolved path to the .so/.dylib/.dll. May differ from
+  // `manifest.binary_file`: manifests conventionally declare the ELF name
+  // (`lib<target>.so`), and discovery falls back to the same stem with the
+  // host platform's canonical extension when that file is absent. See
+  // `resolve_plugin_binary` in src/plugin-host/discovery.cpp.
+  std::filesystem::path binary_path;
   Manifest manifest;
 };
 

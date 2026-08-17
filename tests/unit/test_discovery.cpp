@@ -7,6 +7,8 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <string>
+#include <string_view>
 
 using namespace souxmar::plugin;
 namespace fs = std::filesystem;
@@ -88,6 +90,92 @@ TEST(Discovery, FindsValidPlugin) {
   EXPECT_TRUE(report.rejected.empty());
   EXPECT_EQ(report.loaded[0].manifest.id, "com.example.test-mesher");
   EXPECT_EQ(report.loaded[0].binary_path, plugin_dir / "libtest_mesher.so");
+}
+
+// The host platform's own shared-library extension, and the extension the
+// fallback is expected to settle on when only the two non-native ones are
+// present (kBinaryExtensions in discovery.cpp puts the host's first, then
+// .so / .dylib / .dll in that order).
+#if defined(_WIN32)
+constexpr std::string_view kHostExtension = ".dll";
+constexpr std::string_view kPreferredOfDylibAndDll = ".dll";
+#elif defined(__APPLE__)
+constexpr std::string_view kHostExtension = ".dylib";
+constexpr std::string_view kPreferredOfDylibAndDll = ".dylib";
+#else
+constexpr std::string_view kHostExtension = ".so";
+// .so is host-native but absent in that test, so the ordered scan lands on
+// .dylib (kBinaryExtensions == {.so, .dylib, .dll} on ELF platforms).
+constexpr std::string_view kPreferredOfDylibAndDll = ".dylib";
+#endif
+
+// Every in-tree manifest declares the ELF name `lib<target>.so` because the
+// manifest ships once for all platforms, but CMake emits .dylib on macOS and
+// .dll on Windows. Discovery must retry the stem with the host extension
+// instead of rejecting the plugin as binary_not_found.
+TEST(Discovery, DeclaredSoResolvesToHostExtension) {
+  TempDir td;
+  auto plugin_dir = td.path() / "host-ext";
+  fs::create_directories(plugin_dir);
+  write_file(plugin_dir / "souxmar-plugin.toml", kValidManifest);
+  // Manifest says libtest_mesher.so; only the host artefact exists.
+  touch(plugin_dir / (std::string("libtest_mesher") + std::string(kHostExtension)));
+
+  auto report = discover_plugins({td.path()});
+  ASSERT_EQ(report.loaded.size(), 1u) << (report.rejected.empty() ? "" : report.rejected[0].reason);
+  EXPECT_TRUE(report.rejected.empty());
+  EXPECT_EQ(report.loaded[0].binary_path.extension().string(), std::string(kHostExtension));
+  // The manifest itself is not rewritten — only the resolved path changes.
+  EXPECT_EQ(report.loaded[0].manifest.binary_file, "libtest_mesher.so");
+}
+
+// The declared name stays authoritative: when it is on disk it is used even
+// though a host-native sibling exists next to it.
+TEST(Discovery, DeclaredBinaryWinsOverHostExtensionSibling) {
+  TempDir td;
+  auto plugin_dir = td.path() / "declared-wins";
+  fs::create_directories(plugin_dir);
+  write_file(plugin_dir / "souxmar-plugin.toml", kValidManifest);
+  touch(plugin_dir / "libtest_mesher.so");
+  touch(plugin_dir / (std::string("libtest_mesher") + std::string(kHostExtension)));
+
+  auto report = discover_plugins({td.path()});
+  ASSERT_EQ(report.loaded.size(), 1u);
+  EXPECT_EQ(report.loaded[0].binary_path, plugin_dir / "libtest_mesher.so");
+}
+
+// Robustness leg: neither the declared name nor the host extension is
+// present, but another canonical extension is. Resolution is by the fixed
+// kBinaryExtensions order, never by directory-iteration order, so the pick
+// is identical on every machine.
+TEST(Discovery, FallsBackToAnyCanonicalExtensionInFixedOrder) {
+  TempDir td;
+  auto plugin_dir = td.path() / "cross-ext";
+  fs::create_directories(plugin_dir);
+  write_file(plugin_dir / "souxmar-plugin.toml", kValidManifest);
+  touch(plugin_dir / "libtest_mesher.dylib");
+  touch(plugin_dir / "libtest_mesher.dll");
+
+  auto report = discover_plugins({td.path()});
+  ASSERT_EQ(report.loaded.size(), 1u) << (report.rejected.empty() ? "" : report.rejected[0].reason);
+  EXPECT_EQ(report.loaded[0].binary_path.extension().string(),
+            std::string(kPreferredOfDylibAndDll));
+}
+
+// A sibling with a non-canonical extension is not a fallback candidate; the
+// rejection still names the declared path.
+TEST(Discovery, NonCanonicalSiblingIsNotAFallbackCandidate) {
+  TempDir td;
+  auto plugin_dir = td.path() / "bogus-sibling";
+  fs::create_directories(plugin_dir);
+  write_file(plugin_dir / "souxmar-plugin.toml", kValidManifest);
+  touch(plugin_dir / "libtest_mesher.bin");
+
+  auto report = discover_plugins({td.path()});
+  EXPECT_TRUE(report.loaded.empty());
+  ASSERT_EQ(report.rejected.size(), 1u);
+  EXPECT_EQ(report.rejected[0].code, DiscoveryRejectionCode::BinaryNotFound);
+  EXPECT_NE(report.rejected[0].reason.find("libtest_mesher.so"), std::string::npos);
 }
 
 TEST(Discovery, MissingBinaryRejected) {

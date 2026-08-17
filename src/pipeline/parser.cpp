@@ -59,6 +59,15 @@ std::variant<Value, ParseError> to_value(const YAML::Node& node) {
     case YAML::NodeType::Scalar: {
       // yaml-cpp does not carry a typed scalar back; we sniff bool/number/string.
       const auto raw = node.Scalar();
+      // A quoted scalar is a string, full stop — that is what quoting means in
+      // YAML, and souxmar used to ignore it. The cost was silent and specific:
+      // `alloy: "2507"` reached the plugin as the number 2507, so a
+      // string-typed lookup fell back to its default and the pipeline produced
+      // confident results for the wrong material. yaml-cpp reports the
+      // non-specific tag "!" for single- and double-quoted scalars and "?" for
+      // plain ones, which is the only signal that survives into the node.
+      if (node.Tag() == "!")
+        return Value::string(raw);
       if (raw == "true" || raw == "True")
         return Value::boolean(true);
       if (raw == "false" || raw == "False")

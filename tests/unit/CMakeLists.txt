@@ -1,6 +1,10 @@
 # Unit tests — fast, in-process, no I/O, no plugin loading.
 
-find_package(unofficial-sodium CONFIG REQUIRED)
+# libsodium — resolved through the project's own abstraction rather than
+# naming the vcpkg target directly, so a Homebrew / distro dev environment
+# (pkg-config) configures too. Same rationale as src/crypto and src/updater;
+# see the header comment in cmake/SouxmarFindSodium.cmake.
+include(SouxmarFindSodium)
 
 add_executable(souxmar_unit_tests
   test_version.cpp
@@ -82,7 +86,7 @@ target_link_libraries(souxmar_unit_tests
     # signatures at test time via libsodium directly; the production
     # surface (souxmar::update) keeps libsodium PRIVATE so this is the
     # only test target that pulls it in.
-    unofficial-sodium::sodium
+    souxmar::sodium
     GTest::gtest
     GTest::gtest_main
 )
