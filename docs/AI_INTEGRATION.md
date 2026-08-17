@@ -71,6 +71,12 @@ Categories and examples:
 | File        | `write_pipeline`              | Persists current pipeline. Confirmation required.           |
 | File        | `export_results`              | Writes `.vtu` / `.xdmf`. Confirmation required.             |
 | Plugin      | `list_plugins`                | Returns available plugins by capability.                    |
+| Pipeline    | `propose_am_setup`            | Drafts a complete AM pipeline for a process + material + machine; stages the setup under session `manufacturing`. |
+| Mesh        | `check_printability`          | Runs `solver.am.printability`; summarises score distribution + dominant blocker. |
+| BC          | `set_build_orientation`       | Scores candidate build directions on support area / height / footprint; stages the winner. Confirmation required. |
+| Mesh        | `estimate_build_cost`         | Mass, build time, energy, machine + material cost from the staged setup and mesh bounding box. |
+| BC          | `apply_hydrostatic_load`      | Stages a depth-derived pressure load case (computes ρ·g·h). Confirmation required. |
+| Field       | `check_marine_integrity`      | Collapse margin + corrosion / galvanic advisory summary. Advisory only, not class approval. |
 
 Tools missing from this list (e.g. "delete file", "install plugin", "send to cloud") are deliberately absent. Adding them is an RFC, not a one-line change.
 

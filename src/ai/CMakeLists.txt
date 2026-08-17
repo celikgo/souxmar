@@ -38,6 +38,13 @@ add_library(souxmar_ai
   # Sprint 8 push 5 — CFD planner + BC validator.
   tools/propose_cfd_setup.cpp
   tools/validate_bcs.cpp
+  # Manufacturing block — AM + marine agent tools (catalogue 18 -> 24).
+  tools/propose_am_setup.cpp
+  tools/check_printability.cpp
+  tools/set_build_orientation.cpp
+  tools/estimate_build_cost.cpp
+  tools/apply_hydrostatic_load.cpp
+  tools/check_marine_integrity.cpp
 )
 add_library(souxmar::ai ALIAS souxmar_ai)
 

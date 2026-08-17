@@ -1,0 +1,59 @@
+id: am-03-build-cost
+description: propose_am_setup then mesh then estimate_build_cost returns mass, time, energy and cost.
+category: manufacturing
+# Needs the am-layered-mesher plugin on the plugin path (same
+# dependency shape as mesh-01-hello-mesher). estimate_build_cost itself
+# dispatches nothing — it reads the staged setup plus the mesh bounding
+# box.
+steps:
+  - tool: propose_am_setup
+    inputs:
+      process:  lpbf
+      material: 316L
+  - tool: mesh
+    inputs:
+      capability_id: mesher.am.layered
+      target_size:   0.005
+  - tool: estimate_build_cost
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    step: 0
+    value: ok
+  - kind: tool_outcome
+    step: 1
+    value: ok
+  - kind: tool_outcome
+    step: 2
+    value: ok
+  - kind: tool_data_equals
+    step: 2
+    path: process
+    value: lpbf
+  - kind: tool_data_equals
+    step: 2
+    path: setup_source
+    value: session_manufacturing
+    note: the cost estimate must reuse the setup propose_am_setup staged
+  - kind: tool_data_gte
+    step: 2
+    path: mass_kg
+    value: 0.001
+  - kind: tool_data_gte
+    step: 2
+    path: num_machine_layers
+    value: 100
+  - kind: tool_data_gte
+    step: 2
+    path: build_time_hours
+    value: 0
+  - kind: tool_data_present
+    step: 2
+    path: energy_kwh
+  - kind: tool_data_gte
+    step: 2
+    path: total_cost
+    value: 1
+  - kind: tool_summary_contains
+    step: 2
+    value: build cost

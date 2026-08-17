@@ -1,0 +1,56 @@
+id: marine-02-integrity
+description: check_marine_integrity rejects an unknown check, and a failed check does not undo the staged load case.
+category: marine
+# The final step's error code is deliberately NOT asserted: with the
+# marine plugin on the path it is PRECONDITION_FAILED (no mesh), without
+# it PLUGIN_NOT_FOUND. Step 1 *is* code-asserted because `checks` is
+# validated before any host lookup.
+steps:
+  - tool: apply_hydrostatic_load
+    inputs:
+      tag:   pressure_hull
+      depth: 300
+  - tool: check_marine_integrity
+    inputs:
+      checks: [buoyancy]
+  - tool: check_marine_integrity
+    inputs:
+      checks:        [collapse, corrosion]
+      design_depth:  300
+      thickness:     0.012
+      diameter:      1.0
+      alloy:         316L
+  - tool: apply_hydrostatic_load
+    inputs:
+      tag:   pressure_hull
+      depth: 450
+assertions:
+  - kind: tool_outcome
+    step: 0
+    value: ok
+  - kind: tool_data_equals
+    step: 0
+    path: latest.type
+    value: hydrostatic
+  - kind: tool_outcome
+    step: 1
+    value: fail
+  - kind: tool_error_code
+    step: 1
+    value: INVALID_ARGUMENT
+    note: only 'collapse' and 'corrosion' are valid checks
+  - kind: tool_outcome
+    step: 2
+    value: fail
+  - kind: tool_outcome
+    step: 3
+    value: ok
+  - kind: tool_data_equals
+    step: 3
+    path: count
+    value: 2
+    note: the two failed integrity calls must not have dropped the first load case
+  - kind: tool_data_equals
+    step: 3
+    path: depth
+    value: 450

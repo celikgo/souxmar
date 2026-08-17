@@ -1,0 +1,36 @@
+id: am-02-printability
+description: check_printability validates its input before touching the host, then fails cleanly with no mesh.
+category: manufacturing
+# The last step's error code is deliberately NOT asserted: with the
+# am-manufacturability plugin on the path it is PRECONDITION_FAILED (no
+# mesh), without it PLUGIN_NOT_FOUND. Both are correct, so the task
+# asserts the outcome only. Step 1 *is* code-asserted because input
+# validation runs before any host lookup.
+steps:
+  - tool: propose_am_setup
+    inputs:
+      process:  lpbf
+      material: Ti6Al4V
+  - tool: check_printability
+    inputs:
+      score_threshold: 2.0
+  - tool: check_printability
+    inputs: {}
+assertions:
+  - kind: tool_outcome
+    step: 0
+    value: ok
+  - kind: tool_data_equals
+    step: 0
+    path: material.id
+    value: Ti6Al4V
+  - kind: tool_outcome
+    step: 1
+    value: fail
+  - kind: tool_error_code
+    step: 1
+    value: INVALID_ARGUMENT
+    note: score_threshold must be in [0, 1]; validation precedes the registry lookup
+  - kind: tool_outcome
+    step: 2
+    value: fail
