@@ -18,9 +18,12 @@
 #include <string>
 
 TEST(CBridgeProvider, AbiVersionBumpedToV2) {
-  // Sprint 14 push 4 grew the bridge surface — ABI byte bumps
-  // from 1 (pipeline-only) to 2 (pipeline + provider).
-  EXPECT_EQ(souxmar_bridge_abi_version(), 2u);
+  // The invariant this test owns is "the provider surface is present", which
+  // landed at v2 and survives every later ratchet — so it asserts a floor,
+  // not an exact value. CBridge.AbiVersionMatchesExpected owns the exact
+  // lockstep check against the Rust side; pinning the exact value here too is
+  // what left this test asserting 2 long after the surface reached 3.
+  EXPECT_GE(souxmar_bridge_abi_version(), 2u);
 }
 
 TEST(CBridgeProvider, StubChatRequestReturnsResponse) {
@@ -30,10 +33,11 @@ TEST(CBridgeProvider, StubChatRequestReturnsResponse) {
   ASSERT_NE(r, nullptr) << "chat_send failed: " << (err ? err : "<no error>");
   EXPECT_EQ(err, nullptr);
 
-  // StubProvider returns OK by default for any request — the
-  // canned-reply table the stub ships with covers the smoke
-  // path. If a future StubProvider change tightens this, the
-  // test updates alongside.
+  // The bridge programs a catch-all reply into the StubProvider before
+  // dispatching (src/c-bridge/provider.cpp), so the wiring path always
+  // answers. A bare StubProvider would return ProtocolMismatch here — that
+  // is its documented behaviour for an unprogrammed request, and it used to
+  // make this branch error on every chat message.
   EXPECT_EQ(souxmar_bridge_chat_error_kind(r), SOUXMAR_BRIDGE_PE_OK);
   EXPECT_EQ(souxmar_bridge_chat_provider(r), SOUXMAR_BRIDGE_PROVIDER_STUB);
 

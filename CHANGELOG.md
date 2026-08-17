@@ -129,6 +129,43 @@ than deferred: nothing in this block could be demonstrated without them.
   rejects** — a `postproc.*` stage with only `mesh:` and no `field:`, which
   `registry_dispatcher.cpp` has always refused. The test now supplies an
   upstream field and says why.
+- **The unit + integration suites are green for the first time on this
+  toolchain: 672/672.** Once the three files that would not compile were
+  fixed, 57 latent failures surfaced. Beyond the plugin-discovery and
+  symbol-export fixes above, the causes were:
+  - **toml++ packaged as a shared library broke every typed parse error.** In
+    that mode its exception typeinfo is hidden inside the dylib, so
+    `catch (const toml::parse_error&)` did not match the thrown object: the
+    manifest, plugin-index, budget-config, provider-config and update-manifest
+    parsers all stopped returning a typed error with a line and column, and an
+    uncaught exception escaped `souxmar plugin list` on any malformed
+    manifest. `cmake/SouxmarFindToml.cmake` now pins toml++ to header-only —
+    its default, and what vcpkg ships — and the parse sites keep a
+    `std::exception` arm so a shared-library build degrades to a typed error
+    instead of terminating.
+  - **Test helpers returned references into temporaries.** `expect_ok`,
+    `expect_err`, `expect_apply` and `expect_refusal` returned a reference into
+    a variant, so `const auto& m = expect_ok(f(...))` bound to a temporary that
+    died at the end of the full expression. Tests then read freed memory —
+    some passed by luck, others reported garbage strings. The helpers now
+    return by value.
+  - **Stale test expectations** that had drifted from the code they cover: the
+    manifest fixtures used `id = "x"`, which the reverse-DNS id check rejects
+    before reaching the behaviour under test; the tamper test's off-by-one
+    corrupted the version into `0.910`, so the manifest failed schema
+    validation and its signature was never checked; the `update apply` test
+    still asserted a placeholder message from before apply was implemented;
+    and the two bridge-ABI tests asserted 1 and 2 after the surface reached 3.
+  - **The VTU conformance test never checked its own invariant.** It looked
+    for the `<Points>` DataArray by `Name`, but that array is correctly
+    unnamed in VTU, so the extractor always returned nothing and the point
+    array parsed as zero floats.
+- **The bridge's stub provider answered every chat message with an error.**
+  It constructed a `StubProvider` with an empty reply table, and an
+  unprogrammed request is a deliberate `ProtocolMismatch` — which defeated the
+  reason the stub is wired into the bridge at all, namely letting the desktop
+  Chat panel exercise the full path before a real provider is configured. It
+  now programs a catch-all reply that says plainly what it is.
 - **The scripted agent-eval suite was almost entirely broken and nothing
   noticed.** 16 of 44 tasks failed: three assertion kinds the tasks used
   (`tool_data_contains`, `error_code_contains`, `step_outcome`) were never

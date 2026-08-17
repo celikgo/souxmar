@@ -35,9 +35,13 @@ const char* kCantileverYaml =
 }  // namespace
 
 TEST(CBridge, AbiVersionMatchesExpected) {
-  // Aligned with EXPECTED_ABI_VERSION on the Rust side. When the
-  // surface ratchets, both sides bump together.
-  EXPECT_EQ(souxmar_bridge_abi_version(), 1u);
+  // Lockstep gate: this literal and EXPECTED_ABI_VERSION in
+  // src/desktop/src-tauri/souxmar-bridge/src/ffi.rs must move together, so a
+  // partial upgrade fails loudly instead of calling through a mismatched
+  // surface. The surface reached v3 (pipeline -> +provider -> +updater)
+  // without this test being updated, which is exactly the drift it exists to
+  // catch — update BOTH sides in the same commit as the next ratchet.
+  EXPECT_EQ(souxmar_bridge_abi_version(), 3u);
 }
 
 TEST(CBridge, ParseCantileverReturnsTwoStages) {

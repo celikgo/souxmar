@@ -3,7 +3,7 @@
 # docs/AI_INTEGRATION.md. Future tools join the catalogue via RFCs.
 
 find_package(fmt CONFIG REQUIRED)
-find_package(tomlplusplus CONFIG REQUIRED)   # Sprint 6 push 6 — budget_config.cpp
+include(SouxmarFindToml)   # toml++ pinned header-only; see the module for why   # Sprint 6 push 6 — budget_config.cpp
 find_package(yaml-cpp CONFIG REQUIRED)       # Sprint 10 push 9 — provider response parsing
 
 add_library(souxmar_ai
@@ -65,7 +65,7 @@ target_link_libraries(souxmar_ai
     souxmar::warnings
     souxmar::sanitizers
     fmt::fmt
-    tomlplusplus::tomlplusplus
+    souxmar::tomlplusplus
     yaml-cpp::yaml-cpp
 )
 

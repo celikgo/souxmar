@@ -13,7 +13,7 @@
 # ADR-0013 § "Signing key compromise" lists the risk model that
 # justifies pinning to one curve.
 
-find_package(tomlplusplus CONFIG REQUIRED)
+include(SouxmarFindToml)   # toml++ pinned header-only; see the module for why
 include(SouxmarFindSodium)
 
 # Sprint 10 push 8 — embedded trust store. The release pipeline
@@ -132,7 +132,7 @@ target_link_libraries(souxmar_update
     # transitive; if a future cleanup drops that transitivity, the
     # souxmar::sodium link can be dropped here.
     souxmar::crypto
-    tomlplusplus::tomlplusplus
+    souxmar::tomlplusplus
     souxmar::sodium
 )
 

@@ -50,6 +50,12 @@ BudgetConfigResult parse_budget_config(std::string_view toml_source) {
     const auto& src = e.source();
     return make_error(fmt::format("TOML parse error: {}", e.description()),
                       static_cast<std::size_t>(src.begin.line));
+  } catch (const std::exception& e) {
+    // See the same arm in src/plugin-host/manifest.cpp: a shared-library
+    // toml++ hides its exception typeinfo, so the typed catch above cannot
+    // match and the exception would otherwise escape. Line number is lost in
+    // that configuration; a typed error is still better than a crash.
+    return make_error(fmt::format("TOML parse error: {}", e.what()), std::nullopt);
   }
 
   BudgetConfig cfg;

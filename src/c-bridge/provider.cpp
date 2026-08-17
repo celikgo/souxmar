@@ -274,6 +274,24 @@ extern "C" souxmar_bridge_chat_response_t* souxmar_bridge_chat_send(const char* 
     return out;
   } else {
     souxmar::ai::StubProvider stub;
+    // A bare StubProvider has an empty reply table, and an unmatched request
+    // is a ProtocolMismatch — deliberate, and pinned by
+    // StubProvider.UnmatchedTriggerReturnsProtocolMismatch. That is the right
+    // behaviour for the eval harness, which programs the replies it expects,
+    // but it made this branch answer every chat message with an error, which
+    // defeats the reason the stub is wired here at all: letting the desktop
+    // Chat panel exercise the full path before a real provider is configured.
+    //
+    // So program one catch-all reply (empty trigger matches any message, and
+    // the model has to match exactly, hence req.model). The text says plainly
+    // what it is, so nobody mistakes it for a model talking.
+    souxmar::ai::ChatResponse canned;
+    canned.text =
+        "souxmar stub provider — no real model is configured for this project, "
+        "so this reply is generated locally and the request never left your "
+        "machine. Set `provider` in project.ai.toml (or configure a key in "
+        "Settings) to talk to a real model.";
+    stub.program_reply(req.model, /*trigger_substring=*/"", std::move(canned));
     result = stub.chat_completion(req);
   }
 

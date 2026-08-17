@@ -256,7 +256,11 @@ TEST_F(UpdateCheckCli, TamperedManifestFailsVerification) {
   auto manifest_text = read_file(p.manifest);
   auto pos = manifest_text.find("\"0.9.0\"");
   ASSERT_NE(pos, std::string::npos);
-  manifest_text[pos + 4] = '1';  // "0.9.0" -> "0.9.1"
+  // pos points at the opening quote, so the digits sit at +1, +3 and +5.
+  // Writing to +4 hit the second '.' and produced "0.910", a manifest that
+  // fails schema validation (exit 65) before signature verification is ever
+  // reached — so this test passed no signature at all.
+  manifest_text[pos + 5] = '1';  // "0.9.0" -> "0.9.1"
   write_file(p.manifest, manifest_text);
 
   const auto log = work_ / "out.log";
@@ -301,11 +305,12 @@ TEST_F(UpdateCheckCli, JsonModeEmitsStructuredOutput) {
   EXPECT_NE(out.find("\"arch\":\"x86_64\""), std::string::npos) << out;
 }
 
-TEST_F(UpdateCheckCli, ApplyWithoutDryRunIsNotYetImplemented) {
-  // Locks in that `apply` without --dry-run errors with a guidance
-  // message until push 7 wires the downloader. A future patch that
-  // accidentally enables `apply` would have to update this test
-  // first.
+TEST_F(UpdateCheckCli, ApplyWithoutRequiredFlagsRefusesWithGuidance) {
+  // `apply` without --dry-run needs somewhere to stage to and something to
+  // stage, so it must refuse with guidance naming both flags rather than
+  // half-applying. (This test used to assert the message said "push 7" — the
+  // placeholder text from before the downloader landed. Apply is implemented
+  // now; the invariant that survives is the refusal and its guidance.)
   const auto p = write_signed("0.9.0", "2026-12-31T00:00:00Z");
   const auto log = work_ / "out.log";
 
@@ -319,7 +324,12 @@ TEST_F(UpdateCheckCli, ApplyWithoutDryRunIsNotYetImplemented) {
   const int rc = run_cli(base);
   const auto out = read_file(log);
   EXPECT_NE(rc, 0) << "expected non-zero exit; output:\n" << out;
-  EXPECT_NE(out.find("push 7"), std::string::npos) << "expected guidance message; output:\n" << out;
+  EXPECT_NE(out.find("--target-root"), std::string::npos)
+      << "guidance must name the missing flag; output:\n"
+      << out;
+  EXPECT_NE(out.find("--artifact"), std::string::npos)
+      << "guidance must name the missing flag; output:\n"
+      << out;
 }
 
 TEST_F(UpdateCheckCli, ApplyWithDryRunMatchesCheck) {
