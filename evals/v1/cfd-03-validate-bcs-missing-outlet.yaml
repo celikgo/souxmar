@@ -8,12 +8,12 @@ steps:
       target_size: 0.5
   - tool: apply_inlet
     inputs:
-      patch: inlet
+      tag: inlet
       velocity: [1.0, 0.0, 0.0]
   - tool: apply_wall
     inputs:
-      patch: walls
-      kind: no_slip
+      tag: walls
+      condition: no_slip
   - tool: validate_bcs
     inputs: {}
 assertions:
@@ -21,4 +21,7 @@ assertions:
     value: ok
   - kind: tool_data_contains
     path: issues
-    value: missing-outlet
+    value: NO_OUTLET
+  - kind: tool_data_equals
+    path: counts.outlet
+    value: 0

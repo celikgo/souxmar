@@ -70,14 +70,20 @@ FixedTimeSource clock_after_expiry() {
   return FixedTimeSource{*parse_rfc3339_utc("2027-01-01T00:00:00Z")};
 }
 
-const UpdateApply& expect_apply(const UpdateDecision& d) {
+// These helpers return BY VALUE on purpose. Returning a reference into the
+// variant meant that `const auto& x = expect_ok(f(...))` bound a reference
+// into a temporary that died at the end of the full expression: the tests
+// then read freed memory and either passed by luck or reported garbage
+// strings. A copy of a small struct costs nothing here and the trap cannot
+// come back.
+UpdateApply expect_apply(const UpdateDecision& d) {
   if (auto* r = std::get_if<UpdateRefusal>(&d)) {
     ADD_FAILURE() << "expected Apply, got refusal " << to_string(r->reason) << ": " << r->detail;
   }
   return std::get<UpdateApply>(d);
 }
 
-const UpdateRefusal& expect_refusal(const UpdateDecision& d, RefusalReason expected) {
+UpdateRefusal expect_refusal(const UpdateDecision& d, RefusalReason expected) {
   if (auto* a = std::get_if<UpdateApply>(&d)) {
     ADD_FAILURE() << "expected refusal " << to_string(expected) << ", got Apply " << a->version;
   }

@@ -1,0 +1,95 @@
+# souxmar lattice spec — every key `reader.lattice` recognises.
+#
+# Format: UTF-8 text, one `key = value` per line, `#` starts a comment
+# that runs to the end of the line, blank lines ignored. Values are
+# numbers, bare strings, or `[a, b, c]` lists. Unknown keys are ignored
+# so a newer spec file stays readable by an older plugin. A malformed
+# line (no `=`, empty key or value, a non-number where a number is
+# required, a list of the wrong length) fails the stage with
+# SOUXMAR_E_IO naming the line number.
+#
+# UNITS ARE STRICT SI: every length here is METRES.
+#
+# Every key below may also be given in the pipeline stage's `input:`
+# map, where it OVERRIDES the value in this file:
+#
+#   - id: core
+#     use: reader.lattice
+#     input:
+#       path: examples/plugins/lattice-reader/example.lattice
+#       unit_cell: octet          # overrides the file
+#       relative_density: 0.22    # overrides the file
+
+# ---------------------------------------------------------------------
+# bbox — the box the lattice is trimmed to, metres:
+#   [xmin, ymin, zmin, xmax, ymax, zmax]
+# Given inverted (max < min) it is silently normalised. The lattice is
+# anchored at the box MINIMUM and spans nx/ny/nz whole cells, so the
+# filled extent can fall short of (or overshoot) the box by up to half a
+# cell per axis; pin nx/ny/nz below when that matters.
+# Default: [0, 0, 0, 0.05, 0.05, 0.05]  (a 50 mm cube)
+bbox = [0.0, 0.0, 0.0, 0.05, 0.05, 0.05]
+
+# ---------------------------------------------------------------------
+# unit_cell — one of:
+#   cubic    12 struts/cell: the cube edges. Axial only, bending-dominated.
+#   bcc       8 struts/cell: four body diagonals, split at the body centre.
+#             Strut length = cell_size * sqrt(3)/2. (BCC, not BCCZ — no
+#             axial struts are added.)
+#   fcc      24 struts/cell: each face centre joined to its 4 face corners.
+#             Strut length = cell_size / sqrt(2).
+#   octet    36 struts/cell: the fcc set plus the 12 octahedron edges
+#             between face centres — the octet truss (Deshpande, Fleck &
+#             Ashby 2001), stretch-dominated, the usual choice for
+#             load-bearing AM lattices.
+#   diamond  16 struts/cell: the diamond-cubic tetrahedral network,
+#             coordination 4, strut length = cell_size * sqrt(3)/4.
+# Anything else fails the stage with SOUXMAR_E_INVALID_ARGUMENT.
+# Default: bcc
+unit_cell = bcc
+
+# ---------------------------------------------------------------------
+# cell_size — unit-cell edge length, metres. Clamped to [1e-4, 1.0].
+# Default: 0.005  (5 mm)
+cell_size = 0.005
+
+# ---------------------------------------------------------------------
+# strut_diameter — metres. 0.0 (the default) means "derive it from
+# relative_density" via
+#     rho* = (pi d^2 / 4) * L_total / V_lattice
+# where L_total is the summed length of the struts actually generated
+# and V_lattice = nx*ny*nz*cell_size^3. Set it explicitly to pin the
+# section instead.
+#
+# NOTE: the reader ABI can carry a mesh but not a scalar section
+# property, so this number does not travel on the output mesh — hand the
+# same value to whatever sizes the beam sections downstream. For the
+# defaults in this file (50 mm cube, bcc, 5 mm cells,
+# relative_density 0.15) the derived diameter is 0.830 mm.
+# Default: 0.0
+strut_diameter = 0.0
+
+# ---------------------------------------------------------------------
+# relative_density — solid volume fraction, dimensionless. Clamped to
+# [0.01, 0.6]. The relation above ignores the volume double-counted
+# where struts meet at a node, so it over-predicts the density of a
+# given diameter; above about 0.3 treat the derived diameter as nominal
+# and size the struts explicitly. Ignored when strut_diameter > 0.
+# Default: 0.15
+relative_density = 0.15
+
+# ---------------------------------------------------------------------
+# nx, ny, nz — whole cells along each axis. 0 (the default) — or any
+# non-positive value — means "round(span / cell_size)". Each is then
+# clamped to [1, 60].
+# For the 50 mm box and 5 mm cells above these derive to 10, 10, 10.
+nx = 0
+ny = 0
+nz = 0
+
+# ---------------------------------------------------------------------
+# max_cells — upper bound on the number of Edge2 cells (struts) the
+# stage may emit; nx*ny*nz*struts_per_cell is checked against it before
+# anything is generated. Clamped to [1, 5000000].
+# Default: 400000
+max_cells = 400000

@@ -28,6 +28,7 @@ export default defineConfig({
       { text: "Guide",    link: "/guide/" },
       { text: "Agents",   link: "/agents/" },
       { text: "Plugins",  link: "/plugins/" },
+      { text: "Manufacturing", link: "/manufacturing/" },
       { text: "Pricing",  link: "/business/" },
       {
         text: "v0.9.0",
@@ -71,6 +72,21 @@ export default defineConfig({
             { text: "Your first plugin",  link: "/plugins/first-plugin" },
             { text: "Conformance suite",  link: "/plugins/conformance" },
             { text: "Marketplace",        link: "/plugins/marketplace" },
+          ],
+        },
+      ],
+      // Manufacturing + marine vertical. Every capability documented
+      // here is a closed-form or heuristic screening model, not a
+      // calibrated process simulation; the pages say so on themselves.
+      // Only three pages exist — do not add sidebar links ahead of the
+      // markdown.
+      "/manufacturing/": [
+        {
+          text: "Manufacturing + marine",
+          items: [
+            { text: "Overview",                link: "/manufacturing/" },
+            { text: "Additive manufacturing",  link: "/manufacturing/additive" },
+            { text: "Marine + subsea",         link: "/manufacturing/marine" },
           ],
         },
       ],

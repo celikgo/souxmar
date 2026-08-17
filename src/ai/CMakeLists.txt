@@ -3,7 +3,7 @@
 # docs/AI_INTEGRATION.md. Future tools join the catalogue via RFCs.
 
 find_package(fmt CONFIG REQUIRED)
-find_package(tomlplusplus CONFIG REQUIRED)   # Sprint 6 push 6 — budget_config.cpp
+include(SouxmarFindToml)   # toml++ pinned header-only; see the module for why   # Sprint 6 push 6 — budget_config.cpp
 find_package(yaml-cpp CONFIG REQUIRED)       # Sprint 10 push 9 — provider response parsing
 
 add_library(souxmar_ai
@@ -38,6 +38,13 @@ add_library(souxmar_ai
   # Sprint 8 push 5 — CFD planner + BC validator.
   tools/propose_cfd_setup.cpp
   tools/validate_bcs.cpp
+  # Manufacturing block — AM + marine agent tools (catalogue 18 -> 24).
+  tools/propose_am_setup.cpp
+  tools/check_printability.cpp
+  tools/set_build_orientation.cpp
+  tools/estimate_build_cost.cpp
+  tools/apply_hydrostatic_load.cpp
+  tools/check_marine_integrity.cpp
 )
 add_library(souxmar::ai ALIAS souxmar_ai)
 
@@ -58,7 +65,7 @@ target_link_libraries(souxmar_ai
     souxmar::warnings
     souxmar::sanitizers
     fmt::fmt
-    tomlplusplus::tomlplusplus
+    souxmar::tomlplusplus
     yaml-cpp::yaml-cpp
 )
 

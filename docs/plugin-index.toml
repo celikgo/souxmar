@@ -24,10 +24,13 @@
 
 # ---- in-tree reference plugins (always-on) ----------------------------
 #
-# Eleven plugins live under examples/plugins/ in the souxmar repo and
-# are built unconditionally. They are listed here so `souxmar plugin
-# search` surfaces them alongside third-party entries — there's no
-# special-case in the index for "in-tree vs. out-of-tree".
+# Twenty plugins live under examples/plugins/ in the souxmar repo and
+# are built unconditionally: the eleven below, the eight manufacturing +
+# marine plugins in their own section further down, and modal-stub
+# (`solver.modal.linear`) — which is still missing a listing here and
+# needs one filed. They are listed so `souxmar plugin search` surfaces
+# them alongside third-party entries — there's no special-case in the
+# index for "in-tree vs. out-of-tree".
 
 [[plugin]]
 id           = "dev.souxmar.examples.hello-mesher"
@@ -244,4 +247,116 @@ author       = "souxmar project"
 souxmar_versions = ">=1.0,<2.0"
 conformance      = "passed"
 conformance_date = "2026-05-11"
+status           = "active"
+
+# ---- in-tree manufacturing + marine plugins (always-on) ---------------
+#
+# Eight plugins carrying 18 capabilities for additive manufacturing and
+# marine / subsea work. Built unconditionally like the reference set
+# above; no external dependency, no CMake flag.
+#
+# Every model here is closed-form or heuristic, with a named literature
+# reference and an explicit "what this is NOT" note in its source
+# header. They are screening and preliminary-sizing aids, not calibrated
+# process simulations, and the marine qualification dossier is advisory
+# only — souxmar is not a classification society.
+#
+# `conformance = "not_run"` on all eight: no conformance attestation has
+# been produced for these binaries yet. The index states that rather
+# than inheriting the reference set's badge.
+
+[[plugin]]
+id           = "dev.souxmar.examples.am-layered-mesher"
+name         = "AM Layered Voxel Mesher"
+description  = "Layer-aligned structured Hex8 build mesh for additive-manufacturing process simulation. Cell tag = layer index; outer faces tagged 10..15 per side."
+capabilities = ["mesher.am.layered"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/am-layered-mesher"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "not_run"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.lattice-reader"
+name         = "Parametric Strut-Lattice Reader"
+description  = "Generates a periodic strut-lattice beam mesh (cubic / bcc / fcc / octet / diamond) from a lattice spec file. Edge2 cells, cell tag = strut family."
+capabilities = ["reader.lattice"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/lattice-reader"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "not_run"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.am-thermal"
+name         = "LPBF Thermal History + Melt Pool"
+description  = "Layer-wise LPBF thermal history from the Rosenthal moving point source, plus melt-pool depth, normalised enthalpy and lack-of-fusion/keyhole porosity risk. Closed-form screening model, not a resolved melt-pool CFD."
+capabilities = ["solver.am.thermal.lpbf", "postproc.am.melt_pool"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/am-thermal"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "not_run"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.am-distortion"
+name         = "AM Distortion + Residual Stress"
+description  = "Part-scale AM distortion by the Keller-Ploshikhin inherent-strain method with Stoney-type layer-wise curvature accumulation, plus an elastic residual-stress read-back with a yield cap. The strain-calibration factor must be fitted to a measured part."
+capabilities = ["solver.am.distortion.inherent_strain", "postproc.am.residual_stress"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/am-distortion"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "not_run"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.am-polymer"
+name         = "Polymer AM Thermal + Bond Strength"
+description  = "FFF/FDM interlayer thermal cycling (lumped-capacitance road cooling) plus Yang-Pitchumani reptation healing for interlayer degree of healing and Z-strength fraction."
+capabilities = ["solver.am.polymer.fff", "postproc.am.bond_strength"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/am-polymer"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "not_run"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.am-manufacturability"
+name         = "AM Manufacturability Checks"
+description  = "Design-for-additive-manufacturing checks: per-cell overhang/support need, a composite printability score, and per-layer build time from the mesh's own boundary facets. Registered as solver.* because postproc.* requires an input field and a mesh-only check has none. The printability score is a documented weighting, not a guarantee."
+capabilities = ["solver.am.overhang", "solver.am.printability", "solver.am.buildtime"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/am-manufacturability"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "not_run"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.am-slicer"
+name         = "AM Slicer: G-code, CLI, build report"
+description  = "Slices the mesh boundary with planar layers and emits FFF G-code, Common Layer Interface ASCII, or a Markdown build report with a non-cryptographic FNV-1a content digest. Single perimeter, no offset compensation, no support generation, no bridging logic; generic flavour, not a per-vendor post-processor."
+capabilities = ["writer.am.gcode", "writer.am.cli", "writer.am.report"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/am-slicer"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "not_run"
+status           = "active"
+
+[[plugin]]
+id           = "dev.souxmar.examples.marine"
+name         = "Marine / Subsea Loads and Integrity"
+description  = "Closed-form marine engineering set: seawater hydrostatic load cases, preliminary pressure-hull collapse margin, seawater corrosion / pitting / galvanic indicators, and an advisory AM qualification dossier. Preliminary design aids, not classification-society calculations."
+capabilities = ["solver.marine.hydrostatic", "solver.marine.hull_collapse", "solver.marine.corrosion", "writer.marine.qualification_report"]
+license      = "Apache-2.0"
+source       = "https://github.com/souxmar/souxmar/tree/master/examples/plugins/marine"
+author       = "souxmar project"
+souxmar_versions = ">=1.0,<2.0"
+conformance      = "not_run"
 status           = "active"

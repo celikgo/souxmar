@@ -34,6 +34,8 @@ souxmar is **two things at once**: a scalable orchestration layer over the exist
 
 souxmar wraps OpenCASCADE for geometry, embeds Gmsh and a native mesher behind a common interface, talks to FEniCSx and a native solver through the same `ISolver` contract, adapts OpenFOAM for CFD problems, accepts Blender models for concept and architectural geometry, and emits VTK for ParaView and any future viewer.
 
+Domains beyond stress, thermal, and flow enter the same way, as plugins under the existing capability namespaces rather than as new core concepts. Manufacturing-process simulation is the worked example: additive-manufacturing thermal history, distortion, manufacturability screening, slicing, and the marine / subsea load and integrity checks that follow an AM part into service all register as ordinary `mesher.*`, `reader.*`, `solver.*`, `writer.*`, and `postproc.*` capabilities on the frozen plugin ABI. This is the abstraction paying for itself: a whole vertical arrives with no ABI change, no new prefix, and no host change — and it arrives honest about its own fidelity, since these are closed-form and heuristic screening models, not calibrated process simulations.
+
 ## Product surfaces
 
 | Surface             | For                                              | Status                  |
@@ -62,12 +64,13 @@ Primary (the desktop app is built for them):
 1. **Mechanical and structural engineers** running parts and assemblies through stress, deflection, vibration, and thermal analyses. They want a pipeline they can trust on Monday and re-run on Friday.
 2. **Aerospace / aviation engineers** who need traceable, reproducible analysis pipelines for components and sub-assemblies, often under regulatory scrutiny. Open-source code they can audit is non-negotiable.
 3. **Architectural and civil engineers** running building-component analyses, MEP airflow studies, and concept-stage structural sizing. Often coming from Blender or Revit on the geometry side.
+4. **Manufacturing and marine / naval engineers** who need to know whether a part can actually be built and whether it will survive where it has to work. On the manufacturing side: additive-process screening — will it warp, does it need supports, how long is the build, what does it cost. On the marine side: depth load cases, preliminary pressure-hull sizing, seawater corrosion allowance, and the evidence trail an AM part needs before anyone will fit it to a hull. These are the people who today leave the pipeline for a separate build-preparation tool and a spreadsheet, and never bring the answer back.
 
 Secondary (the library, CLI, Python, and SDK are built for them):
 
-4. **Researchers** testing new mesh algorithms, elements, or solver formulations against real industrial geometry without writing a CAD importer or a viewer.
-5. **Educators** who want students to understand each stage of the CAE pipeline without drowning them in glue code.
-6. **Tool builders** embedding a CAE pipeline inside a larger product (digital twin, generative design, simulation-as-a-service) without licensing fees.
+5. **Researchers** testing new mesh algorithms, elements, or solver formulations against real industrial geometry without writing a CAD importer or a viewer.
+6. **Educators** who want students to understand each stage of the CAE pipeline without drowning them in glue code.
+7. **Tool builders** embedding a CAE pipeline inside a larger product (digital twin, generative design, simulation-as-a-service) without licensing fees.
 
 ## Design principles
 

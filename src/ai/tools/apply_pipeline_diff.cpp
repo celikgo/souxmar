@@ -24,6 +24,7 @@
 // (typically by re-adding the missing upstream first).
 
 #include "souxmar/ai/tool.h"
+#include "souxmar/pipeline/dag.h"
 #include "souxmar/pipeline/parser.h"
 #include "souxmar/pipeline/pipeline.h"
 #include "souxmar/pipeline/value.h"
@@ -279,6 +280,33 @@ Tool make_apply_pipeline_diff_tool() {
                                   "after a remove. Re-add the missing upstream and retry."}};
     }
     const auto& parsed = std::get<pl::Pipeline>(parse_result);
+
+    // Parsing is not validation. `parse_pipeline` checks the document's shape;
+    // it does not resolve `{from: <id>}` references, so a `remove` that orphans
+    // a downstream stage parses perfectly and only fails later, when the runner
+    // builds the DAG. Run the same validator here so the tool actually delivers
+    // the dangling-reference diagnosis its error message promises, and so the
+    // agent never gets handed a pipeline that cannot run.
+    auto dag_result = pl::validate(parsed);
+    if (auto* errs = std::get_if<std::vector<pl::DagError>>(&dag_result)) {
+      std::ostringstream msg;
+      for (std::size_t i = 0; i < errs->size(); ++i) {
+        if (i != 0)
+          msg << "; ";
+        if (!(*errs)[i].stage_id.empty())
+          msg << "stage '" << (*errs)[i].stage_id << "': ";
+        msg << (*errs)[i].message;
+      }
+      return ToolResult{pl::Value::null_value(),
+                        "diffed pipeline failed validation",
+                        ToolError{"INVALID_ARGUMENT",
+                                  msg.str(),
+                                  "the ops applied cleanly and the result parses, but it is not a "
+                                  "runnable DAG — typically a dangling {from: <id>} reference left "
+                                  "by a remove, or a cycle introduced by an add. Re-add the "
+                                  "missing upstream (or drop the stage that referenced it) and "
+                                  "retry; the pipeline is unchanged on failure."}};
+    }
 
     std::map<std::string, pl::Value> out;
     out.emplace("yaml", pl::Value::string(yaml));

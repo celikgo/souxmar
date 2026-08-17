@@ -930,3 +930,174 @@ In addition to the existing gates (perf, determinism, security, docs, conformanc
 - **MPC / kinematic coupling.** CalculiX supports `*MPC` and `*EQUATION`; out of scope for this block — rigid-body coupling deserves a dedicated RFC since the souxmar data model has no rigid-body concept yet.
 - **Restart files.** Long-running nonlinear "resume from .rin" — deferred to a v1.10 follow-up once the orchestrator has a "resume a stage" concept.
 - **GUI INP-deck editor.** souxmar generates INPs; we do not become a deck-editor IDE.
+
+---
+
+# Post-v1.9 plan — Sprints 41–44: manufacturing + marine verticals
+
+**Context.** After v1.9 souxmar can tell an engineer what a part does under load. It still cannot tell them whether the part can be *built*, or whether it will survive where it has to work. Every AM-facing user today leaves for Netfabb / Simufact / Amphyon to answer "will this warp, does it need supports, how long does the build take, what does it cost" — and every subsea user leaves for a spreadsheet to answer "what is the collapse depth and how much wall do I lose to corrosion in 25 years." This block closes both gaps as a **plugin-only vertical**: eight always-on in-tree plugins carrying **18 capabilities**, six additive agent tools, two workbench panels, four runnable examples, and a curated material library. The ABI v1 contract is untouched — **no minor ratchet in this block** — because every capability rides the existing `mesher.` / `reader.` / `solver.` / `writer.` / `postproc.` prefix dispatch.
+
+The block is deliberately **closed-form and heuristic**. Every model has a named literature source, an explicit "what this is NOT" note in its source header, and a documented clamp on every user input. Nothing in S41–S43 is a calibrated process simulation; the calibrated path is the S44 story and it ships behind a beta flag. Nothing in the block is a classification-society calculation or an approval of any kind.
+
+Like the v1.7–v1.9 block, this is eight weeks (four sprints).
+
+**Releases:** `v1.10` at end of S41 (AM core: layered meshing, lattices, LPBF thermal, distortion, DfAM screening), `v1.11` at end of S42 (polymer AM, slicing/G-code, marine, agent tools, panels), `v1.12` at end of S44 (calibrated inherent-strain solver behind a beta flag + qualification-evidence surface). S43 is the no-release hardening sprint — validation, the calibration study, and the determinism sweep across eighteen new capabilities.
+
+**Headline metrics this block must hit:**
+
+- An engineer can drop an STL into the app, ask "can this be printed in 316L on an LPBF machine, and what will it cost", and get an overhang field, a printability score with a named limiting factor, and a build-time/cost estimate without editing pipeline YAML.
+- `examples/am-lpbf-bracket` runs mesh → thermal → melt pool → distortion → residual stress → overhang → report end to end on all three OSes with byte-identical output.
+- `examples/am-submarine-pressure-hull` produces depth load cases, a collapse margin with a named governing mode, and an advisory qualification dossier from one pipeline file.
+- Determinism gate stays green across all 18 new capabilities: no `unordered_*` iteration, no unseeded RNG, no wall-clock or environment reads in any emitted artefact (G-code, CLI, Markdown reports all carry fixed dates and no absolute paths).
+- Every AM/marine capability source contains both a `What it computes:` block with a literature citation and a `What this is NOT:` block. The docs gate fails the build if either is missing.
+- Agent-eval CI run time increases by ≤3 minutes (still inside the 15-minute budget).
+
+## Risk register additions (post-v1.9)
+
+Numbering continues the project-wide `R-nnn` sequence — the last ID issued was **R-044** (ADR-0035 / Sprint 24 retro), not the R-027 that closes the previous block's table in this file.
+
+| ID    | Risk                                                                                                            | Likelihood | Impact | Mitigation                                                                                                                                                                                                                                                        |
+| ----- | --------------------------------------------------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| R-045 | Users read the closed-form AM models as calibrated predictions and commit a real build on them                    | High       | High   | "What this is NOT" block mandatory in every source header and mirrored into `docs/MANUFACTURING.md`; ManufacturingPanel renders a persistent model-fidelity banner; `propose_am_setup` returns the caveat inside its own summary text; docs gate enforces the section. |
+| R-046 | The `strain_calibration` default (0.30) is treated as a physical constant, so distortion is wrong by a factor     | High       | High   | Default is documented as a placeholder that must be fitted to a measured part; `writer.am.report` prints the factor used and labels the run **uncalibrated** unless the user overrode it; S44's calibrated solver supersedes the heuristic.                          |
+| R-047 | `writer.marine.qualification_report` is presented to a class surveyor as evidence of compliance                   | Med        | High   | Prominent advisory-only disclaimer at the head of every dossier; the checklist is explicitly sourced to publicly documented practice; no standard number is ever printed as "met"; `check_marine_integrity` repeats the disclaimer in chat.                          |
+| R-048 | Slicer geometry robustness — self-intersecting or non-manifold input produces silently broken G-code               | High       | Med    | Contour chaining reports unclosed loops as a typed error rather than emitting a partial layer; the build report records the per-layer contour count so a bad slice is visible; documented limitations list single-perimeter, no offset compensation, no bridging.     |
+| R-049 | Determinism drift in the slicer and the boundary-face extraction (map ordering, floating-point accumulation order) | Med        | High   | Sorted-key `std::map` / sorted vectors only, contours ordered by (min y, min x), index-order accumulation; the determinism gate diffs G-code, CLI and Markdown artefacts byte-for-byte across the three OS runners.                                                  |
+| R-050 | Eighteen capabilities land with no conformance attestation, so the plugin index shows `not_run` indefinitely       | High       | Low    | S43 runs `souxmar-conformance` against all eight plugins on all four CI platforms and flips `docs/plugin-index.toml` to `passed` with a date; until then the index states `not_run` honestly rather than claiming a pass.                                            |
+| R-051 | Scope creep from "manufacturability check" into topology optimisation                                             | Med        | Med    | Named in this block's *not doing* list; any optimisation request is answered with a DfAM screening field, not a shape change. Topology optimisation stays a block of its own with its own RFC.                                                                       |
+| R-052 | The calibrated S44 solver cannot beat the heuristic without measured data we do not have                          | Med        | Med    | S43's calibration study defines the acceptance data set before S44 starts; if no usable measured part exists, S44 ships the solver behind the beta flag with the study published as "insufficient data" rather than inventing a validation claim.                     |
+
+## RFCs required before merge of this block
+
+| RFC slot | Subject                                                                                                                                                | Sprint that consumes it |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
+| RFC-0012 | **AM process-simulation contract** — capability placement, unit and temperature conventions, per-capability fidelity statement, calibration policy       | S41 (filed)             |
+| RFC-0014 | Calibrated AM distortion solver — mesh-resolved inherent-strain formulation, calibration data schema, beta-flag exit criteria                            | S44                     |
+| RFC-0015 | AM qualification-evidence contract — what a dossier may and may not assert, evidence-artefact schema, per-framework mapping policy                       | S44                     |
+
+**Numbering note.** `docs/rfcs/` currently contains 0001–0006 and 0011 plus the template; slots 0007–0010 (reserved by the v1.4–v1.6 block) and 0013 (reserved by the v1.7–v1.9 block for the fatigue contract) were never filed. RFC-0012 is now filed as `docs/rfcs/0012-am-process-simulation.md`, which means the v1.7–v1.9 block's reservation of "RFC-012" for the cross-solver comparison contract collides and must take a free slot when it is actually written. This block takes 0014 and 0015.
+
+Two ADRs land with the block: [ADR-0044](adr/0044-manufacturing-capability-namespaces.md) (capability-namespace placement and the two structural constraints behind it) and [ADR-0045](adr/0045-agent-tool-contract-am-ratchet.md) (the additive tool ratchet for tools 19–24). **ADR-0043 was already claimed by RFC-0011's CalculiX work**, which is why this block starts at 0044.
+
+---
+
+## Sprint 41 — AM core: layered meshing, lattices, LPBF thermal, distortion, DfAM (`v1.10` release)
+
+**Theme:** land the metal-AM spine and the DfAM screening surface. By exit an engineer can voxelise a build volume into layers, generate a parametric lattice, run an LPBF thermal history with melt-pool and porosity-risk read-back, get a part-scale distortion and residual-stress prediction, and screen a part for overhangs, printability and build cost. Everything closed-form; the fidelity statement ships with the code, not after it.
+
+| Team       | Story                                                                                                                                        | Size |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | RFC-0012 merged; ADR-0044 filed (`postproc.*` needs an input field ⇒ mesh-only analyses are `solver.*`; meshers get no value bag ⇒ parametric generation is `reader.*`) | M    |
+| Plugin Host| `am-layered-mesher` — `mesher.am.layered`: layer-aligned Hex8 fill, cell tag = layer index, per-side boundary-face tags 10–15, 200 k-cell cap | L    |
+| Plugin Host| `lattice-reader` — `reader.lattice`: cubic / bcc / fcc / octet / diamond strut lattice from a spec file, Edge2 cells, strut-family cell tags   | L    |
+| Adapters   | `am-thermal` — `solver.am.thermal.lpbf` (Rosenthal layer-wise history) + `postproc.am.melt_pool` (depth, normalised enthalpy, porosity risk)  | XL   |
+| Adapters   | `am-distortion` — `solver.am.distortion.inherent_strain` (Keller–Ploshikhin + Stoney curvature) + `postproc.am.residual_stress`               | XL   |
+| Adapters   | `am-manufacturability` — `solver.am.overhang`, `solver.am.printability`, `solver.am.buildtime`; host-side boundary-face extraction, no ABI help | L  |
+| DX         | `examples/am-lpbf-bracket/`; `examples/materials/am-marine.toml` with a source column on every number                                          | L    |
+| DX         | `docs/MANUFACTURING.md`: per-capability inputs, units, output field shapes, and the fidelity statement for each model                          | L    |
+| Platform   | Release `v1.10`; retro                                                                                                                        | M    |
+
+**Exit criteria:**
+- `examples/am-lpbf-bracket/` runs mesh → thermal → melt pool → distortion → residual stress → overhang → report on all three OSes, byte-identical.
+- `solver.am.overhang` reproduces the analytic downskin tilt on a known wedge to within floating-point tolerance for Tet4, Hex8, Prism6, Pyramid5 and Tri3/Quad4 inputs.
+- Every capability's source contains a `What it computes:` block with a citation and a `What this is NOT:` block; the docs gate enforces it.
+- `docs/plugin-index.toml` lists all five plugins with `conformance = "not_run"` — honest until S43's attestation run.
+- `v1.10` tagged. Determinism gate green.
+
+---
+
+## Sprint 42 — Polymer AM, slicing, marine, agent tools + panels (`v1.11` release)
+
+**Theme:** the block's public face. Polymer AM closes the "not everyone prints metal" gap; the slicer turns a souxmar mesh into something a machine can actually run; the marine plugin opens the subsea vertical; and the six agent tools plus two panels make the whole vertical reachable from chat and from the pipeline editor without hand-writing YAML.
+
+| Team       | Story                                                                                                                                          | Size |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| Adapters   | `am-polymer` — `solver.am.polymer.fff` (lumped-capacitance interlayer cooling) + `postproc.am.bond_strength` (Yang–Pitchumani reptation healing) | L    |
+| Adapters   | `am-slicer` — shared `slicer.hpp`/`slicer.cpp`; `writer.am.gcode`, `writer.am.cli` (CLI ASCII), `writer.am.report` (Markdown + FNV-1a digest)    | XL   |
+| Adapters   | `marine` — `solver.marine.hydrostatic`, `solver.marine.hull_collapse`, `solver.marine.corrosion`, `writer.marine.qualification_report`           | XL   |
+| AI         | Agent tools 19–24 as an additive ratchet (ADR-0045): `propose_am_setup`, `check_printability`, `set_build_orientation`, `estimate_build_cost`, `apply_hydrostatic_load`, `check_marine_integrity`; ≥1 eval case each | L |
+| Desktop    | `ManufacturingPanel.tsx` + `MarinePanel.tsx` in `src/desktop/src/workbench/`, registered in `YamlViewer.tsx`; upstream-gate empty states         | L    |
+| Desktop    | Mirror both panels' stage algorithms into `scripts/sim-pipeline-flow.mjs` so the headless simulator stays in step                                | M    |
+| DX         | `examples/am-marine-propeller/`, `examples/am-submarine-pressure-hull/`, `examples/am-polymer-auv-fairing/`                                       | L    |
+| DX         | `docs/MARINE.md` + docs-site manufacturing section (overview / additive / marine); `docs/AI_INTEGRATION.md` tool table extended to 24            | L    |
+| Platform   | Release `v1.11`; retro                                                                                                                          | M    |
+
+**Exit criteria:**
+- `writer.am.gcode` output for `examples/am-polymer-auv-fairing/` is byte-identical across the three OSes and parses in a third-party G-code viewer without warnings.
+- `examples/am-submarine-pressure-hull/` produces a collapse margin with a named governing mode and an advisory dossier from one pipeline file.
+- All six new agent tools appear in `souxmar agent list --json`, carry their documented confirmation policy, and land with the `Ratchet: additive tool (ADR-0010)` marker; `scripts/check-tool-contract.sh` passes.
+- Manufacturing and Marine panels render their upstream-gate empty state honestly when no mesh stage exists.
+- `v1.11` tagged. Determinism gate green on every emitted artefact.
+
+---
+
+## Sprint 43 — Validation, calibration study, conformance + determinism sweep (no release)
+
+**Theme:** earn the right to keep the vertical in the default build. Eighteen capabilities landed in two sprints; this sprint proves they behave, attests them through the conformance suite, and produces the calibration study that decides whether S44's calibrated solver is buildable at all. Deliberate no-release sprint, same reasoning as S39 — hardening is the thing every previous block under-budgeted.
+
+| Team       | Story                                                                                                                                        | Size |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | `souxmar-conformance` run against all eight plugins on all four CI platforms; `docs/plugin-index.toml` flipped to `passed` with a date         | L    |
+| Platform   | Determinism sweep across all 18 capabilities: artefact-level byte diffs (G-code, CLI, Markdown) plus field-level diffs on the three OS runners | L    |
+| Adapters   | Closed-form verification set: Rosenthal peak temperature vs. published analytic values, Stoney curvature vs. analytic bilayer, Windenburg–Trilling vs. published collapse charts, membrane-yield vs. hand calculation | XL |
+| Adapters   | Sensitivity study: which inputs actually move each output, published per capability so users know what to measure first                        | L    |
+| DX         | **Calibration study**: what measured data a calibrated distortion solver needs, what is publicly available, and the acceptance criteria S44 must hit. Publishes "insufficient data" as a legitimate outcome. | XL |
+| Desktop    | Model-fidelity banner in both panels; per-capability "what this ignores" tooltip sourced from the same text as the source headers               | M    |
+| AI         | Eval-suite growth to cover all six new tools plus two negative cases each (missing mesh, missing upstream field)                                | M    |
+| Plugin Host| Plugin-fault gate extended over the eight new plugins (deliberate-bad-input pass, not just deliberate segfault)                                 | M    |
+
+**Exit criteria:**
+- Conformance attested for all eight plugins on all four platforms; `docs/plugin-index.toml` carries `conformance = "passed"` with a real date.
+- Determinism gate green with artefact-level byte comparison, not just field norms.
+- The verification set is published with every deviation from the analytic reference stated as a number, including the ones that look bad.
+- The calibration study is merged with an explicit go / no-go recommendation for S44.
+- No regression in the agent-eval CI budget (still <15 min p95).
+
+---
+
+## Sprint 44 — Calibrated distortion solver + qualification evidence (`v1.12` release)
+
+**Theme:** the RFC-0012 follow-on. Replace the block's weakest link — a hand-entered `strain_calibration` scalar — with a mesh-resolved, data-calibrated inherent-strain solver, shipped behind a beta flag and gated on S43's study. Plus the qualification-evidence surface that makes an advisory dossier genuinely useful without ever pretending to be an approval.
+
+| Team       | Story                                                                                                                               | Size |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| Platform   | RFC-0014 merged; calibrated-solver contract + calibration-data schema + beta-flag exit criteria                                       | M    |
+| Adapters   | Calibrated distortion solver: mesh-resolved layer-wise inherent strain with a fitted calibration set; beta flag, off by default. **Capability id is fixed by RFC-0014, not here** — this block's frozen id list ends at the 18 that shipped in S41–S42 | XL |
+| Platform   | Calibration-data ingest: a versioned, hash-pinned measured-part set; the solver refuses to run uncalibrated rather than guessing      | L    |
+| Platform   | RFC-0015 merged; qualification-evidence contract — artefact schema, per-framework mapping policy, what a dossier may never assert     | M    |
+| Adapters   | `writer.marine.qualification_report` extension: evidence-artefact links, per-item provenance, unchanged advisory-only disclaimer      | L    |
+| Desktop    | Calibration panel: which data set is loaded, its hash, and a blunt "uncalibrated" state when none is                                  | M    |
+| AI         | A model-limits explanation tool scoped (name and shape fixed by RFC-0014) and deferred if the eval budget is tight — it must not become a substitute for reading the docs | S |
+| DX         | Validation report for the calibrated solver, published to `docs/validation/` per the `validating-solver` skill protocol               | XL   |
+| DX         | Tutorials: "Will this bracket warp?", "Sizing a pressure hull"; release notes for `v1.12`                                              | L    |
+| Platform   | Release `v1.12`; retro + capacity reset for the next block                                                                            | M    |
+
+**Exit criteria:**
+- The calibrated distortion solver reproduces the S43 acceptance data set inside the tolerance RFC-0014 published, or ships disabled with the shortfall documented as a number. Inventing a pass is a release blocker.
+- The solver refuses to run without a hash-pinned calibration set, and says why.
+- Every qualification-dossier item carries provenance; the advisory-only disclaimer is unchanged and untouchable.
+- `v1.12` tagged on all three OSes. Determinism gate green.
+- Retro produces the theme proposal for Sprints 45+ (likely: topology optimisation with its own RFC, or the Code_Aster second-solver adapter carried over from the v1.7–v1.9 retro).
+
+---
+
+## Cross-cutting commitments (Sprints 41–44)
+
+In addition to the existing gates (perf, determinism, security, docs, conformance, viz-golden, solver-validation, coupler-stability, subprocess-adapter conformance, cross-solver agreement):
+
+- **Model-honesty gate:** every new `solver.*` / `postproc.*` / `writer.*` / `mesher.*` / `reader.*` capability in this block ships a source-header block containing `What it computes:` (formula + named literature reference) and `What this is NOT:` (exactly what the model ignores). CI fails if either is absent, and `docs/MANUFACTURING.md` / `docs/MARINE.md` must carry the same statement for the same capability.
+- **No-standards-claim gate:** no artefact this block emits may state or imply compliance with, or approval under, any standard or classification framework. The qualification dossier cites publicly documented practice and says plainly that it is advisory. A grep-based check rejects "compliant", "approved" and "certified" in emitted templates.
+- **Artefact determinism gate:** G-code, CLI and Markdown outputs are byte-compared across the three OS runners, not just field-norm-compared. No wall-clock, no absolute paths, no environment values in any emitted file.
+- **Input-clamp discipline:** every user input is clamped to a documented range and no unchecked input is ever a divisor. Reviewed per capability, not per plugin.
+- **Eval-suite growth:** 6 new agent tools in this block; eval suite grows by ≥6 happy-path plus ≥12 negative cases. CI budget headroom monitored at each sprint exit; if p95 crosses 13 min we cut the lowest-value cases rather than let the gate expire.
+- **ABI stays frozen:** no `include/souxmar-c/` change in this block. If a capability seems to need one, it is the capability's placement that is wrong, not the ABI (see ADR-0044).
+
+## What this block deliberately does *not* do
+
+- **Topology optimisation.** Explicitly out. A manufacturability *screening* field is not a shape *change*; the moment souxmar moves geometry it needs an optimisation data model, a sensitivity framework, and a manufacturing-constraint formulation. That is a block of its own with its own RFC, and it does not start here.
+- **Standards compliance or classification approval.** souxmar is not a classification society and does not become one. `writer.marine.qualification_report` and the qualification-evidence work in S44 are **advisory only**: a checklist derived from publicly documented AM qualification practice, with provenance on every item. No approval, no certification, no statement of compliance, in this block or any later one.
+- **Calibrated process simulation in S41–S43.** The first three sprints are closed-form and heuristic by design, and they say so in every source header. Calibration is S44, behind a beta flag, gated on S43's study — and shipping it disabled with a documented shortfall is an acceptable outcome.
+- **Support-structure generation.** `solver.am.overhang` tells you support is needed and where; it does not generate the support geometry. Support generation is a geometry-authoring feature and souxmar does not author geometry.
+- **Machine-specific post-processors.** `writer.am.gcode` emits generic FFF G-code and `writer.am.cli` emits CLI ASCII. We do not maintain a per-vendor flavour matrix; a vendor flavour is an out-of-tree writer plugin, which is exactly what the plugin ABI is for.
+- **Powder-scale or melt-pool CFD.** No powder-bed discrete-element modelling, no Marangoni-resolved melt-pool CFD. The melt-pool capability reports scaling-law dimensions, not a resolved flow field.
+- **Costing as a quotation surface.** `solver.am.buildtime` estimates time, energy, mass and cost from user-supplied rates. It is an engineering estimate, not a quote, and no rate database ships with it.

@@ -1,9 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Sprint 6 push 1 integration: discover + load hello-mesher and the new
-// mesh-quality plugin, run a 2-stage pipeline (mesh → mesh_quality),
-// inspect the resulting per-cell Field and confirm the components match
-// `souxmar::core::quality::summarise`.
+// Sprint 6 push 1 integration: discover + load hello-mesher, heat-solver and
+// the mesh-quality plugin, run a 3-stage pipeline
+// (mesh → heat → mesh_quality), inspect the resulting per-cell Field and
+// confirm the components match `souxmar::core::quality::summarise`.
+//
+// Why heat-solver is in a mesh-quality test: RegistryDispatcher hard-requires
+// `field: {from: <stage>}` on EVERY postproc stage — see dispatch_postproc()
+// in src/pipeline/registry_dispatcher.cpp (the "Required `field` upstream
+// handle" branch). postproc is field-in / field-out by definition and a
+// missing field is a dispatch error, not a silent NULL. `postproc.mesh_quality`
+// happens to ignore the field it is handed (it derives its metrics from the
+// mesh alone), but the dispatcher does not know or care about that, so the
+// pipeline still needs some upstream stage producing a Field. heat-solver is
+// the cheapest one in-tree. Do not "simplify" this back to a two-stage
+// mesh → quality pipeline: the run fails with
+//   postproc 'postproc.mesh_quality' input is missing required 'field: {from: ...}'
 
 #include "souxmar/core/mesh_quality.h"
 #include "souxmar/pipeline/cache.h"
@@ -55,33 +67,50 @@ TEST(MeshQualityPluginEndToEnd, MesherFollowedByMeshQuality) {
   plugin::PluginLoader loader(registry, "test-host/0.0.0");
 
   auto _mesher = load_by_id(loader, discovery, "dev.souxmar.examples.hello-mesher");
+  // Upstream Field producer — see the file-top note on dispatch_postproc().
+  auto _heat = load_by_id(loader, discovery, "dev.souxmar.examples.heat-solver");
   auto _quality = load_by_id(loader, discovery, "dev.souxmar.examples.mesh-quality");
 
   ASSERT_NE(registry.find_mesher("mesher.tetra.hello"), nullptr);
+  ASSERT_NE(registry.find_solver("solver.heat.linear"), nullptr);
   ASSERT_NE(registry.find_postproc("postproc.mesh_quality"), nullptr);
 
+  // mesh → heat (nodal scalar field, 1 step) → quality (per-cell vector).
+  // The `field: {from: heat}` edge is what the dispatcher requires; the
+  // mesh-quality plugin itself ignores the field's contents.
   std::ostringstream yaml;
   yaml << "version: 1\n"
        << "stages:\n"
        << "  - id: mesh\n"
        << "    plugin: mesher.tetra.hello\n"
+       << "  - id: heat\n"
+       << "    plugin: solver.heat.linear\n"
+       << "    input:\n"
+       << "      mesh: { from: mesh }\n"
+       << "      num_time_steps: 1\n"
+       << "      dt: 0.5\n"
+       << "      tau: 1.0\n"
        << "  - id: quality\n"
        << "    plugin: postproc.mesh_quality\n"
        << "    input:\n"
-       << "      mesh: { from: mesh }\n";
+       << "      mesh:  { from: mesh }\n"
+       << "      field: { from: heat }\n";
 
   auto parse_result = pipeline::parse_pipeline(yaml.str());
-  ASSERT_TRUE(std::holds_alternative<pipeline::Pipeline>(parse_result));
+  ASSERT_TRUE(std::holds_alternative<pipeline::Pipeline>(parse_result))
+      << "parse failed: " << std::get<pipeline::ParseError>(parse_result).message;
   const auto& p = std::get<pipeline::Pipeline>(parse_result);
 
   pipeline::RegistryDispatcher dispatcher(registry);
   pipeline::Cache cache;
   auto run = pipeline::run_pipeline(p, dispatcher, cache);
-  ASSERT_EQ(run.status, pipeline::RunResult::Status::Success);
-  ASSERT_EQ(run.stage_results.size(), 2u);
+  ASSERT_EQ(run.status, pipeline::RunResult::Status::Success)
+      << "validation_errors=" << (run.validation_errors.empty() ? "" : run.validation_errors[0]);
+  ASSERT_EQ(run.stage_results.size(), 3u);
   for (const auto& sr : run.stage_results) {
     EXPECT_EQ(sr.status, pipeline::StageRunResult::Status::Executed)
-        << "stage '" << sr.stage_id << "' did not execute";
+        << "stage '" << sr.stage_id
+        << "' did not execute: " << (sr.error ? sr.error->message : std::string{"(no error)"});
   }
 
   ASSERT_NE(run.outputs.find("quality"), run.outputs.end());

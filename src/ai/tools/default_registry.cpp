@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// default_v1_tools() — assembles the frozen 18-tool v1 agent catalogue
-// per docs/AI_INTEGRATION.md. Each tool's factory lives in a sibling
-// .cpp to keep the per-tool code reviewable in isolation. The catalogue
-// is frozen final at v1 (ADR-0011, superseding the freeze-candidate
+// default_v1_tools() — assembles the v1 agent catalogue per
+// docs/AI_INTEGRATION.md. Each tool's factory lives in a sibling .cpp to
+// keep the per-tool code reviewable in isolation. The catalogue was
+// frozen final at 18 tools (ADR-0011, superseding the freeze-candidate
 // ADR-0010); additions land via the "Ratchet: additive tool (ADR-0010)"
-// marker and are enforced by scripts/check-tool-contract.sh.
+// marker and are enforced by scripts/check-tool-contract.sh. The
+// manufacturing block adds tools 19-24, taking the catalogue to 24.
 
 #include "souxmar/ai/tool.h"
 
@@ -37,6 +38,15 @@ Tool make_apply_outlet_tool();
 // closes the freeze-candidate ADR-0010).
 Tool make_propose_cfd_setup_tool();
 Tool make_validate_bcs_tool();
+// Manufacturing block — additive manufacturing + marine. Catalogue
+// 18 → 24 (tools 19-24 of the ADR-0010 additive ratchet; see
+// docs/adr/0045-agent-tool-contract-am-ratchet.md).
+Tool make_propose_am_setup_tool();
+Tool make_check_printability_tool();
+Tool make_set_build_orientation_tool();
+Tool make_estimate_build_cost_tool();
+Tool make_apply_hydrostatic_load_tool();
+Tool make_check_marine_integrity_tool();
 
 ToolRegistry default_v1_tools() {
   ToolRegistry r;
@@ -65,6 +75,15 @@ ToolRegistry default_v1_tools() {
   // 18 for the v1 final freeze; ADR-0011 superseded ADR-0010).
   r.add(make_propose_cfd_setup_tool());
   r.add(make_validate_bcs_tool());
+  // Manufacturing block — AM + marine (tools 19-24, catalogue 18 → 24).
+  // Additive-only: the 18 tools above keep their names, categories and
+  // confirmation tiers untouched.
+  r.add(make_propose_am_setup_tool());
+  r.add(make_check_printability_tool());
+  r.add(make_set_build_orientation_tool());
+  r.add(make_estimate_build_cost_tool());
+  r.add(make_apply_hydrostatic_load_tool());
+  r.add(make_check_marine_integrity_tool());
   return r;
 }
 

@@ -94,7 +94,7 @@ provides = ["mesher.x"]
 TEST(Manifest, EmptyCapabilitiesRejected) {
   std::string toml = R"(
 [plugin]
-id = "x"
+id = "dev.souxmar.test.x"
 name = "x"
 version = "0.1.0"
 abi = 1
@@ -114,7 +114,7 @@ provides = []
 TEST(Manifest, UnknownThreadingModelRejected) {
   std::string toml = R"(
 [plugin]
-id = "x"
+id = "dev.souxmar.test.x"
 name = "x"
 version = "0.1.0"
 abi = 1
@@ -137,7 +137,7 @@ model = "nonsense"
 TEST(Manifest, AbiVersionMustBeOneInV1xHost) {
   std::string toml = R"(
 [plugin]
-id = "x"
+id = "dev.souxmar.test.x"
 name = "x"
 version = "0.1.0"
 abi = 2
@@ -164,7 +164,7 @@ TEST(Manifest, MalformedTomlReportsLine) {
 TEST(Manifest, ThreadingDefaultIsSingleThreaded) {
   std::string toml = R"(
 [plugin]
-id = "x"
+id = "dev.souxmar.test.x"
 name = "x"
 version = "0.1.0"
 abi = 1

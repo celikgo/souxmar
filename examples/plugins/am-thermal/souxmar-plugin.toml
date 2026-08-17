@@ -1,0 +1,24 @@
+[plugin]
+id            = "dev.souxmar.examples.am-thermal"
+name          = "LPBF Thermal History + Melt Pool"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/am-thermal"
+
+description   = "Layer-wise LPBF thermal history from the Rosenthal moving point source, plus melt-pool depth, normalised enthalpy and lack-of-fusion/keyhole porosity risk."
+documentation = "https://souxmar.dev/docs/plugins/am-thermal"
+tags          = ["solver", "postproc", "additive-manufacturing", "lpbf", "thermal", "melt-pool", "porosity"]
+min_souxmar_abi_minor = 0
+
+[plugin.binary]
+file          = "libam_thermal.so"
+
+[plugin.capabilities]
+provides      = ["solver.am.thermal.lpbf", "postproc.am.melt_pool"]
+
+[plugin.threading]
+model         = "reentrant"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"

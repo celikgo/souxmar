@@ -1,0 +1,24 @@
+[plugin]
+id            = "dev.souxmar.examples.am-slicer"
+name          = "AM Slicer and Build Report Writers"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/am-slicer"
+
+description   = "Planar slicer for additive manufacturing: FFF G-code, Common Layer Interface ASCII, and a Markdown build report with a content digest."
+documentation = "https://souxmar.dev/docs/plugins/am-slicer"
+tags          = ["writer", "additive-manufacturing", "slicer", "gcode", "cli", "report"]
+min_souxmar_abi_minor = 0
+
+[plugin.binary]
+file          = "libam_slicer.so"
+
+[plugin.capabilities]
+provides      = ["writer.am.gcode", "writer.am.cli", "writer.am.report"]
+
+[plugin.threading]
+model         = "reentrant"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"

@@ -211,6 +211,18 @@ ParseResult parse_manifest(std::string_view toml_source) {
                       fmt::format("TOML parse error: {}", e.description()),
                       static_cast<std::size_t>(src.begin.line),
                       static_cast<std::size_t>(src.begin.column));
+  } catch (const std::exception& e) {
+    // Defence in depth against a toml++ packaged as a shared library: in that
+    // mode its exception typeinfo is hidden inside the dylib and the typed
+    // catch above silently fails to match, which used to let the exception
+    // escape and terminate `souxmar plugin list` on any malformed manifest.
+    // cmake/SouxmarFindToml.cmake pins header-only so the typed catch works
+    // and we keep line/column; this arm only fires if a downstream build
+    // overrides that, and it still returns a typed rejection.
+    return make_error(ManifestRejection::TomlSyntax,
+                      fmt::format("TOML parse error: {}", e.what()),
+                      std::nullopt,
+                      std::nullopt);
   }
 
   Manifest m;

@@ -135,6 +135,23 @@ Responsibilities:
 - Wrap every plugin call in a longjmp/SEH-style error frame so a plugin segfault does not take down the host.
 - Enforce thread-safety contracts declared in the manifest (some algorithms are reentrant, some are not).
 
+#### Capability namespaces
+
+Pipeline dispatch is a **pure prefix match** on the five stage-carrying kinds — `reader.` / `mesher.` / `solver.` / `writer.` / `postproc.` — followed by an exact-string registry lookup. (The manifest allow-list carries a sixth top-level name, `element.`; element capabilities are consumed by solvers rather than dispatched as pipeline stages.) Two consequences fall straight out of that:
+
+- Any new capability id under an existing prefix routes with **zero host changes** — including arbitrarily deep sub-namespaces like `solver.am.thermal.lpbf`.
+- A brand-new top-level prefix (`am.`, `manufacturing.`) is not a plugin change at all; it is a host change plus an ABI change, and an unknown prefix is rejected by name at dispatch time. Whole domains are therefore expected to arrive *inside* the existing kinds rather than beside them.
+
+The manufacturing + marine block is the worked example: eighteen capabilities across eight plugins — `mesher.am.layered`, `reader.lattice`, `solver.am.thermal.lpbf`, `postproc.am.melt_pool`, `solver.am.distortion.inherent_strain`, `postproc.am.residual_stress`, `solver.am.polymer.fff`, `postproc.am.bond_strength`, `solver.am.overhang`, `solver.am.printability`, `solver.am.buildtime`, `writer.am.gcode`, `writer.am.cli`, `writer.am.report`, `solver.marine.hydrostatic`, `solver.marine.hull_collapse`, `solver.marine.corrosion`, `writer.marine.qualification_report` — landed with no change to `include/souxmar-c/`, to the dispatcher, or to the data model. See [ADR-0044](adr/0044-manufacturing-capability-namespaces.md).
+
+Fitting that block inside the existing kinds surfaced two **structural constraints** that are properties of the ABI, not of the block, and that any future vertical will hit in the same place:
+
+1. **`postproc.*` hard-requires an input field.** A `postproc` stage's `field: {from: <stage>}` input is resolved by the dispatcher before the plugin is called; a missing field is a dispatch error, not a NULL handed to the plugin. So a *field → field* derivation is a `postproc.*`, but an analysis that reads only the mesh has nothing to declare and cannot be one. This is why the mesh-only manufacturability checks — `solver.am.overhang`, `solver.am.printability`, `solver.am.buildtime` — register as `solver.*` despite being post-design checks rather than physics solves. The naming is slightly counter-intuitive; the alternative was a spurious upstream field, which is worse.
+
+2. **Meshers get no value bag.** The mesher entry point receives only `souxmar_mesher_options_t` — `target_size`, `optimize`, `element_order`, `random_seed` — filled from the YAML keys of the same names. A mesher cannot read custom input keys at all. Readers, by contrast, are passed the full value bag alongside their path. So *fully-parametric geometry generation goes through `reader.*`*: `reader.lattice` takes a unit-cell type, cell size, relative density and grid counts, which no mesher could have read. `mesher.am.layered` stays a mesher precisely because everything it needs already maps onto those four fields — the simulation layer thickness arrives as `target_size`, and `element_order` gates its linear-only path — and it *documents* the choices it therefore cannot accept, namely the build direction and the default build box used when no geometry is supplied, rather than pretending to read them.
+
+Neither constraint is a defect to be fixed in v2 by widening the mesher signature; both are the ABI being narrow on purpose. The rule they imply is worth stating directly: **the capability kind is chosen by what data the stage consumes, not by what the engineer would call the activity.**
+
 ### `libsouxmar-pipeline`
 
 A directed acyclic graph of stages. Each stage is a typed call into the plugin registry plus its inputs. Pipelines are declarative on disk:

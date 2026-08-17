@@ -8,5 +8,8 @@ assertions:
   - kind: tool_outcome
     value: ok
   - kind: tool_data_contains
-    path: plugins
+    path: capabilities
     value: hello-mesher
+  - kind: tool_data_gte
+    path: count_total
+    value: 1

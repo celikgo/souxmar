@@ -1,5 +1,5 @@
 id: diff-02-dangling-rejected
-description: apply_pipeline_diff rejects a `remove` that leaves a `{from: ...}` reference dangling.
+description: "apply_pipeline_diff rejects a `remove` that leaves a `{from: ...}` reference dangling."
 category: diff
 steps:
   - tool: apply_pipeline_diff

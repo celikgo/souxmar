@@ -1,0 +1,240 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# am-submarine-pressure-hull — a 300 m pressure-hull bay and the AM lattice
+# buoyancy core that lives inside it. Drives five of the eighteen
+# manufacturing capabilities (ADR-0044), including both new geometry sources:
+#
+#   reader.obj      hull-ring.obj          faceted 1.0 m dia shell bay
+#   reader.lattice  buoyancy-core.lattice  parametric octet strut lattice
+#     -> solver.marine.hydrostatic   pressure per depth load case (x2)
+#     -> solver.marine.hull_collapse collapse margin, analytical
+#          -> writer.am.cli          Common Layer Interface slice file
+#          -> writer.vtu x2
+#          -> writer.marine.qualification_report   advisory dossier
+#
+# What this models: one 0.5 m frame bay of a 1.0 m diameter, 12 mm wall 316L
+# pressure hull rated to 300 m, checked at three depth factors (operating /
+# test / collapse), plus an 8%-dense octet lattice buoyancy core sized to fit
+# the bore. Both geometry files are generated / documented in this directory.
+#
+# THE OUTPUTS OF THIS PIPELINE ARE PRELIMINARY SIZING ESTIMATES. The collapse
+# capability is a set of textbook closed-form expressions with knockdown
+# factors, not a nonlinear buckling analysis, and it is emphatically not a
+# classification-society calculation. Nobody should get in a submarine on the
+# strength of this file. See README.md § "Status of these numbers".
+#
+# Two frames are in play and the difference matters:
+#   * the OBJ's cylinder axis is +Z — the MANUFACTURING frame, because that
+#     is the deposition direction and what the slicer wants;
+#   * in service the hull axis lies horizontal, so the hydrostatic stages
+#     declare `build_direction: [0, 1, 0]` — "up" is +Y, and pressure varies
+#     over the 1.0 m of hull diameter rather than along the hull axis.
+# Getting that backwards gives you a 0.5 m pressure gradient in the wrong
+# direction, which is small enough that you would not notice. Hence the note.
+#
+# Temperatures are degrees Celsius; everything else is SI.
+#
+# Run:
+#   cd examples/am-submarine-pressure-hull
+#   souxmar run pipeline.yaml --plugin-path ../../build/dev/examples/plugins
+#
+# Outputs in $PWD: hull-ring-pressure.vtu, buoyancy-core-pressure.vtu,
+# hull-ring.cli, hull-qualification-dossier.md.
+
+version: 1
+
+stages:
+  # ------------------------------------------------------------------ ring
+  # Stage 1: the shell bay. 896 nodes, 1792 Tri3 cells, watertight, outer
+  # diameter exactly 1.000 m. The OBJ names its surfaces with `g` groups
+  # (shell_outer / shell_inner / frame_land_aft / frame_land_fwd) rather than
+  # `usemtl`, so the per-cell tags stay at the untagged sentinel — see the
+  # OBJ header for why that matters to a layer-resolving capability.
+  - id: ring
+    plugin: reader.obj
+    input:
+      path: hull-ring.obj
+
+  # ------------------------------------------------------------------ core
+  # Stage 2: the buoyancy core, generated from a spec file rather than read
+  # from a mesh.
+  #
+  # reader.lattice exists because the C ABI gives meshers no value bag: a
+  # mesher entry point sees only target_size / optimize / element_order /
+  # random_seed, so a fully parametric generator cannot be a mesher. Readers
+  # DO get the value bag, so parametric generation lives behind reader.*.
+  #
+  # Every key in buoyancy-core.lattice is also a YAML input key here, and a
+  # YAML value overrides the file. To sweep density without touching the
+  # spec file, add `relative_density: 0.10` to this input block.
+  #
+  # 6 x 6 x 8 octet cells at 50 mm -> 1437 nodes and 7440 Edge2 struts of
+  # 3.73 mm diameter at the file's 8% relative density.
+  - id: core
+    plugin: reader.lattice
+    input:
+      path: buoyancy-core.lattice
+
+  # ------------------------------------------------------------------ load
+  # Stage 3: hydrostatic pressure on the hull, three load cases.
+  #
+  # depth_factors gives one field step per factor: 1.0 operating (300 m),
+  # 1.5 test (450 m), 2.25 collapse (675 m). The mesh's topmost node along
+  # build_direction sits at design_depth x factor and deeper nodes see
+  # proportionally more, so the field spans 1.0 m of head across the hull
+  # diameter — about 10 kPa, i.e. 0.3% of the 3.0 MPa operating pressure.
+  # It is in there because it is real, not because it changes an answer.
+  #
+  # seawater_density 0 asks the solver to derive density from salinity and
+  # temperature; 35 psu at 6 degC gives roughly 1027 kg/m^3. include_
+  # atmospheric stays false, so the field is GAUGE pressure — which is what a
+  # structural check wants, because the hull interior sits at 1 atm and only
+  # the differential loads the shell.
+  - id: hydro
+    plugin: solver.marine.hydrostatic
+    input:
+      mesh: { from: ring }
+      design_depth: 300.0
+      depth_factors: [1.0, 1.5, 2.25]
+      seawater_density: 0.0
+      salinity_psu: 35.0
+      seawater_temperature: 6.0
+      gravity: 9.80665
+      include_atmospheric: false
+      build_direction: [0.0, 1.0, 0.0]
+
+  # Stage 4: the same load on the lattice core.
+  #
+  # design_depth is 300.35 rather than 300.0 on purpose. Each hydrostatic
+  # stage measures depth from ITS OWN mesh's top: the hull crown is at
+  # y = +0.5 m and the core's crown at y = +0.15 m, so the core sits 0.35 m
+  # deeper in the same water column. Shifting design_depth by that 0.35 m
+  # keeps the two fields on one consistent datum. Get this wrong and the two
+  # meshes silently float at different depths.
+  - id: core-hydro
+    plugin: solver.marine.hydrostatic
+    input:
+      mesh: { from: core }
+      design_depth: 300.35
+      depth_factors: [1.0, 1.5, 2.25]
+      seawater_density: 0.0
+      salinity_psu: 35.0
+      seawater_temperature: 6.0
+      gravity: 9.80665
+      include_atmospheric: false
+      build_direction: [0.0, 1.0, 0.0]
+
+  # -------------------------------------------------------------- collapse
+  # Stage 5: collapse margin.
+  #
+  # This capability is ANALYTICAL: it writes the same triple onto every cell
+  # because the numbers come from closed-form shell expressions, not from the
+  # mesh. The mesh is there to give the field somewhere to live. The hull
+  # dimensions are therefore inputs, and they must be kept in step with
+  # hull-ring.obj by hand — diameter 1.0 m, thickness 12 mm,
+  # unsupported_length 0.5 m (the frame spacing, which is the bay length).
+  #
+  # Knockdowns, both of which you should argue with:
+  #   imperfection_knockdown  0.75  out-of-circularity and residual stress.
+  #                                 Applied to the ELASTIC instability modes
+  #                                 only — out-of-roundness knocks down
+  #                                 buckling, not yield strength. A class rule
+  #                                 would derive this from a measured
+  #                                 tolerance, not assume it.
+  #   am_anisotropy_knockdown 0.90  as-built Z-direction property penalty for
+  #                                 LPBF/DED 316L (see examples/materials).
+  #                                 Applied to every mode.
+  # safety_factor 1.5 makes the margin a margin against the TEST pressure
+  # case, not against operating depth.
+  #
+  # Sanity check you can do by hand:
+  #   membrane yield  p_y  = 2*sigma_y*t/D = 2 * 500 MPa * 0.012 / 1.0
+  #                        = 12.00 MPa  -> x0.90            = 10.80 MPa
+  #   interframe (W-T) p_wt = 17.11 MPa  -> x0.75 x0.90      = 11.55 MPa
+  # Yield governs, so governing_mode_code should come out 1 and
+  # collapse_pressure_Pa about 1.08e7. Factored design pressure is
+  # 1027 * 9.80665 * 300 * 1.5 = 4.53 MPa, so the margin is about 2.4.
+  - id: collapse
+    plugin: solver.marine.hull_collapse
+    input:
+      mesh: { from: ring }
+      hull_type: ring_stiffened_cylinder
+      diameter: 1.0
+      thickness: 0.012
+      unsupported_length: 0.5
+      youngs_modulus: 1.9e11
+      poisson_ratio: 0.28
+      yield_strength: 5.0e8
+      design_depth: 300.0
+      seawater_density: 1027.0
+      gravity: 9.80665
+      imperfection_knockdown: 0.75
+      am_anisotropy_knockdown: 0.90
+      safety_factor: 1.5
+
+  # ---------------------------------------------------------------- output
+  # Stage 6: slice the bay for a large-format metal AM machine.
+  #
+  # Common Layer Interface is the format metal machines actually eat. The
+  # slicer walks the mesh's triangulated boundary with planes at layer
+  # mid-heights and chains the segments into closed contours: for this
+  # geometry that is two concentric 64-gons per layer, outer then inner.
+  #
+  # layer_height 2 mm is a PREVIEW resolution, not a process resolution. A
+  # real 40 um slice of a 0.5 m tall part is 12 500 layers and a very large
+  # file; 2 mm gives 250 layers and runs instantly. Also note that a 1.0 m
+  # diameter part is far outside any powder-bed machine — this is a
+  # wire-arc/DED part, and 2 mm is a plausible bead layer for that process.
+  #
+  # units is millimetres per CLI unit, so 1.0 emits the part in millimetres:
+  # a 500 mm tall stack. $$DATE is fixed at 010100 because determinism is a
+  # gate here and a wall-clock read would break it.
+  - id: slice
+    plugin: writer.am.cli
+    input:
+      mesh:  { from: ring }
+      path:  hull-ring.cli
+      layer_height: 0.002
+      units: 1.0
+      build_direction: [0.0, 0.0, 1.0]
+      label: "hull-ring-bay-1"
+      binary: false
+
+  # Stage 7: nodal pressure in Pa, three steps (operating / test / collapse).
+  - id: write-pressure
+    plugin: writer.vtu
+    input:
+      mesh:  { from: ring }
+      field: { from: hydro }
+      path:  hull-ring-pressure.vtu
+
+  # Stage 8: the same for the lattice. The VTU carries Edge2 cells, which
+  # ParaView renders as lines — set the representation to Wireframe and
+  # colour by pressure.
+  - id: write-core
+    plugin: writer.vtu
+    input:
+      mesh:  { from: core }
+      field: { from: core-hydro }
+      path:  buoyancy-core-pressure.vtu
+
+  # Stage 9: the advisory dossier, rendered around the collapse-margin field.
+  #
+  # application: hull and criticality 1 (the top of the writer's 1..3 scale)
+  # because a pressure-hull failure at depth is not survivable. redundancy is
+  # false for the same reason: there is no second hull.
+  - id: dossier
+    plugin: writer.marine.qualification_report
+    input:
+      mesh:  { from: ring }
+      field: { from: collapse }
+      path:  hull-qualification-dossier.md
+      part_name: "316L pressure-hull bay, 1.0 m dia x 0.5 m, 12 mm wall"
+      process: ded_waam
+      alloy: "316L"
+      application: hull
+      criticality: 1
+      design_depth: 300.0
+      service_life_years: 25.0
+      class_framework: generic
+      redundancy: false

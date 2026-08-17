@@ -16,23 +16,45 @@ import pysouxmar as sx
 
 
 def test_default_registry_contains_v1_tools():
-    """Sprint 6 push 3 expanded the catalogue from 9 to 12 tools."""
+    """The catalogue only grows (ADR-0011 ratchet).
+
+    Sprint 8 push 5 closed tool-contract v1 at 18 tools; the
+    manufacturing block adds tools 19-24 (AM + marine), so the
+    catalogue is 24. This assertion is the contract gate — a tool that
+    lands without updating it is a contract change that skipped review.
+    """
     r = sx.ai.default_v1_tools()
-    assert len(r) == 12
+    assert len(r) == 24
     assert set(r.list()) == {
+        # Sprint 4 push 3
         "read_geometry_summary",
         "mesh",
         "set_bc",
         "solve",
         "screenshot_viewport",
+        # Sprint 5 push 2
         "query_field",
         "compute_field",
         "propose_pipeline",
+        # Sprint 6 push 1 / push 3
         "query_mesh_quality",
         "set_material",
         "list_plugins",
         "apply_pipeline_diff",
         "export_results",
+        # Sprint 8 push 4 / push 5 — CFD
+        "apply_inlet",
+        "apply_wall",
+        "apply_outlet",
+        "propose_cfd_setup",
+        "validate_bcs",
+        # Manufacturing block — AM + marine (tools 19-24)
+        "propose_am_setup",
+        "check_printability",
+        "set_build_orientation",
+        "estimate_build_cost",
+        "apply_hydrostatic_load",
+        "check_marine_integrity",
     }
 
 

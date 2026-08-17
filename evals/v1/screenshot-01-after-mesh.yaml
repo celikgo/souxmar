@@ -1,5 +1,5 @@
 id: screenshot-01-after-mesh
-description: screenshot_viewport produces a placeholder path after a mesh stage.
+description: screenshot_viewport refuses honestly in a build with no viewport.
 category: screenshot
 auto_confirm: true   # screenshot_viewport is ConfirmOnce by default
 steps:
@@ -11,8 +11,16 @@ steps:
       view: iso
       path: /tmp/souxmar-eval-screenshot-01.png
 assertions:
+  # The eval runner is a headless CLI: there is no viewport to capture, and
+  # the tool says so rather than writing a placeholder file and claiming
+  # success. A build that links the renderer returns ok with `path` set;
+  # this task pins the headless contract, which is the one CI exercises.
   - kind: tool_outcome
+    step: 0
     value: ok
-  - kind: tool_data_equals
-    path: path
-    value: /tmp/souxmar-eval-screenshot-01.png
+  - kind: tool_outcome
+    step: 1
+    value: fail
+  - kind: tool_error_code
+    step: 1
+    value: NOT_AVAILABLE

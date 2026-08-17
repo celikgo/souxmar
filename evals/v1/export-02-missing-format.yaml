@@ -1,5 +1,5 @@
 id: export-02-missing-format
-description: export_results refuses with a clear error when format is missing.
+description: export_results refuses with a clear error when capability_id is missing.
 category: export
 steps:
   - tool: mesh
@@ -11,5 +11,5 @@ steps:
 assertions:
   - kind: tool_outcome
     value: fail
-  - kind: error_code_contains
-    value: MISSING_INPUT
+  - kind: tool_error_code
+    value: INVALID_ARGUMENT

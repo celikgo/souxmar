@@ -1,0 +1,289 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# am-lpbf-bracket — the metal-AM process chain end to end. Drives eight of
+# the eighteen manufacturing capabilities (ADR-0044) against in-tree plugins:
+#
+#   mesher.am.layered                    layer-aligned Hex8 build mesh
+#     -> solver.am.thermal.lpbf          layer-wise thermal history
+#        -> postproc.am.melt_pool        melt-pool depth + porosity risk
+#     -> solver.am.distortion.inherent_strain   part-scale warp
+#        -> postproc.am.residual_stress  von-Mises-equivalent residual stress
+#     -> solver.am.overhang              downskin tilt + support need
+#          -> writer.vtu x3, writer.am.report x2
+#
+# What this models: a 60 x 20 x 20 mm 316L blank on a 400 W laser
+# powder-bed-fusion machine, built +Z off a preheated baseplate, resolved as
+# 10 simulation layers of 2 mm each. The thermal solve gives the peak and
+# interlayer temperature history, the melt-pool postproc turns that into a
+# lack-of-fusion / keyholing porosity risk, the inherent-strain solve gives
+# the accumulated warp as the part grows, and the overhang solve reports which
+# cells sit over air.
+#
+# What this is NOT: a bracket. `mesher.am.layered` gets no value bag from the
+# ABI (the mesher entry point takes only target_size / optimize /
+# element_order / random_seed) so it cannot be told a shape from YAML; with no
+# upstream `geometry:` it produces its documented default build box. This
+# pipeline is therefore a *process* study on a bracket-sized blank, not a
+# shape study. README.md § "Putting your own geometry in" shows the one-stage
+# change that fixes that.
+#
+# Every temperature in this file is degrees Celsius — the single documented
+# exception to souxmar's strict-SI rule. Everything else is SI: metres,
+# seconds, watts, pascals, kg/m^3.
+#
+# Run (from the repo root; `path:` values resolve against your working
+# directory, so cd into this directory if you prefer short output paths):
+#   souxmar run examples/am-lpbf-bracket/pipeline.yaml \
+#     --plugin-path build/dev/examples/plugins
+#
+# Outputs, all in $PWD: bracket-temperature.vtu, bracket-melt-pool.vtu,
+# bracket-distortion.vtu, bracket-build-report.md, bracket-support-report.md.
+
+version: 1
+
+stages:
+  # ------------------------------------------------------------------ mesh
+  # Stage 1: the build mesh.
+  #
+  # target_size is doing double duty here: it is the voxel edge AND the
+  # simulation layer thickness, and 0.002 m over the default 0.06 x 0.02 x
+  # 0.02 m build box gives 30 x 10 x 10 = 3000 Hex8 cells in 10 layers.
+  # Every cell carries its layer index as its cell tag, which is how every
+  # downstream AM capability resolves layers without re-binning coordinates
+  # (contract § 2.2, resolution rule 1).
+  #
+  # `optimize` is accepted and ignored by this mesher; element_order must be
+  # 1 (Hex20 would need mid-edge nodes the layer bookkeeping doesn't carry).
+  - id: build
+    plugin: mesher.am.layered
+    input:
+      target_size: 0.002
+      element_order: 1
+
+  # --------------------------------------------------------------- thermal
+  # Stage 2: layer-wise LPBF thermal history (Rosenthal moving point source).
+  #
+  # 195 W / 0.8 m/s / 0.11 mm hatch / 30 um layer is a stock 316L parameter
+  # set for a 400 W machine. Note the two layer heights:
+  #   layer_height          0.002   the SIMULATION layer — matches the mesh
+  #   process_layer_height  3.0e-5  the MACHINE layer — sets the energy density
+  # so one simulation layer lumps ~67 machine layers. That coarsening is the
+  # central approximation of this example; README.md § "What the model
+  # approximates" spells out what it costs you.
+  #
+  # interlayer_time is the machine's per-layer cycle: 20 x 20 mm of
+  # cross-section at a 0.11 mm hatch is 3.6 m of scan, 4.5 s at 0.8 m/s, plus
+  # an 8 s recoat. It is deliberately NOT rescaled to the 2 mm simulation bin
+  # (matching the contract's own defaults, 1 mm layer / 10 s) — read the
+  # sub-surface gradient as "where the gradient is steep", not as a
+  # thermocouple reading.
+  - id: thermal
+    plugin: solver.am.thermal.lpbf
+    input:
+      mesh: { from: build }
+      laser_power: 195.0
+      scan_speed: 0.8
+      hatch_spacing: 1.1e-4
+      layer_height: 0.002
+      process_layer_height: 3.0e-5
+      absorptivity: 0.35
+      preheat_temperature: 80.0
+      baseplate_temperature: 80.0
+      thermal_conductivity: 15.0
+      density: 7990.0
+      specific_heat: 500.0
+      melt_temperature: 1400.0
+      interlayer_time: 12.5
+      build_direction: [0.0, 0.0, 1.0]
+      baseplate_layers: 1
+      num_layers: 0
+
+  # -------------------------------------------------------------- meltpool
+  # Stage 3: melt-pool geometry and porosity risk.
+  #
+  # postproc.* is field-in / field-out by definition, so BOTH `mesh:` and
+  # `field:` are mandatory — the dispatcher rejects a postproc stage with a
+  # missing `field:` rather than passing NULL. The process inputs are
+  # repeated because no plugin in this block reads a material file: every
+  # property is an explicit input with a documented default (contract § 2.6).
+  - id: meltpool
+    plugin: postproc.am.melt_pool
+    input:
+      mesh:  { from: build }
+      field: { from: thermal }
+      laser_power: 195.0
+      scan_speed: 0.8
+      hatch_spacing: 1.1e-4
+      layer_height: 0.002
+      process_layer_height: 3.0e-5
+      absorptivity: 0.35
+      preheat_temperature: 80.0
+      thermal_conductivity: 15.0
+      density: 7990.0
+      specific_heat: 500.0
+      melt_temperature: 1400.0
+
+  # ------------------------------------------------------------ distortion
+  # Stage 4: part-scale residual distortion, inherent-strain method.
+  #
+  # inherent_strain left at 0 asks the solver to derive it as
+  # -cte * (T_melt - T_preheat) * strain_calibration. strain_calibration =
+  # 0.30 is a placeholder: the inherent-strain method is only quantitative
+  # once that number is fitted to a MEASURED part on YOUR machine with YOUR
+  # parameter set. Until then treat the magnitudes as relative.
+  #
+  # baseplate_clamped keeps the bottom layer's nodes at exactly zero
+  # displacement at every step, which is the "still bolted to the plate"
+  # boundary condition — not the sprung-back, cut-off part.
+  - id: distortion
+    plugin: solver.am.distortion.inherent_strain
+    input:
+      mesh: { from: build }
+      youngs_modulus: 1.9e11
+      poisson_ratio: 0.28
+      cte: 1.6e-5
+      melt_temperature: 1400.0
+      preheat_temperature: 80.0
+      inherent_strain: 0.0
+      strain_calibration: 0.30
+      layer_height: 0.002
+      substrate_thickness: 0.0
+      build_direction: [0.0, 0.0, 1.0]
+      baseplate_layers: 1
+      baseplate_clamped: true
+      num_layers: 0
+
+  # -------------------------------------------------------------- residual
+  # Stage 5: von-Mises-equivalent residual stress from the distortion field.
+  # yield_strength is as-built LPBF 316L, XY orientation (see
+  # examples/materials/am-marine.toml for where that number comes from and
+  # what the Z knockdown is).
+  - id: residual
+    plugin: postproc.am.residual_stress
+    input:
+      mesh:  { from: build }
+      field: { from: distortion }
+      youngs_modulus: 1.9e11
+      poisson_ratio: 0.28
+      cte: 1.6e-5
+      melt_temperature: 1400.0
+      preheat_temperature: 80.0
+      inherent_strain: 0.0
+      strain_calibration: 0.30
+      layer_height: 0.002
+      yield_strength: 5.0e8
+
+  # -------------------------------------------------------------- overhang
+  # Stage 6: downskin tilt and support need per cell.
+  #
+  # This is a solver, not a postproc, precisely because it needs no input
+  # field — and the dispatcher would reject a postproc without one. It finds
+  # the boundary faces itself (a face is on the boundary when no other cell
+  # shares its node set) and reports, per cell, the minimum downskin tilt
+  # from the build plate, whether that tilt breaches the 45 deg threshold,
+  # and how much downward-facing area the cell contributes.
+  - id: overhang
+    plugin: solver.am.overhang
+    input:
+      mesh: { from: build }
+      build_direction: [0.0, 0.0, 1.0]
+      overhang_threshold_deg: 45.0
+      layer_height: 0.002
+
+  # ---------------------------------------------------------------- output
+  # Stages 7-9: three ParaView views. The VTU writer is field-agnostic; it
+  # takes whichever field the stage points at, so one writer stage per field
+  # you want to look at.
+  #
+  # bracket-temperature.vtu carries 10 time steps (one per simulation layer)
+  # of nodal temperature in degC — scrub the time slider to watch the build.
+  - id: write-temperature
+    plugin: writer.vtu
+    input:
+      mesh:  { from: build }
+      field: { from: thermal }
+      path:  bracket-temperature.vtu
+
+  # Per-cell melt-pool triple: [0] depth (m), [1] normalised enthalpy (-),
+  # [2] porosity risk (0..1). Colour by component 2 to find the cells at
+  # risk of lack-of-fusion or keyhole porosity.
+  - id: write-melt-pool
+    plugin: writer.vtu
+    input:
+      mesh:  { from: build }
+      field: { from: meltpool }
+      path:  bracket-melt-pool.vtu
+
+  # Nodal displacement vectors in metres, 10 steps. Warp-by-vector in
+  # ParaView with a large scale factor — the raw magnitudes are tens of
+  # microns at this calibration.
+  - id: write-distortion
+    plugin: writer.vtu
+    input:
+      mesh:  { from: build }
+      field: { from: distortion }
+      path:  bracket-distortion.vtu
+
+  # Stages 10-11: two Markdown build reports.
+  #
+  # writer.am.report renders exactly ONE field — it dispatches on the field's
+  # name and emits the matching section — so getting both the residual-stress
+  # summary and the support summary means two stages. Both always include the
+  # mesh summary, the process parameters, the cost/time totals re-derived
+  # from the rate keys below, and a Traceability section carrying an FNV-1a
+  # content digest of the mesh (a digest, not a signature).
+  - id: report
+    plugin: writer.am.report
+    input:
+      mesh:  { from: build }
+      field: { from: residual }
+      path:  bracket-build-report.md
+      title: "316L LPBF bracket blank — build report"
+      process: lpbf
+      material: "316L"
+      design_notes: >-
+        Process study on the mesher's default 60 x 20 x 20 mm build box, not a
+        bracket outline. Residual stress is reported against as-built XY
+        yield; the Z knockdown is not applied. strain_calibration is
+        uncalibrated at 0.30.
+      layer_height: 0.002
+      process_layer_height: 3.0e-5
+      scan_speed: 0.8
+      hatch_spacing: 1.1e-4
+      recoat_time: 8.0
+      laser_power: 195.0
+      machine_power_overhead: 2500.0
+      material_cost_per_kg: 75.0
+      machine_rate_per_hour: 45.0
+      density: 7990.0
+      build_direction: [0.0, 0.0, 1.0]
+
+  - id: support-report
+    plugin: writer.am.report
+    input:
+      mesh:  { from: build }
+      field: { from: overhang }
+      path:  bracket-support-report.md
+      title: "316L LPBF bracket blank — support and downskin report"
+      process: lpbf
+      material: "316L"
+      design_notes: >-
+        Downskin tilt is measured on the mesh's own boundary faces. A
+        voxelised box has axis-aligned faces only, so the layer-0 cells
+        report a 0 deg downskin (the baseplate interface, which this
+        capability has no way to recognise as supported) and every other cell
+        reports the no-downskin sentinel of 90 deg. That is the honest answer
+        for this geometry and a useless one for a real part: run the overhang
+        check against reader.obj geometry, as examples/am-marine-propeller
+        does.
+      layer_height: 0.002
+      process_layer_height: 3.0e-5
+      scan_speed: 0.8
+      hatch_spacing: 1.1e-4
+      recoat_time: 8.0
+      laser_power: 195.0
+      machine_power_overhead: 2500.0
+      material_cost_per_kg: 75.0
+      machine_rate_per_hour: 45.0
+      density: 7990.0
+      build_direction: [0.0, 0.0, 1.0]

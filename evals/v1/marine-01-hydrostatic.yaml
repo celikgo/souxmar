@@ -1,0 +1,68 @@
+id: marine-01-hydrostatic
+description: apply_hydrostatic_load computes rho*g*h at 300 m and stages a hydrostatic BC.
+category: marine
+# Plugin-free and mesh-free: the tool derives seawater density from
+# salinity + temperature and does the arithmetic itself. The pressure is
+# pinned by the summary substring rather than tool_data_equals, because
+# tool_data_equals on a Number is an exact double comparison.
+steps:
+  - tool: apply_hydrostatic_load
+    inputs:
+      tag:   hull_outer
+      depth: 300
+  - tool: apply_hydrostatic_load
+    inputs:
+      depth:         300
+      depth_factors: [1.0, 1.5, 2.25]
+assertions:
+  - kind: tool_outcome
+    step: 0
+    value: ok
+  - kind: tool_data_equals
+    step: 0
+    path: count
+    value: 1
+  - kind: tool_data_equals
+    step: 0
+    path: depth
+    value: 300
+  - kind: tool_data_equals
+    step: 0
+    path: density
+    value: 1027
+    note: the EOS-80 fit returns exactly 1027 kg/m3 at its 35 PSU / 10 C reference point
+  - kind: tool_data_equals
+    step: 0
+    path: density_source
+    value: derived_from_salinity_temperature
+  - kind: tool_data_gte
+    step: 0
+    path: pressure
+    value: 3021428
+  - kind: tool_data_equals
+    step: 0
+    path: latest.type
+    value: hydrostatic
+  - kind: tool_data_equals
+    step: 0
+    path: latest.tag
+    value: hull_outer
+  - kind: tool_summary_contains
+    step: 0
+    value: 3.021 MPa
+  - kind: tool_outcome
+    step: 1
+    value: ok
+  - kind: tool_data_equals
+    step: 1
+    path: count
+    value: 2
+    note: BCs accumulate on the session, they do not replace each other
+  - kind: tool_data_equals
+    step: 1
+    path: load_cases.2.factor
+    value: 2.25
+  - kind: tool_data_gte
+    step: 1
+    path: max_pressure
+    value: 6798214

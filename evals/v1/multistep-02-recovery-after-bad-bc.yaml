@@ -1,5 +1,5 @@
 id: multistep-02-recovery-after-bad-bc
-description: After a refused BC, the next set_bc with a valid kind succeeds.
+description: After a refused BC, the next set_bc with a valid shape succeeds.
 category: multistep
 steps:
   - tool: mesh
@@ -7,16 +7,19 @@ steps:
       capability_id: mesher.tetra.hello
   - tool: set_bc
     inputs:
-      kind: nonsense
       value: 42
   - tool: set_bc
     inputs:
-      kind: dirichlet
+      tag: fixed
+      type: dirichlet
       value: 300
 assertions:
-  - kind: step_outcome
-    index: 1
+  - kind: tool_outcome
+    step: 1
     value: fail
-  - kind: step_outcome
-    index: 2
+  - kind: tool_error_code
+    step: 1
+    value: INVALID_ARGUMENT
+  - kind: tool_outcome
+    step: 2
     value: ok

@@ -9,9 +9,11 @@
 // rendered pane carries the syntax colors.
 //
 // When the open file is pipeline.yaml (or any pipeline*.yaml), the
-// SolversPanel renders above the editor so the user can swap the
-// `kind:` line of the solve stage with a click — read+write through
-// the same buffer so changes go through Save like any other edit.
+// pipeline-editor panels render above the editor so the user can drive
+// the document with clicks — read+write through the same buffer so
+// changes go through Save like any other edit. Mesher / Solvers /
+// Materials / BCs edit the existing stages; Manufacturing and Marine
+// append whole new ones via `insertPipelineStages` below.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
@@ -20,6 +22,8 @@ import { MeshingPanel } from "./MeshingPanel";
 import { SolversPanel } from "./SolversPanel";
 import { MaterialsPanel } from "./MaterialsPanel";
 import { BoundaryConditionsPanel } from "./BoundaryConditionsPanel";
+import { ManufacturingPanel } from "./ManufacturingPanel";
+import { MarinePanel } from "./MarinePanel";
 import { ResultsPanel } from "./ResultsPanel";
 
 interface Props {
@@ -158,6 +162,17 @@ export function YamlViewer({ projectPath, relPath, onOpenResult }: Props) {
             onChange={(next) => setText(next)}
           />
           <BoundaryConditionsPanel
+            currentText={text}
+            onChange={(next) => setText(next)}
+          />
+          {/* Manufacturing / Marine come after the BC editor: they append
+              whole stages rather than editing the current solver stage,
+              so they read as "extend the pipeline", not "configure it". */}
+          <ManufacturingPanel
+            currentText={text}
+            onChange={(next) => setText(next)}
+          />
+          <MarinePanel
             currentText={text}
             onChange={(next) => setText(next)}
           />
@@ -656,4 +671,187 @@ export function replaceMesherPlugin(yaml: string, newCapability: string): string
   }
   return yaml + (yaml.endsWith("\n") ? "" : "\n") +
     `# TODO: no mesher.* stage found; add e.g. "plugin: ${newCapability}"\n`;
+}
+
+// ---------------------------------------------------------------------------
+// Whole-stage insertion — shared by ManufacturingPanel and MarinePanel.
+//
+// The pickers above swap a single `plugin:` line. The manufacturing and
+// marine panels instead append complete stages (a solver plus the
+// postproc that consumes its field, a writer, …), so they need three
+// things those pickers only do piecemeal:
+//
+//   1. resolve the upstream mesh-producing stage id from the document,
+//   2. resolve the most recent field-producing stage id, for the
+//      `field: { from: … }` wiring that postproc.* hard-requires and
+//      writer.* optionally accepts,
+//   3. splice one or more `- id:` blocks into the document without
+//      disturbing DAG order — analysis stages land before the first
+//      writer stage, writer stages land at the end.
+//
+// Input values are emitted verbatim, so the caller owns every unit and
+// format decision (the manufacturing capability contract fixes both).
+// Two substitution tokens are recognised inside a value:
+//
+//   $MESH      → the resolved upstream mesh stage id
+//   $STAGE<n>  → the final (collision-resolved) id of the n-th spec in
+//                this same batch, so a postproc can reference the
+//                solver inserted alongside it.
+
+export interface StageInput {
+  /** Contract input key, e.g. `laser_power`. */
+  key:   string;
+  /** Literal YAML: `200`, `[0, 0, 1]`, `'316L'`, `{ from: $MESH }`. */
+  value: string;
+}
+
+export interface StageSpec {
+  /** Preferred stage id; deduped against ids already in the buffer. */
+  id:     string;
+  /** Capability id, e.g. `solver.am.thermal.lpbf`. */
+  plugin: string;
+  /** Ordered children of the stage's `input:` block. */
+  input:  StageInput[];
+  /** Optional trailing `#` comment on the `- id:` line. */
+  note?:  string;
+}
+
+/** The stage id that produces the mesh: last `mesher.*`, else last
+ *  `reader.*` (readers can emit a mesh — `reader.lattice` does), else
+ *  null when the document has no mesh-producing stage at all. */
+export function findMeshStageId(yaml: string): string | null {
+  return findMeshStageIdIn(yaml.split("\n"));
+}
+
+/** The stage id of the last field-producing stage (`solver.*` or
+ *  `postproc.*`), or null. Used for `field: { from: … }` wiring. */
+export function findFieldStageId(yaml: string): string | null {
+  return findLastStageIdMatching(yaml.split("\n"), /^\s*plugin\s*:\s*['"]?(?:solver|postproc)\./);
+}
+
+/** True when the document has a stage that can satisfy `mesh: { from: … }`. */
+export function hasMeshStage(yaml: string): boolean {
+  return findMeshStageId(yaml) !== null;
+}
+
+export function insertPipelineStages(yaml: string, specs: StageSpec[]): string {
+  if (specs.length === 0) return yaml;
+  const lines  = yaml.split("\n");
+  const meshId = findMeshStageIdIn(lines);
+  if (meshId === null) {
+    // Same graceful degradation as the Materials panel: leave the
+    // structure alone and tell the user what is missing.
+    return yaml + (yaml.endsWith("\n") ? "" : "\n") +
+      "# TODO: no mesh-producing stage (mesher.* / reader.*) found; cannot wire " +
+      `${specs.map(s => s.plugin).join(", ")}.\n`;
+  }
+
+  // Resolve every id up front so a `$STAGE<n>` reference is stable even
+  // when an earlier spec's preferred id collided.
+  const taken = collectStageIds(lines);
+  const ids   = specs.map(s => {
+    const id = uniqueStageId(s.id, taken);
+    taken.add(id);
+    return id;
+  });
+
+  const stageIndent      = discoverStageIndent(lines);
+  const childIndent      = stageIndent + "  ";
+  const grandchildIndent = childIndent + "  ";
+
+  const resolve = (value: string): string =>
+    value
+      .replace(/\$MESH\b/g, meshId)
+      .replace(/\$STAGE(\d+)\b/g, (whole, n: string) => ids[Number(n)] ?? whole);
+
+  // Analysis stages keep the mesh → solve → write reading order;
+  // writers go last so the DAG stays topologically obvious.
+  const analysis: string[] = [];
+  const outputs:  string[] = [];
+  specs.forEach((spec, i) => {
+    const block = [
+      `${stageIndent}- id: ${ids[i]}${spec.note ? `  # ${spec.note}` : ""}`,
+      `${childIndent}plugin: ${spec.plugin}`,
+    ];
+    if (spec.input.length > 0) {
+      block.push(`${childIndent}input:`);
+      for (const { key, value } of spec.input) {
+        block.push(`${grandchildIndent}${key}: ${resolve(value)}`);
+      }
+    }
+    const sink = spec.plugin.startsWith("writer.") ? outputs : analysis;
+    sink.push("", ...block);
+  });
+
+  const writerIdx = findFirstWriterStageIdx(lines);
+  if (writerIdx < 0) {
+    return [...lines, ...analysis, ...outputs].join("\n");
+  }
+  return [
+    ...lines.slice(0, writerIdx),
+    ...analysis,
+    ...(analysis.length > 0 ? [""] : []),
+    ...lines.slice(writerIdx),
+    ...outputs,
+  ].join("\n");
+}
+
+function findMeshStageIdIn(lines: string[]): string | null {
+  return (
+    findLastStageIdMatching(lines, /^\s*plugin\s*:\s*['"]?mesher\./) ??
+    findLastStageIdMatching(lines, /^\s*plugin\s*:\s*['"]?reader\./)
+  );
+}
+
+// Walk every `- id:` header, look ahead a few lines for that stage's
+// `plugin:` line, and keep the LAST match — the same last-wins rule
+// insertSolverStage uses, so both paths agree on the upstream id.
+function findLastStageIdMatching(lines: string[], pluginRe: RegExp): string | null {
+  let found: string | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^\s*-\s*id\s*:\s*['"]?([\w\-]+)['"]?\s*(#.*)?$/.exec(lines[i]);
+    if (!m) continue;
+    for (let j = i + 1; j < lines.length && j < i + 6; j++) {
+      if (pluginRe.test(lines[j])) { found = m[1]; break; }
+      if (/^\s*-\s*id\s*:/.test(lines[j])) break;
+    }
+  }
+  return found;
+}
+
+function findFirstWriterStageIdx(lines: string[]): number {
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^\s*-\s*id\s*:/.test(lines[i])) continue;
+    for (let j = i + 1; j < lines.length && j < i + 6; j++) {
+      if (/^\s*plugin\s*:\s*['"]?writer\.[\w.\-]+/.test(lines[j])) return i;
+      if (/^\s*-\s*id\s*:/.test(lines[j])) break;
+    }
+  }
+  return -1;
+}
+
+function collectStageIds(lines: string[]): Set<string> {
+  const out = new Set<string>();
+  for (const ln of lines) {
+    const m = /^\s*-\s*id\s*:\s*['"]?([\w\-]+)['"]?\s*(#.*)?$/.exec(ln);
+    if (m) out.add(m[1]);
+  }
+  return out;
+}
+
+function uniqueStageId(preferred: string, taken: Set<string>): string {
+  if (!taken.has(preferred)) return preferred;
+  for (let n = 2; n < 1000; n++) {
+    const candidate = `${preferred}-${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return `${preferred}-x`;
+}
+
+function discoverStageIndent(lines: string[]): string {
+  for (const ln of lines) {
+    const m = /^(\s*)-\s*id\s*:/.exec(ln);
+    if (m) return m[1];
+  }
+  return "  ";
 }

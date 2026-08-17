@@ -87,6 +87,25 @@ Definition of done: an engineer downloads the desktop app on macOS, Windows, or 
 
 Definition of done: tag `v1.0.0`, freeze ABI v1 + agent tool contract v1, publish.
 
+## Phase 6 — Manufacturing and marine verticals
+
+**Goal:** answer the question the pipeline could not previously answer — "can this part actually be built, and will it survive where it has to work?" Everything here rides the frozen ABI v1 capability namespaces; no host, ABI, or data-model change is required, which is the point of the phase.
+
+- `examples/plugins/am-layered-mesher` — `mesher.am.layered`: layer-aligned Hex8 build mesh with the layer index carried as the cell tag and per-side boundary-face tags.
+- `examples/plugins/lattice-reader` — `reader.lattice`: parametric strut lattices (cubic / bcc / fcc / octet / diamond) generated from a spec file into an Edge2 beam mesh. Parametric generation lives in `reader.*` because the mesher ABI passes no value bag.
+- `examples/plugins/am-thermal` — `solver.am.thermal.lpbf` + `postproc.am.melt_pool`: Rosenthal layer-wise LPBF thermal history, melt-pool depth, normalised enthalpy, lack-of-fusion / keyhole porosity risk.
+- `examples/plugins/am-distortion` — `solver.am.distortion.inherent_strain` + `postproc.am.residual_stress`: inherent-strain distortion with Stoney-type layer-wise curvature accumulation, plus a residual-stress read-back.
+- `examples/plugins/am-polymer` — `solver.am.polymer.fff` + `postproc.am.bond_strength`: FFF interlayer thermal cycling and reptation-healing bond quality.
+- `examples/plugins/am-manufacturability` — `solver.am.overhang`, `solver.am.printability`, `solver.am.buildtime`: DfAM screening on the mesh alone. These are `solver.*` rather than `postproc.*` because `postproc.*` requires an input field and a manufacturability check has none.
+- `examples/plugins/am-slicer` — `writer.am.gcode`, `writer.am.cli`, `writer.am.report`: planar slicing to FFF G-code and Common Layer Interface ASCII, plus a Markdown build report.
+- `examples/plugins/marine` — `solver.marine.hydrostatic`, `solver.marine.hull_collapse`, `solver.marine.corrosion`, `writer.marine.qualification_report`: depth load cases, preliminary pressure-hull collapse margin, seawater corrosion indicators, and an advisory AM-part qualification dossier.
+- Six additive agent tools (`propose_am_setup`, `check_printability`, `set_build_orientation`, `estimate_build_cost`, `apply_hydrostatic_load`, `check_marine_integrity`), two workbench panels (Manufacturing, Marine), four runnable examples, and a curated `examples/materials/am-marine.toml` library.
+- Decisions: [ADR-0044](adr/0044-manufacturing-capability-namespaces.md) (capability-namespace placement), [ADR-0045](adr/0045-agent-tool-contract-am-ratchet.md) (additive tool ratchet), [RFC-0012](rfcs/0012-am-process-simulation.md) (process-simulation contract).
+
+**What this phase is honest about.** Every model in it is closed-form or heuristic, with a named literature source and an explicit statement of what it ignores. They are screening and preliminary-sizing aids: a distortion prediction is only as good as its hand-entered calibration factor, a printability score is a documented weighting rather than a guarantee, corrosion rates are indicative literature values, and the qualification dossier is a checklist derived from public practice — souxmar is not a classification society and issues no approval. Calibrated, mesh-resolved process solvers are a later phase (Sprints 41–44 in [`SPRINT_PLAN.md`](SPRINT_PLAN.md)); topology optimisation stays out of this phase and remains deferred to a dedicated block of its own.
+
+Definition of done: an engineer can take an STL or a build-box geometry, run a manufacturability + build-cost check from chat, see the overhang and printability fields in the viewport, produce a G-code or CLI slice plus a Markdown build report, and — for a subsea part — get depth load cases, a collapse margin, and an advisory qualification dossier, all from one pipeline file on Linux, macOS, and Windows with byte-identical results.
+
 ## Post-1.0 themes
 
 These do not have a phase; they are areas the project grows into after the v1 ABI is stable. Order is illustrative, not prescriptive.

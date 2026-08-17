@@ -7,18 +7,22 @@ steps:
       capability_id: mesher.tetra.hello
   - tool: set_bc
     inputs: {}
-  - tool: query_field
-    inputs:
-      field: temperature
+  # query_mesh_quality still sees the mesh the first step staged: the failed
+  # set_bc neither cleared the handle nor cascaded its error. (query_field
+  # would be the tighter probe, but it legitimately needs a solve first, so
+  # it cannot distinguish "session poisoned" from "no field yet".)
+  - tool: query_mesh_quality
+    inputs: {}
 assertions:
-  - kind: step_outcome
-    index: 0
+  - kind: tool_outcome
+    step: 0
     value: ok
-  - kind: step_outcome
-    index: 1
+  - kind: tool_outcome
+    step: 1
     value: fail
-  # query_field can still see the mesh and explain why temperature
-  # isn't there yet — it doesn't silently inherit the BC failure.
-  - kind: step_outcome
-    index: 2
+  - kind: tool_error_code
+    step: 1
+    value: INVALID_ARGUMENT
+  - kind: tool_outcome
+    step: 2
     value: ok

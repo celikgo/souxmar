@@ -110,14 +110,20 @@ algorithm     = "ed25519"
 public_key_id = "release-2026"
 )toml";
 
-const Manifest& expect_ok(const ManifestLoadResult& r) {
+// These helpers return BY VALUE on purpose. Returning a reference into the
+// variant meant that `const auto& x = expect_ok(f(...))` bound a reference
+// into a temporary that died at the end of the full expression: the tests
+// then read freed memory and either passed by luck or reported garbage
+// strings. A copy of a small struct costs nothing here and the trap cannot
+// come back.
+Manifest expect_ok(const ManifestLoadResult& r) {
   if (auto* err = std::get_if<ManifestParseError>(&r)) {
     ADD_FAILURE() << "unexpected parse error: " << err->message;
   }
   return std::get<Manifest>(r);
 }
 
-const ManifestParseError& expect_err(const ManifestLoadResult& r) {
+ManifestParseError expect_err(const ManifestLoadResult& r) {
   if (std::holds_alternative<Manifest>(r)) {
     ADD_FAILURE() << "expected parse error, got a Manifest";
   }

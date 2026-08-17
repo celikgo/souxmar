@@ -9,16 +9,18 @@ setup:
 steps:
   - tool: propose_cfd_setup
     inputs:
-      flow_regime: incompressible_steady
+      goal: steady incompressible flow through a duct
 assertions:
   - kind: tool_outcome
     value: ok
   - kind: tool_data_contains
-    path: bc_plan
+    path: plan
     value: apply_inlet
   - kind: tool_data_contains
-    path: bc_plan
+    path: plan
     value: apply_wall
   - kind: tool_data_contains
-    path: bc_plan
+    path: plan
     value: apply_outlet
+  - kind: tool_data_present
+    path: recommended_solver

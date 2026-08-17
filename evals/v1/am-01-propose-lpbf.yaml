@@ -1,0 +1,41 @@
+id: am-01-propose-lpbf
+description: propose_am_setup drafts a runnable LPBF pipeline for 316L with the material table resolved.
+category: manufacturing
+# Plugin-free by construction: propose_am_setup dispatches nothing, so
+# this task passes with an empty plugin path.
+steps:
+  - tool: propose_am_setup
+    inputs:
+      process:   lpbf
+      material:  316L
+      part_name: bracket
+assertions:
+  - kind: tool_outcome
+    value: ok
+  - kind: tool_data_equals
+    path: process
+    value: lpbf
+  - kind: tool_data_equals
+    path: material.id
+    value: 316L
+  - kind: tool_data_equals
+    path: material.density
+    value: 7990
+    note: 316L density comes from the built-in AM material table
+  - kind: tool_data_gte
+    path: stage_count
+    value: 8
+  - kind: tool_data_equals
+    path: pipeline.stages.0.plugin
+    value: mesher.am.layered
+  - kind: tool_data_present
+    path: pipeline.stages.0.input.target_size
+    note: meshers get no value bag, so the layer height rides in as target_size
+  - kind: tool_data_equals
+    path: marine
+    value: false
+  - kind: tool_data_present
+    path: warnings
+    note: the proposal must surface its caveats, not hide them
+  - kind: tool_summary_contains
+    value: 316L

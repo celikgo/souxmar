@@ -21,14 +21,20 @@ ChatMessage user(std::string_view s) {
   return {ChatMessage::Role::User, std::string(s), {}};
 }
 
-const ChatResponse& expect_ok(const ChatResult& r) {
+// These helpers return BY VALUE on purpose. Returning a reference into the
+// variant meant that `const auto& x = expect_ok(f(...))` bound a reference
+// into a temporary that died at the end of the full expression: the tests
+// then read freed memory and either passed by luck or reported garbage
+// strings. A copy of a small struct costs nothing here and the trap cannot
+// come back.
+ChatResponse expect_ok(const ChatResult& r) {
   if (auto* err = std::get_if<ProviderError>(&r)) {
     ADD_FAILURE() << "provider error: " << to_string(err->kind) << ": " << err->message;
   }
   return std::get<ChatResponse>(r);
 }
 
-const ProviderError& expect_err(const ChatResult& r) {
+ProviderError expect_err(const ChatResult& r) {
   if (std::holds_alternative<ChatResponse>(r)) {
     ADD_FAILURE() << "expected ProviderError, got ChatResponse";
   }
@@ -69,7 +75,7 @@ TEST(StubProvider, ProgrammedReplyMatchesByTriggerSubstring) {
   ChatRequest req;
   req.model = "test-model";
   req.messages = {user("Hey, what plugins are available?")};
-  auto& got = expect_ok(s.chat_completion(req));
+  const auto& got = expect_ok(s.chat_completion(req));
   EXPECT_EQ(got.text, "Hi, calling list_plugins.");
   ASSERT_EQ(got.tool_calls.size(), 1u);
   EXPECT_EQ(got.tool_calls[0].name, "list_plugins");
@@ -177,7 +183,7 @@ TEST(OllamaResponse, ParsesPlainAssistantText) {
     "eval_count":3
   })";
   auto r = OllamaProvider::parse_response_body(kBody);
-  auto& resp = expect_ok(r);
+  const auto& resp = expect_ok(r);
   EXPECT_EQ(resp.text, "Hello!");
   EXPECT_TRUE(resp.tool_calls.empty());
   EXPECT_EQ(resp.input_tokens, 12u);
@@ -197,7 +203,7 @@ TEST(OllamaResponse, ParsesToolCalls) {
     "done":true
   })";
   auto r = OllamaProvider::parse_response_body(kBody);
-  auto& resp = expect_ok(r);
+  const auto& resp = expect_ok(r);
   ASSERT_EQ(resp.tool_calls.size(), 1u);
   EXPECT_EQ(resp.tool_calls[0].name, "list_plugins");
 }

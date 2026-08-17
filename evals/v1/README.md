@@ -77,6 +77,13 @@ Assertion kinds:
 - `tool_data_equals` — `path: <dotted>`, `value: <any>`; `result.data[path]` equals expected.
 - `tool_data_gte` — same `path`, numeric `>= value`.
 - `tool_data_present` — `path: <dotted>`; non-null entry at the path.
+- `tool_data_contains` — `path: <dotted>`, `value: <scalar>`; membership. When the
+  entry is a List it matches if any element matches, and an element that is a Map
+  matches if any of its **direct** fields matches; two strings match when the
+  expected one is a substring of the actual (so `hello-mesher` finds
+  `dev.souxmar.examples.hello-mesher`). Nothing recurses deeper than one level.
+  Use this instead of pinning a list index when the list can legitimately grow or
+  reorder — the plugin catalogue, a BC plan, a list of validation issues.
 - `tool_summary_contains` — `value: "<substring>"`; the human-readable summary contains it.
 
 Each assertion defaults to checking the **last** step's result. Use `step: <index>` to target an earlier step.

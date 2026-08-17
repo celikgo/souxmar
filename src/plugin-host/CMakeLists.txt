@@ -2,7 +2,7 @@
 # Sprint 1 implements manifest + discovery. Loader + registry land in Sprint 2.
 
 find_package(fmt        CONFIG REQUIRED)
-find_package(tomlplusplus CONFIG REQUIRED)
+include(SouxmarFindToml)   # toml++ pinned header-only; see the module for why
 
 add_library(souxmar_plugin
   manifest.cpp
@@ -40,7 +40,7 @@ target_link_libraries(souxmar_plugin
     souxmar::warnings
     souxmar::sanitizers
     fmt::fmt
-    tomlplusplus::tomlplusplus
+    souxmar::tomlplusplus
     ${_SOUXMAR_PLUGIN_HOST_PRIVATE_LIBS}
 )
 

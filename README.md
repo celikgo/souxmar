@@ -2,7 +2,7 @@
 
 An open-source CAE platform: parametric CAD, mesh generation, FEM and CFD, post-processing — wrapped in a cross-platform desktop app with an agentic AI chat that can drive the entire pipeline.
 
-For mechanical, structural, aerospace, and architectural engineers who want a Cursor-style experience for simulation work: open the app, describe the problem in chat, watch it mesh and solve, inspect results in a built-in viewport. C++20 core, Python bindings, stable C plugin ABI, Tauri + React desktop app, Apache 2.0.
+For mechanical, structural, aerospace, architectural, manufacturing, and marine engineers who want a Cursor-style experience for simulation work: open the app, describe the problem in chat, watch it mesh and solve, inspect results in a built-in viewport. C++20 core, Python bindings, stable C plugin ABI, Tauri + React desktop app, Apache 2.0.
 
 souxmar does not replace FreeCAD, Gmsh, FEniCSx, OpenFOAM, Blender, or ParaView. It unifies them under a shared data model and a stable plugin ABI, then puts a modern UI and an agentic AI on top.
 
@@ -27,9 +27,11 @@ The free tier is the full product. You bring your own Anthropic / OpenAI / local
 
 ## Status
 
-🎉 **Stable — `v1.0.0` tagged 2026-05-22.** First stable release. End of the v0.x window. Plugin C ABI **v1.3 FINAL** (frozen forever within v1.x); agent tool contract **v1 FINAL** at 18 tools; on-disk pipeline format **v1 FINAL**; update manifest **v1 FINAL**; bridge ABI v3 (additive Tier-0 evolution allowed through v1.x). 24 sprints, ~150 pushes, 36 ADRs. Apache-2.0. BYOK default; Pro tier opt-in. Six Pro-tier services live (managed-AI proxy, cloud sync, plugin marketplace, billing, account portal, hosted-compute offload). Three desktop FFI surfaces structural (pipeline_introspection, provider_call, auto_updater_menu); viewport_renderer lands in v1.1.0. Sprint 24 retro: [`docs/retros/sprint-24.md`](docs/retros/sprint-24.md). [ADR-0036](docs/adr/0036-v1-final-freeze.md) names the final freeze.
+🎉 **Stable — `v1.0.0` tagged 2026-05-22.** First stable release. End of the v0.x window. Plugin C ABI **v1 FINAL** (major frozen forever within v1.x; the minor has since ratcheted additively to **v1.9** across [ADR-0037](docs/adr/0037-abi-v1-4-surface-stream-ratchet.md)–[ADR-0042](docs/adr/0042-abi-v1-9-timeseries-ratchet.md)); agent tool contract **v1 FINAL**, default catalogue now **24 tools** after the additive ratchets; on-disk pipeline format **v1 FINAL**; update manifest **v1 FINAL**; bridge ABI v3 (additive Tier-0 evolution allowed through v1.x). 24 sprints, ~150 pushes and 36 ADRs at the v1.0.0 cut. Apache-2.0. BYOK default; Pro tier opt-in. Six Pro-tier services live (managed-AI proxy, cloud sync, plugin marketplace, billing, account portal, hosted-compute offload). Three desktop FFI surfaces structural (pipeline_introspection, provider_call, auto_updater_menu); viewport_renderer lands in v1.1.0. Sprint 24 retro: [`docs/retros/sprint-24.md`](docs/retros/sprint-24.md). [ADR-0036](docs/adr/0036-v1-final-freeze.md) names the final freeze.
 
 **v1.x roadmap (per ADR-0036):** v1.0.1 (Enterprise E2E cloud sync), v1.0.2 (paid plugins + publisher onboarding), v1.1.0 (Three.js + VTK.js viewport rendering). The next ABI break is v2.0 — post-v1.0 future-sprint scope.
+
+**Manufacturing + marine vertical (newest block).** Eight new always-on in-tree plugins add **18 capabilities** for additive manufacturing and marine/subsea work — layered build meshing, parametric lattices, LPBF thermal + melt-pool, inherent-strain distortion + residual stress, FFF interlayer bonding, DfAM overhang/printability/build-cost, slicing to G-code + CLI + Markdown build report, and hydrostatic / hull-collapse / corrosion / qualification-dossier for marine parts. **Every one of these is a closed-form or heuristic model with a cited literature source — a screening and preliminary-sizing aid, not a calibrated process simulation**, and the qualification dossier is advisory only (souxmar is not a classification society). The block needed **no ABI change**: every capability rides the existing prefix dispatch. Six additive agent tools (19–24) bring the catalogue to 24; two new workbench panels; four runnable examples. See [`docs/MANUFACTURING.md`](docs/MANUFACTURING.md), [`docs/MARINE.md`](docs/MARINE.md), [ADR-0044](docs/adr/0044-manufacturing-capability-namespaces.md), [ADR-0045](docs/adr/0045-agent-tool-contract-am-ratchet.md), [RFC-0012](docs/rfcs/0012-am-process-simulation.md). Calibrated process solvers, topology optimisation and any form of class approval are **not** in this block — Sprints 41–44 in [`docs/SPRINT_PLAN.md`](docs/SPRINT_PLAN.md) name what follows.
 
 What changed since v0.9.5 (Sprint 18 in full):
 
@@ -104,14 +106,23 @@ The ABI v1 soak that ran across Sprints 5–7 picked up its third additive minor
 Runnable today:
 
 - **CLI**: `souxmar run <pipeline.yaml>`, `souxmar plugin {list,search,validate-index}`, `souxmar update {check,apply,rollback}` (Sprint 10 pushes 6+7 — signature-verifying auto-updater against signed manifests, atomic-swap apply, audit-logged rollback), `souxmar agent {list,invoke}` (with `--audit-log`, `--budget-config`, `--yes`), `souxmar-conformance <dir>`, `souxmar-eval <evals-dir>`, `souxmar-eval-llm <evals-dir>` (Sprint 10 push 9 — LLM-driven compatibility-matrix generator against Ollama).
-- **Python**: `pip install pysouxmar` → parser, registry, loader, runner, cache, **18 agent tools**, audit log, first-class `SessionBudget.on_threshold` callback, `.souxmar/budget.toml` loader.
-- **Plugin SDK**: **frozen-final C ABI v1.3** across six capability namespaces (`reader.*`, `mesher.*`, `solver.*`, `writer.*`, `postproc.*`, plus the bulk-buffer ingest path), now with **per-face tags** on `souxmar_mesh_*` (ADR-0012); `souxmar_add_plugin` CMake macro; conformance suite + CI lockdown gate; host-side **subprocess harness** for plugins that drive external binaries.
-- **Eleven in-tree reference plugins** (always-on): hello-mesher, grid-mesher, hello-writer, vtu-writer, heat-solver, elasticity-stub, cfd-stub, scalar-magnitude, mesh-quality, stl-reader, obj-reader.
+- **Python**: `pip install pysouxmar` → parser, registry, loader, runner, cache, **24 agent tools**, audit log, first-class `SessionBudget.on_threshold` callback, `.souxmar/budget.toml` loader.
+- **Plugin SDK**: **frozen-final C ABI v1** (minor at **v1.9**) across six capability namespaces (`reader.*`, `mesher.*`, `solver.*`, `writer.*`, `postproc.*`, plus the bulk-buffer ingest path), with **per-face tags** on `souxmar_mesh_*` (ADR-0012); `souxmar_add_plugin` CMake macro; conformance suite + CI lockdown gate; host-side **subprocess harness** for plugins that drive external binaries.
+- **Twenty in-tree reference plugins** (always-on): hello-mesher, grid-mesher, hello-writer, vtu-writer, heat-solver, elasticity-stub, cfd-stub, scalar-magnitude, mesh-quality, stl-reader, obj-reader, modal-stub, plus the eight manufacturing + marine plugins below.
+- **Manufacturing + marine plugins** (always-on, eight plugins / **18 capabilities**) — **closed-form and heuristic models only**, each with its literature reference and an explicit "what this is NOT" note in its source header:
+  - `am-layered-mesher`: `mesher.am.layered` — layer-aligned Hex8 build mesh, cell tag = layer index.
+  - `lattice-reader`: `reader.lattice` — parametric cubic / bcc / fcc / octet / diamond strut lattice → Edge2 beam mesh.
+  - `am-thermal`: `solver.am.thermal.lpbf`, `postproc.am.melt_pool` — Rosenthal layer-wise LPBF thermal history; melt-pool depth, normalised enthalpy, lack-of-fusion / keyhole porosity risk.
+  - `am-distortion`: `solver.am.distortion.inherent_strain`, `postproc.am.residual_stress` — Keller–Ploshikhin inherent strain with Stoney-type curvature accumulation; the calibration factor must be fitted to a measured part.
+  - `am-polymer`: `solver.am.polymer.fff`, `postproc.am.bond_strength` — lumped-capacitance FFF interlayer cooling; Yang–Pitchumani reptation healing.
+  - `am-manufacturability`: `solver.am.overhang`, `solver.am.printability`, `solver.am.buildtime` — DfAM downskin / support need, a documented composite printability heuristic, per-layer time / energy / mass / cost.
+  - `am-slicer`: `writer.am.gcode`, `writer.am.cli`, `writer.am.report` — planar slicing to FFF G-code, Common Layer Interface ASCII, and a Markdown build report with an FNV-1a content digest (a digest, not a signature).
+  - `marine`: `solver.marine.hydrostatic`, `solver.marine.hull_collapse`, `solver.marine.corrosion`, `writer.marine.qualification_report` — depth load cases, Windenburg–Trilling / membrane-yield / sphere-buckling collapse margin, PREN + galvanic-series corrosion indicators, and an **advisory-only** qualification dossier. Preliminary sizing, never a classification-society calculation.
 - **Five opt-in external adapters**: `occt-reader` (`-DSOUXMAR_WITH_OPENCASCADE=ON`, STEP / IGES), `gmsh-mesher` (`-DSOUXMAR_WITH_GMSH=ON`), `fenicsx-solver` (`-DSOUXMAR_WITH_FENICSX=ON`, FEM Poisson), `openfoam-solver` (`-DSOUXMAR_WITH_OPENFOAM=ON`, three CFD capabilities), `blender-reader` (`-DSOUXMAR_WITH_BLENDER=ON`, `.blend` import).
-- **Five runnable examples**: `examples/cantilever-beam/`, `examples/thermal-fin/`, `examples/stl-cube/`, `examples/pipe-bend/`, and the new `examples/mesh-comparison/` (Sprint 10 push 11 — runs both meshers, renders a comparison report). Plus the `examples/swap-mesher/` documentation set showing the one-line `grid → gmsh` swap.
+- **Ten runnable examples**: `examples/cantilever-beam/`, `examples/thermal-fin/`, `examples/stl-cube/`, `examples/pipe-bend/`, `examples/mesh-comparison/` (runs both meshers, renders a comparison report), `examples/modal-beam/`, and the four manufacturing + marine stories — `examples/am-lpbf-bracket/` (316L LPBF bracket: layered mesh → thermal → melt pool → distortion → residual stress → overhang → report), `examples/am-marine-propeller/` (nickel-aluminium-bronze blade: distortion → printability → corrosion → qualification report), `examples/am-submarine-pressure-hull/` (316L hull ring + lattice buoyancy core: hydrostatic → collapse margin → qualification report), `examples/am-polymer-auv-fairing/` (PEKK / PA12-CF fairing: FFF thermal → bond strength → printability → G-code + build report). Plus the `examples/swap-mesher/` documentation set showing the one-line `grid → gmsh` swap, and `examples/materials/am-marine.toml` — a curated AM + marine material library with a source column on every number.
 - **Out-of-core mesh streaming**: mmap-backed `souxmar_buffer_t` v2. `souxmar_mesh_from_buffers` routes transparently to heap or mmap.
 - **Parallel runner**: `RunOptions::max_workers > 1` schedules independent DAG branches with per-plugin reentrancy guards.
-- **Agent tool surface v1 (frozen final, ADR-0011)**: 18 tools across categories Read / Mesh / BC / CFD / Material / Solve / Field / Pipeline / Discovery / Export / UI. Structured audit log, per-project token budget config. **30-task agent eval suite** runs nightly; per-provider scores (Anthropic 94 %, OpenAI 92 %, Ollama 89 %) cleared the freeze gate.
+- **Agent tool surface v1 (frozen final, ADR-0011)**: **24 tools** across categories Read / Mesh / BC / CFD / Material / Solve / Field / Pipeline / Discovery / Export / UI. The original 18 froze at v1; tools 19–24 landed as an additive ratchet ([ADR-0045](docs/adr/0045-agent-tool-contract-am-ratchet.md)) — `propose_am_setup`, `check_printability`, `set_build_orientation`, `estimate_build_cost`, `apply_hydrostatic_load`, `check_marine_integrity`. No existing tool, category or confirmation policy changed. Structured audit log, per-project token budget config. **44-task agent eval suite** in `evals/v1/` runs nightly; per-provider scores (Anthropic 94 %, OpenAI 92 %, Ollama 89 %) cleared the freeze gate.
 - **Perf-regression CI at 5 % per-PR** ([`ENGINEERING_PRACTICES.md`](docs/ENGINEERING_PRACTICES.md) § Performance budgets matched). Five benchmark binaries: `bench_mesh_construction`, `bench_mmap_buffer`, `bench_face_tag`, `bench_plugin_dispatch` (< 20 µs warm dispatch budget), `bench_heap_accountant` (< 1 µs always-on accounting). Self-contained HTML dashboard generated per release.
 - **Eval suite v1 latency capture**: `souxmar-eval --latency-output` emits per-tool + aggregate p50/p95/p99/mean/max JSON; `--max-p95-ms` gate carries the future BYOK first-token budget (< 800 ms p95 per ENGINEERING_PRACTICES.md).
 - **Audit log carries heap deltas** on Linux + glibc ≥ 2.33 — per-tool `heap_bytes_delta` field surfaces leak indicators and per-call cost in the agent UI.
@@ -156,11 +167,13 @@ Product & architecture:
 - [`docs/AI_INTEGRATION.md`](docs/AI_INTEGRATION.md) — agentic chat, BYOK credentials, tool surface
 - [`docs/UI_DESIGN.md`](docs/UI_DESIGN.md) — design system using the Twitter dim palette
 - [`docs/PLUGIN_SDK.md`](docs/PLUGIN_SDK.md) — C ABI, plugin lifecycle, versioning
+- [`docs/MANUFACTURING.md`](docs/MANUFACTURING.md) — additive-manufacturing capabilities, inputs, and the limits of each closed-form model
+- [`docs/MARINE.md`](docs/MARINE.md) — marine / subsea capabilities and the advisory-only qualification surface
 - [`docs/BUSINESS_MODEL.md`](docs/BUSINESS_MODEL.md) — open-core model, tiers, marketplace
 
 Engineering & process:
 
-- [`docs/SPRINT_PLAN.md`](docs/SPRINT_PLAN.md) — 24-sprint plan with team commitments, exit criteria, risks
+- [`docs/SPRINT_PLAN.md`](docs/SPRINT_PLAN.md) — sprint plan through Sprint 44, with team commitments, exit criteria, risks
 - [`docs/TEAM_STRUCTURE.md`](docs/TEAM_STRUCTURE.md) — six-team org, RACI, hiring sequence, on-call
 - [`docs/ENGINEERING_PRACTICES.md`](docs/ENGINEERING_PRACTICES.md) — quality bar, perf budgets, security, observability
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) — upstream merge process, RFCs, maintainer roles
@@ -183,6 +196,8 @@ Claude skills (`.claude/skills/`):
 - `onboarding-souxmar-contributor` — first PR walkthrough
 - `updating-design-tokens` — token contract + visual regression
 - `publishing-plugin-marketplace` — open index and paid marketplace
+- `simulating-additive-manufacturing` — AM analysis setup, layer bookkeeping, and what each model is not
+- `assessing-marine-am-parts` — depth, collapse, corrosion, and the advisory qualification dossier
 
 ## License
 

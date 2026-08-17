@@ -77,6 +77,17 @@ model = "internal-parallel"             # one of: reentrant, single-threaded, in
 souxmar = ">=1.0,<2.0"
 ```
 
+### `[plugin.binary] file` and the host-extension fallback
+
+`file` is resolved relative to the manifest's directory. Declare one name and one only — by convention the ELF one, `lib<target>.so` — because the manifest is a source artefact that ships once for every platform, while the artefact CMake produces is `lib<target>.dylib` on macOS and `<target>.dll` on Windows.
+
+Discovery therefore resolves `file` in two steps:
+
+1. **The declared name wins whenever it exists on disk.** A plugin that genuinely ships `libfoo.dylib` and says so is loaded from exactly that file, and a directory holding several artefacts side by side yields the one the manifest asked for.
+2. **Otherwise the same stem is retried with each canonical shared-library extension** — `.so`, `.dylib`, `.dll` — with the host platform's own extension tried first. So a manifest declaring `libfoo.so` loads `libfoo.dylib` on macOS and `libfoo.dll` on Windows without any per-platform manifest.
+
+The extension order is fixed at compile time rather than derived from directory iteration, so a directory containing two artefacts with the same stem resolves identically on every machine and every run. If none of the three candidates exists, discovery reports the unchanged `binary_not_found` rejection naming the *declared* path. A declared name that exists but carries an extension outside those three is still rejected as `binary_unrecognised_extension`.
+
 The host validates the manifest, refuses to load on ABI mismatch, and surfaces the metadata to `souxmar plugin list`. Every rejection carries a stable code — see `ManifestRejection` in `souxmar/plugin/manifest.h` — so `souxmar plugin list` reports the structured class plus a free-form reason:
 
 ```

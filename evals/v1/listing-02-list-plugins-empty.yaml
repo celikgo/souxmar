@@ -1,14 +1,19 @@
 id: listing-02-list-plugins-empty
-description: list_plugins reports cleanly when no plugins are loaded.
+description: list_plugins reports cleanly when the namespace filter matches nothing.
 category: listing
-setup:
-  empty_plugin_path: true
 steps:
+  # The runner shares one loaded registry across every task, so a task cannot
+  # empty it. Filtering to a namespace nothing registers exercises the same
+  # empty-result path.
   - tool: list_plugins
-    inputs: {}
+    inputs:
+      namespace: nosuch.
 assertions:
   - kind: tool_outcome
     value: ok
   - kind: tool_data_equals
-    path: plugin_count
+    path: count_total
     value: 0
+  - kind: tool_data_equals
+    path: filter_namespace
+    value: nosuch.

@@ -256,18 +256,20 @@ TEST(VtuConsumerConformance, OutputParsesAndCarriesContract) {
   EXPECT_EQ(n_cells, 1) << "hello-mesher emits 1 tet";
 
   // <Points> carries 3 floats per node.
-  const std::string points_data = extract_data_array(xml, "Points");
-  // Some writers nest the array under <Points><DataArray>...</DataArray></Points>;
-  // grab the inner DataArray directly if needed.
-  std::string points_text = points_data;
-  if (points_text.find("<DataArray") != std::string::npos) {
-    // The <Points> block had a nested DataArray (no Name attribute);
-    // hand-extract its inner text.
-    std::regex inner(R"(<DataArray[^>]*>([\s\S]*?)</DataArray>)");
-    std::smatch m;
-    if (std::regex_search(points_data, m, inner)) {
-      points_text = m[1].str();
-    }
+  //
+  // The DataArray inside <Points> has no Name attribute — that is correct
+  // VTU, the element's position carries the meaning — so extract_data_array,
+  // which keys on Name="...", can never find it. Take the <Points> block
+  // first, then its inner DataArray. (extract_data_array(xml, "Points") used
+  // to be called here and always returned the empty string, so the array
+  // parsed as zero floats and this invariant was never actually checked.)
+  const std::string points_block = extract_tag_text(xml, "Points");
+  ASSERT_FALSE(points_block.empty()) << "no <Points> block in the VTU";
+  std::string points_text = points_block;
+  std::regex points_inner(R"(<DataArray[^>]*>([\s\S]*?)</DataArray>)");
+  std::smatch points_match;
+  if (std::regex_search(points_block, points_match, points_inner)) {
+    points_text = points_match[1].str();
   }
   const auto pts = split_doubles(points_text);
   EXPECT_EQ(static_cast<int>(pts.size()), n_pts * 3)

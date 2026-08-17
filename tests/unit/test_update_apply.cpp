@@ -65,7 +65,7 @@ Manifest manifest_for(const std::string& version,
   return m;
 }
 
-FixedTimeSource clock_t(const char* rfc3339) {
+FixedTimeSource make_clock(const char* rfc3339) {
   return FixedTimeSource{*parse_rfc3339_utc(rfc3339)};
 }
 
@@ -80,7 +80,7 @@ TEST(ApplyUpdate, HappyPathStagesSwitchesAppendsAndBumpsState) {
   UpdateState st;
   st.current_installed_version = "0.8.5";
   st.max_version_ever_seen = "0.8.5";
-  auto clk = clock_t("2026-05-12T00:00:00Z");
+  auto clk = make_clock("2026-05-12T00:00:00Z");
 
   // Pretend the previous install is already on disk (we don't
   // actually need it for the happy path; just makes the from_version
@@ -129,7 +129,7 @@ TEST(ApplyUpdate, RefusesArtifactHashMismatch) {
   m.artifacts[0].sha256 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 
   UpdateState st;
-  auto clk = clock_t("2026-05-12T00:00:00Z");
+  auto clk = make_clock("2026-05-12T00:00:00Z");
   ApplyContext ctx;
   ctx.manifest = &m;
   ctx.artifact_bytes = payload;
@@ -153,7 +153,7 @@ TEST(ApplyUpdate, RefusesArtifactSizeMismatch) {
   m.artifacts[0].size = payload.size() + 1;
 
   UpdateState st;
-  auto clk = clock_t("2026-05-12T00:00:00Z");
+  auto clk = make_clock("2026-05-12T00:00:00Z");
   ApplyContext ctx;
   ctx.manifest = &m;
   ctx.artifact_bytes = payload;
@@ -175,7 +175,7 @@ TEST(ApplyUpdate, RefusesViaGateWhenAlreadyAhead) {
 
   UpdateState st;
   st.current_installed_version = "1.0.0";
-  auto clk = clock_t("2026-05-12T00:00:00Z");
+  auto clk = make_clock("2026-05-12T00:00:00Z");
   ApplyContext ctx;
   ctx.manifest = &m;
   ctx.artifact_bytes = payload;
@@ -205,7 +205,7 @@ TEST(ApplyUpdate, GcReapsOldVersionsAfterSuccessfulApply) {
 
   UpdateState st;
   st.current_installed_version = "0.8.5";
-  auto clk = clock_t("2026-05-12T00:00:00Z");
+  auto clk = make_clock("2026-05-12T00:00:00Z");
   ApplyContext ctx;
   ctx.manifest = &m;
   ctx.artifact_bytes = payload;
@@ -235,7 +235,7 @@ TEST(Rollback, FlipsCurrentToPrevious) {
   // Set up: apply 0.8.5 then 0.9.0 so the rollback log + the layout
   // both record a real history.
   UpdateState st;
-  auto clk = clock_t("2026-05-12T00:00:00Z");
+  auto clk = make_clock("2026-05-12T00:00:00Z");
 
   // Step 1: apply 0.8.5 onto a fresh root.
   {
@@ -290,7 +290,7 @@ TEST(Rollback, NoCurrentInstallReturnsNoCurrent) {
   const auto root = tmp_dir("rb-no-current");
   InstallLayout layout(root);
   UpdateState st;
-  auto clk = clock_t("2026-05-12T00:00:00Z");
+  auto clk = make_clock("2026-05-12T00:00:00Z");
   RollbackContext rctx{&layout, &st, &clk};
   EXPECT_EQ(rollback(rctx).outcome, RollbackOutcome::NoCurrentInstall);
   fs::remove_all(root);
@@ -305,7 +305,7 @@ TEST(Rollback, NoTargetReturnsNoTarget) {
   ASSERT_TRUE(layout.atomic_switch_to("", "0.9.0"));
 
   UpdateState st;
-  auto clk = clock_t("2026-05-12T00:00:00Z");
+  auto clk = make_clock("2026-05-12T00:00:00Z");
   RollbackContext rctx{&layout, &st, &clk};
   EXPECT_EQ(rollback(rctx).outcome, RollbackOutcome::NoRollbackTarget);
   fs::remove_all(root);
@@ -325,7 +325,7 @@ TEST(Rollback, TargetPayloadMissingReturnsThatOutcome) {
   ASSERT_FALSE(layout.has_version_payload("0.8.5"));
 
   UpdateState st;
-  auto clk = clock_t("2026-05-12T00:00:00Z");
+  auto clk = make_clock("2026-05-12T00:00:00Z");
   RollbackContext rctx{&layout, &st, &clk};
   EXPECT_EQ(rollback(rctx).outcome, RollbackOutcome::TargetPayloadMissing);
   // current.txt unchanged.
