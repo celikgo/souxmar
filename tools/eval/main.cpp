@@ -398,6 +398,64 @@ TaskRunResult run_task(const EvalTask&            task,
         return r;
       }
     }
+    // Membership: "somewhere under `path` there is this value". The tasks
+    // that need it are asking about a list the tool builds — the BC plan
+    // propose_cfd_setup drafts, the issues validate_bcs raises, the
+    // capabilities list_plugins enumerates — where pinning an index would
+    // make the eval break every time a plugin is added or an issue is
+    // reordered. Deliberately shallow and substring-tolerant: a List matches
+    // when any element matches, an element that is a Map matches when any of
+    // its *direct* fields matches, and two strings match when the expected
+    // one is a substring of the actual (so `hello-mesher` finds
+    // `dev.souxmar.examples.hello-mesher`). Nothing recurses further than
+    // one level, so a passing assertion stays easy to reason about.
+    else if (a.kind == "tool_data_contains") {
+      const auto* at = lookup(result.data, a.path);
+      if (at == nullptr) {
+        r.failure_reason = fmt::format(
+            "tool_data_contains (step {}, path '{}'): missing in result.data",
+            a.step, a.path);
+        return r;
+      }
+      const auto scalar_matches = [](const pl::Value& actual, const pl::Value& expected) {
+        if (values_equal(actual, expected))
+          return true;
+        if (actual.kind() == pl::Value::Kind::String
+            && expected.kind() == pl::Value::Kind::String) {
+          return std::string(actual.as_string()).find(std::string(expected.as_string()))
+                 != std::string::npos;
+        }
+        return false;
+      };
+      bool found = false;
+      if (at->kind() == pl::Value::Kind::List) {
+        for (const auto& item : at->as_list()) {
+          if (scalar_matches(item, a.value)) {
+            found = true;
+            break;
+          }
+          if (item.kind() == pl::Value::Kind::Map) {
+            for (const auto& [key, field] : item.as_map()) {
+              (void)key;
+              if (scalar_matches(field, a.value)) {
+                found = true;
+                break;
+              }
+            }
+          }
+          if (found)
+            break;
+        }
+      } else {
+        found = scalar_matches(*at, a.value);
+      }
+      if (!found) {
+        r.failure_reason = fmt::format(
+            "tool_data_contains (step {}, path '{}'): value not found",
+            a.step, a.path);
+        return r;
+      }
+    }
     else if (a.kind == "tool_summary_contains") {
       const std::string needle = std::string(a.value.as_string());
       if (result.summary.find(needle) == std::string::npos) {

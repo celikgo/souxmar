@@ -1,13 +1,21 @@
 id: diff-03-noop-stage
-description: apply_pipeline_diff with no changes returns a noop summary, not an error.
+description: apply_pipeline_diff with no ops returns the base unchanged, not an error.
 category: diff
 steps:
   - tool: apply_pipeline_diff
     inputs:
-      diff: []
+      base:
+        version: 1
+        stages:
+          - id: mesh
+            plugin: mesher.tetra.hello
+      ops: []
 assertions:
   - kind: tool_outcome
     value: ok
   - kind: tool_data_equals
-    path: changes_applied
+    path: ops_applied
     value: 0
+  - kind: tool_data_equals
+    path: parsed_stages
+    value: 1

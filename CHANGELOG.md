@@ -129,6 +129,30 @@ than deferred: nothing in this block could be demonstrated without them.
   rejects** — a `postproc.*` stage with only `mesh:` and no `field:`, which
   `registry_dispatcher.cpp` has always refused. The test now supplies an
   upstream field and says why.
+- **The scripted agent-eval suite was almost entirely broken and nothing
+  noticed.** 16 of 44 tasks failed: three assertion kinds the tasks used
+  (`tool_data_contains`, `error_code_contains`, `step_outcome`) were never
+  implemented by the runner, a dozen tasks named input keys and result paths
+  the tools do not have (`flow_regime` for `goal`, `bc_plan` for `plan`,
+  `format` for `capability_id`, `issue_count`, `plugin_count`,
+  `changes_applied`), and `diff-02-dangling-rejected.yaml` could not even be
+  loaded because its unquoted description contains `{from: ...}`, which
+  yaml-cpp reads as a flow mapping. The tasks now assert against the real tool
+  contracts, `tool_data_contains` is implemented (documented in
+  `evals/v1/README.md`), and the suite runs **49/49**.
+- **`query_mesh_quality` could never succeed.** It dispatched
+  `postproc.mesh_quality` with only a `mesh:` input, and the dispatcher
+  requires every postproc stage to name an upstream `field:` — so one of the
+  eighteen frozen v1 tools failed on every invocation. It now supplies a
+  one-value placeholder field (which `postproc.mesh_quality` ignores, as its
+  own signature shows) purely to satisfy the contract.
+- **`apply_pipeline_diff` never validated its result.** It re-parsed the
+  diffed pipeline but parsing does not resolve `{from: <id>}` references, so a
+  `remove` that orphaned a downstream stage was returned to the caller as a
+  success and only failed later inside the runner — despite the tool's own
+  error string promising to diagnose exactly that. It now runs
+  `pipeline::validate` and reports a dangling reference or cycle as
+  `INVALID_ARGUMENT`.
 - **Three test files did not compile on AppleClang 21**, so neither test
   binary could be built and no test had run on macOS: a test-local
   `clock_t` helper collided with the POSIX type, an unused helper tripped

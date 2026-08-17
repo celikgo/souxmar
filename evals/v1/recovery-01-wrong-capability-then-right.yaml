@@ -9,9 +9,12 @@ steps:
     inputs:
       capability_id: mesher.tetra.hello
 assertions:
-  - kind: step_outcome
-    index: 0
+  - kind: tool_outcome
+    step: 0
     value: fail
-  - kind: step_outcome
-    index: 1
+  - kind: tool_error_code
+    step: 0
+    value: PLUGIN_NOT_FOUND
+  - kind: tool_outcome
+    step: 1
     value: ok

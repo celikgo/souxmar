@@ -7,10 +7,14 @@ steps:
       capability_id: mesher.tetra.hello
   - tool: set_material
     inputs:
-      material: thermal_conductivity_default
+      tag: bulk
+      model: thermal
+      properties:
+        thermal_conductivity: 45.0
   - tool: set_bc
     inputs:
-      kind: dirichlet
+      tag: fixed
+      type: dirichlet
       value: 300
   - tool: solve
     inputs:
@@ -20,11 +24,25 @@ steps:
       field: temperature
   - tool: export_results
     inputs:
-      format: vtu
+      capability_id: writer.vtu
       path: /tmp/souxmar-eval-multistep-01.vtu
 assertions:
+  # Every step of the canonical agent flow has to succeed, not just the last.
   - kind: tool_outcome
+    step: 0
     value: ok
-  - kind: tool_data_contains
-    path: artifacts
-    value: temperature
+  - kind: tool_outcome
+    step: 3
+    value: ok
+  - kind: tool_outcome
+    step: 4
+    value: ok
+  - kind: tool_outcome
+    step: 5
+    value: ok
+  - kind: tool_data_equals
+    path: capability_id
+    value: writer.vtu
+  - kind: tool_data_equals
+    path: has_field
+    value: true

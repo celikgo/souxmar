@@ -88,11 +88,34 @@ std::optional<std::shared_ptr<core::Field>> dispatch_quality(ToolContext& ctx, T
   mesh_so->kind = pipeline::StageOutput::Kind::Mesh;
   mesh_so->mesh = ctx.mesh_handle;
 
+  // The dispatcher requires every postproc.* stage to name an upstream
+  // `field:` — postproc is field-in / field-out by definition, and a missing
+  // input field is a hard dispatch error, not a silent NULL. But
+  // postproc.mesh_quality derives everything from the mesh and ignores its
+  // input field entirely (see examples/plugins/mesh-quality/mesh_quality.cpp,
+  // whose compute_fn comments the parameter out). Without a field to point
+  // at, this tool could never dispatch at all.
+  //
+  // So we hand it a one-value placeholder purely to satisfy the contract. It
+  // is never read. The alternative — relaxing the dispatcher — would change
+  // pipeline semantics for every postproc, and the honest long-term fix is
+  // for a mesh-only analysis to be a solver.* capability, which is the rule
+  // ADR-0044 sets for new capabilities but cannot be applied retroactively to
+  // a frozen capability id.
+  auto placeholder_field = std::make_shared<core::Field>(
+      "mesh_quality_placeholder", core::FieldLocation::Cell, core::FieldKind::Scalar,
+      /*count=*/1, /*num_time_steps=*/1);
+  auto field_so = std::make_shared<pipeline::StageOutput>();
+  field_so->kind = pipeline::StageOutput::Kind::Field;
+  field_so->field = std::move(placeholder_field);
+
   std::map<std::string, std::shared_ptr<void>> upstream;
   upstream.emplace("__session_mesh__", std::static_pointer_cast<void>(mesh_so));
+  upstream.emplace("__placeholder_field__", std::static_pointer_cast<void>(field_so));
 
   std::map<std::string, pipeline::Value> stage_input;
   stage_input.emplace("mesh", pipeline::Value::stage_ref("__session_mesh__"));
+  stage_input.emplace("field", pipeline::Value::stage_ref("__placeholder_field__"));
   auto input_value = pipeline::Value::map(std::move(stage_input));
 
   pipeline::DispatchContext dctx{kCapabilityId, input_value, upstream};
