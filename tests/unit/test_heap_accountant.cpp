@@ -19,6 +19,10 @@
 
 #include "souxmar/plugin/heap_accountant.h"
 
+#if defined(__GLIBC__)
+#include <malloc.h>  // mallopt, M_MMAP_MAX
+#endif
+
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -79,6 +83,43 @@ TEST(HeapAccountant, QuietThreadDeltaIsBoundedlySmall) {
 // but cheap to guard against). On every other platform the file
 // compiles to just the tier-1 assertions above.
 
+namespace {
+
+// glibc services any allocation at or above M_MMAP_THRESHOLD (128 KiB by
+// default) with mmap, and mmap-backed blocks land in mallinfo2's
+// `hblkhd` — not `uordblks`, which is the only field HeapAccountant
+// reads. So the two tests below, which allocate 1 MiB and 8 MiB to sit
+// "comfortably above the noise floor", were measuring exactly the
+// allocations the accountant cannot see. They passed nowhere; they had
+// simply never run, because CI did not exist.
+//
+// Disabling mmap for the duration makes the allocation come from the
+// arena, which is what these tests mean to exercise. The limitation
+// itself is real and documented in the accountant's header: a plugin
+// that allocates one large mesh buffer is invisible to this metric.
+class ForceArenaAllocation {
+ public:
+  ForceArenaAllocation() {
+    // mallopt returns 1 on success. A failure is not fatal — the test
+    // then measures whatever the default policy gives and reports it.
+    ok_ = mallopt(M_MMAP_MAX, 0) == 1;
+  }
+  ~ForceArenaAllocation() {
+    if (ok_) {
+      mallopt(M_MMAP_MAX, kDefaultMmapMax);
+    }
+  }
+  ForceArenaAllocation(const ForceArenaAllocation&) = delete;
+  ForceArenaAllocation& operator=(const ForceArenaAllocation&) = delete;
+
+ private:
+  // glibc's documented default for M_MMAP_MAX.
+  static constexpr int kDefaultMmapMax = 65536;
+  bool ok_ = false;
+};
+
+}  // namespace
+
 TEST(HeapAccountantLinux, DeliberateAllocationShowsAsPositiveDelta) {
   if (!HeapAccountant::is_supported()) {
     GTEST_SKIP() << "runtime accountant unsupported";
@@ -88,6 +129,7 @@ TEST(HeapAccountantLinux, DeliberateAllocationShowsAsPositiveDelta) {
   // `uordblks` in lock step. We use std::malloc directly so the
   // accounting tracks the same path real plugins use.
   constexpr std::size_t kSize = 1u << 20;
+  const ForceArenaAllocation arena_only;
   const auto before = HeapAccountant::snapshot();
   void* buf = std::malloc(kSize);
   ASSERT_NE(buf, nullptr);
@@ -107,6 +149,7 @@ TEST(HeapAccountantLinux, MatchedAllocFreeReturnsCloseToZero) {
     GTEST_SKIP() << "runtime accountant unsupported";
   }
   constexpr std::size_t kSize = 1u << 20;
+  const ForceArenaAllocation arena_only;
   const auto before = HeapAccountant::snapshot();
   void* buf = std::malloc(kSize);
   ASSERT_NE(buf, nullptr);
@@ -126,6 +169,7 @@ TEST(HeapAccountantLinux, VectorGrowthShowsAsPositiveDelta) {
   if (!HeapAccountant::is_supported()) {
     GTEST_SKIP() << "runtime accountant unsupported";
   }
+  const ForceArenaAllocation arena_only;
   const auto before = HeapAccountant::snapshot();
   // std::vector<double>(N) is the canonical "plugin allocates a
   // working buffer" pattern. N = 1 Mi doubles = 8 MiB — large
