@@ -208,10 +208,21 @@ jobs:
 
       - name: ruff (changed files only)
         run: |
+          # `ruff check` only — lint, not formatting. This codebase aligns
+          # consecutive assignments on the `=`, in Python and in Rust:
+          #
+          #     loader   = sx.PluginLoader(...)
+          #     report   = sx.discover_plugins(...)
+          #
+          # ruff format collapses that, the same way rustfmt does, and for
+          # the same reason there is no rustfmt gate here: adopting a
+          # formatter that overrides a deliberate house style is a project
+          # decision, not something a CI change should impose. The lint
+          # rules still catch unused imports, undefined names and import
+          # ordering, which are defects rather than taste.
           files="$(grep -E '\.py$' changed.txt || true)"
           if [ -z "$files" ]; then echo "no Python files changed"; exit 0; fi
           printf '%s\n' "$files" | xargs ruff check
-          printf '%s\n' "$files" | xargs ruff format --check
 
   format-debt:
     name: Format debt (advisory)

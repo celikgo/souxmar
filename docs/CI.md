@@ -121,6 +121,14 @@ reformatting the Rust tree against a style its authors chose on purpose. Adoptin
 project decision, not something a CI change should impose. `clippy -D warnings` and `cargo test`
 are blocking, and those are the gates that catch defects rather than taste.
 
+**`ruff format` is off for the same reason.** The Python sources align consecutive assignments
+identically (`loader   = ...` / `report   = ...`), and ruff format collapses it. `ruff check` is
+blocking — unused imports, undefined names and import ordering are defects, not taste.
+
+`clang-format` is the exception, and only because `.clang-format` is already committed: the project
+has chosen a C++ formatter, so enforcing it on changed lines is applying the project's decision
+rather than making one.
+
 ## Outstanding advisories
 
 `npm-audit` is non-blocking, and not because it lacks data — it works. Its first run surfaced four
