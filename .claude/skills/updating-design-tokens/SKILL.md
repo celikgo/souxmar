@@ -49,7 +49,7 @@ Three rules govern token changes:
 1. **Surface the rationale.** Token changes propagate everywhere; the PR description must explain why.
 2. **Run the visual regression suite locally** before pushing:
    ```bash
-   pnpm -C src/desktop test:visual --update-snapshots
+   npm --prefix tests/visual run update-baselines
    ```
 3. **Review the snapshot diff.** Every changed component is in the diff. Look for:
    - Components that broke unexpectedly (regressions).

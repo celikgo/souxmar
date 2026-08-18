@@ -57,7 +57,7 @@ This skill covers both channels.
    paid             = false             # true for paid-marketplace entries (Sprint 16+)
    ```
 
-3. **The `plugin-index` CI workflow** (Sprint 10 push 3, `.github/workflows/plugin-index.yml`) automatically runs `souxmar plugin validate-index` against the modified file. The check surfaces:
+3. **The `plugin-index` CI workflow** (Sprint 10 push 3, `.github/workflows/plugin-index.yml`) — **removed in `c7f6214` and not restored, so this step is currently manual; a maintainer must run it by hand before merging a listing.** It ran `souxmar plugin validate-index` against the modified file. The check surfaces:
    - **Errors** that block the merge: duplicate `id`, malformed `source` / `homepage` URL (must start with `http://` or `https://`), invalid `capabilities` entry (must be dotted reverse-DNS), or any other shape the TOML parser rejects outright.
    - **Warnings** that don't block but reviewers should weigh: empty `license` on a free-channel entry (the open index requires OSI-licensed source per BUSINESS_MODEL.md), missing `souxmar_versions` range, `conformance = "failed"` (listing remains visible but the badge will read "failed" until reattested).
 

@@ -51,17 +51,17 @@ Total time: 60–90 min.
 
 ```bash
 # macOS
-brew install cmake ninja vcpkg pnpm rustup-init
+brew install cmake ninja vcpkg node rustup-init
 rustup-init -y
 xcode-select --install
 
 # Ubuntu
 sudo apt install cmake ninja-build build-essential libssl-dev curl pkg-config
 curl https://sh.rustup.rs -sSf | sh
-curl -fsSL https://get.pnpm.io/install.sh | sh
+# Node 22+ (vite 8 requires ^20.19 || >=22.12); npm ships with it.
 
 # Windows
-# Install: Visual Studio 2022 Build Tools, CMake, Ninja, Rustup, pnpm
+# Install: Visual Studio 2022 Build Tools, CMake, Ninja, Rustup, Node 22+
 # Open "x64 Native Tools Command Prompt"
 ```
 
@@ -78,8 +78,8 @@ First build typically takes 20–30 min (vcpkg builds OCCT, PETSc, VTK from sour
 ### 5. Run the desktop app (if doing desktop work)
 
 ```bash
-pnpm -C src/desktop install
-pnpm -C src/desktop dev
+npm --prefix src/desktop install
+npm --prefix src/desktop run dev
 ```
 
 The app launches with a dev React server with hot module reload. Backend changes still require a rebuild + relaunch.

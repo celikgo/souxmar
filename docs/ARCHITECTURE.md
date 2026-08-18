@@ -12,7 +12,7 @@ This document describes the layered architecture of souxmar, the in-memory data 
 |  Detailed in DESKTOP_APP.md, UI_DESIGN.md                        |
 +------------------------------------------------------------------+
 |                       AI Integration Layer                       |
-|  Provider abstraction (Anthropic / OpenAI / Ollama, BYOK)        |
+|  Provider abstraction (Claude / GPT / Grok / local / …, BYOK)    |
 |  Agent tool dispatcher | Confirmation policy | Audit log         |
 |  Detailed in AI_INTEGRATION.md                                   |
 +------------------------------------------------------------------+
@@ -204,7 +204,16 @@ The orchestrator:
 
 A C++/Rust library exposing the agentic chat layer. Loaded by the desktop app and accessible from the CLI for headless agent runs. Three responsibilities:
 
-- **Provider abstraction.** A single `IAIProvider` interface implemented by Anthropic, OpenAI, and Ollama backends. Streaming completions, tool calls, prompt caching where supported. Configured per project; credentials never leave the OS keychain.
+- **Provider abstraction.** A single `souxmar::ai::Provider` interface
+  (`include/souxmar/ai/provider.h`) with four implementations: `AnthropicProvider` (Claude, over the
+  Messages API), `OpenAICompatibleProvider` (OpenAI, xAI/Grok, DeepSeek, Groq, Mistral, OpenRouter,
+  Together, and any server speaking `/chat/completions`), `OllamaProvider` (local), and
+  `StubProvider` (tests). Adding a service that speaks the OpenAI shape is configuration, not code.
+  Synchronous, one `chat_completion()` per turn — **not streaming**; a streaming surface needs a
+  different contract and is not implemented. Tool calls yes, prompt caching where the service
+  supports it. Configured per project via `project.ai.toml`; the key is never in that file, only the
+  name of the environment variable holding it. The desktop app reads the key from the OS keychain
+  and supplies it that way. Detailed in [`AI_INTEGRATION.md`](AI_INTEGRATION.md).
 - **Agent tool dispatcher.** A typed catalogue of agent-callable tools (`mesh`, `solve`, `set_bc`, `read_geometry_summary`, …) that map onto orchestrator and plugin-host calls. The agent has no privileged path — it goes through this dispatcher, which enforces the per-tool confirmation policy (`auto` / `confirm-once` / `confirm-always`).
 - **Audit log.** Every tool invocation is appended to `.souxmar/chat/audit.log` with input hash, runtime, and (for managed AI) token cost. The user can inspect, export, or wipe it at any time.
 

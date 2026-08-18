@@ -71,7 +71,7 @@ Definition of done: a researcher can `pip install pysouxmar`, write a 20-line sc
 - Performance budgets met: cold launch < 1.5 s, 1M-cell open < 2 s, viewport rotate at 60 fps on a 5M-cell mesh, first chat token < 800 ms (BYOK direct).
 - Accessibility: WCAG AA across the dim theme, full keyboard nav, command palette, screen-reader pass on macOS / Windows / Linux.
 
-Definition of done: an engineer downloads the desktop app on macOS, Windows, or Linux, supplies their own Anthropic / OpenAI / local-Ollama key, drops in a STEP file, and produces a viewable stress result by chatting with the agent — without writing a line of code.
+Definition of done: an engineer downloads the desktop app on macOS, Windows, or Linux, supplies their own provider key — Claude, GPT, Grok, or any other OpenAI-compatible service, or points at a local Ollama, drops in a STEP file, and produces a viewable stress result by chatting with the agent — without writing a line of code.
 
 ## Phase 5 — Hardening for v1.0
 

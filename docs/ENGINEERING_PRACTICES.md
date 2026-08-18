@@ -4,6 +4,11 @@ The contract every engineer accepts when joining souxmar. These are not aspirati
 
 This document is the source of truth for the team's quality bar. RFCs change it.
 
+[`CI.md`](CI.md) is the implementation map: it names the workflow and job enforcing each item
+below, marks which are blocking, and lists the ones that are measured but not yet enforced —
+coverage, the end-to-end suites, and the performance budgets. Read the two together; a promise here
+with no gate there is a gap, not a guarantee.
+
 ## Definition of Done
 
 A change is **done** only when *all* of the following are true:
@@ -49,7 +54,13 @@ Pre-merge CI total wall time target: **< 25 min** on a typical PR. Beyond that, 
 
 ## Performance budgets
 
-Tracked in `benchmarks/`. Regressions > 5 % block the merge. Improvements are celebrated in the changelog. Numbers are reference-machine (M2 Pro / Ryzen 7 7700X).
+Tracked in `benchmarks/`. Improvements are celebrated in the changelog. Numbers are
+reference-machine (M2 Pro / Ryzen 7 7700X).
+
+Regressions > 5 % are **reported, not blocked**. The budgets below assume the reference hardware,
+and GitHub-hosted runners vary by more than that with no code change, so the CI job measures and
+uploads rather than failing the merge — see [`CI.md`](CI.md) for why, and what would close it. A
+reviewer is expected to read the number; the merge button will not stop them.
 
 | Surface                                        | Budget                              |
 | ---------------------------------------------- | ----------------------------------- |
@@ -68,10 +79,10 @@ When a budget is regressed, the PR cannot merge until either (a) the regression 
 
 ## Security baseline
 
-- **No secret-shaped strings in source.** A pre-commit hook + CI scan rejects anything matching `sk-`, `xoxb-`, AKIA[0-9A-Z]{16}, etc.
+- **No secret-shaped strings in source.** `scripts/check-secrets.sh` rejects anything matching `sk-`, `xoxb-`, `AKIA[0-9A-Z]{16}`, etc. Wired as both a pre-commit hook (`.pre-commit-config.yaml`) and a blocking CI gate, so the two cannot disagree.
 - **All credentials in OS keychain** in the desktop app; never in project files, never in cache, never in git history. See `AI_INTEGRATION.md`.
 - **Dependency additions require an ADR** (or a one-line "covered by ADR-N"). Each ADR documents: license, supply-chain provenance, why this is preferable to a thinner alternative.
-- **License scan in CI.** Every dependency's license is in `THIRD_PARTY_LICENSES.md`. A new dep with an unknown or incompatible license fails the build.
+- **License scan in CI.** Every dependency's license is in `THIRD_PARTY_LICENSES.md`. A new dep with an unknown or incompatible license fails the build — the `license-inventory` job checks the vcpkg manifest against the inventory, and `dependency-review` covers the language ecosystems.
 - **CVE scanning weekly** via `osv-scanner` or equivalent; high-severity CVE in a direct dep gets a P1 ticket.
 - **GPL-licensed adapters (OpenFOAM) are subprocess-isolated.** Never linked into souxmar binaries. Enforced by CMake target boundary; documented in ADR-0003 and the OpenFOAM adapter README.
 - **Plugin host signal/SEH frame** wraps every plugin call. Tested by a deliberate-segfault plugin in CI from S5 onward.

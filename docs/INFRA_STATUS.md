@@ -83,7 +83,8 @@ When a maintainer is ready to land the first real data:
 5. Commit all in one PR titled
    `infra: bootstrap corpora + baselines after v0.9.2 (Sprint X push N)`.
 6. The same PR flips `continue-on-error: true` to `false` in
-   the gating workflows: `eval-nightly.yml` (synth-load step)
+   the gating workflows: `nightly.yml` (synth-load job; this was
+   `eval-nightly.yml` before `c7f6214` removed it)
    and `visual-regression.yml` (Playwright step). Gates go
    live.
 

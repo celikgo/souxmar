@@ -11,7 +11,7 @@ approval comes from a classification society running its own process on your
 part, your machine and your evidence — never from this tool. Say so every time
 you present a number.
 
-Read [`docs/MARINE.md`](../../docs/MARINE.md) for the conventions and the
+Read [`docs/MARINE.md`](../../../docs/MARINE.md) for the conventions and the
 formulas. This skill is the operational walkthrough.
 
 ## When to use this skill

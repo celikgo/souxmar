@@ -34,6 +34,39 @@ but not wired is visible rather than assumed.
 | — | Frozen tool contract (ADR-0011) | `governance` → `check-tool-contract.sh` | Yes |
 | — | Agent eval pass rate | `agent-evals` | Yes |
 
+## What happened to the old workflows
+
+This repository had twelve workflows until `c7f6214` (2026-05-24) removed all of them — 1709 lines,
+no reason recorded in the message. Documentation written before that still names them, which is why
+several files reference `.github/workflows/*.yml` paths that do not exist.
+
+The five workflows here replace most of that surface, under different names:
+
+| Removed | Covered now by |
+| --- | --- |
+| `ci.yml` | `ci.yml` — rewritten, four-platform matrix |
+| `dco.yml` | `ci.yml` → `governance` |
+| `services-build.yml` | `ci.yml` → `rust` (clippy + tests across every crate) |
+| `desktop-ffi.yml` | `ci.yml` → `rust` (builds the frontend, then the bridge) |
+| `eval-nightly.yml` | `nightly.yml` → `agent-eval-llm` + `synth-load` |
+| `perf-nightly.yml` | `ci.yml` → `benchmarks` (advisory) |
+| `nightly.yml` | `nightly.yml` |
+| `release.yml` | `release.yml` — rewritten against `scripts/release/` |
+| `visual-regression.yml` | `visual-regression.yml` |
+
+Three are **not** restored, and nothing here covers them:
+
+- **`docs-site.yml`** — published `docs-site/` to GitHub Pages on every master push. The README
+  still advertises the site.
+- **`plugin-index.yml`** — PR-gated validation of new marketplace listings, running
+  `souxmar plugin validate-index` and `souxmar-conformance` against each submitted binary. The
+  `publishing-plugin-marketplace` skill still instructs authors to expect it.
+- **`triage.yml`** — auto-acknowledged new issues with the matching SLA and auto-labelled by
+  surface. `CONTRIBUTING.md` still promises it.
+
+Each of those is a real capability the project documents and does not currently have. Restoring
+them is a decision, not a doc fix, so they are listed here rather than quietly reinvented.
+
 ## Repository prerequisites
 
 Two settings have to be on before the pipeline is fully green. Neither is in the tree, so neither
