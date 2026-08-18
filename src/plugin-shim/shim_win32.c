@@ -60,7 +60,13 @@ souxmar_status_t souxmar_brep_body_bounds(const souxmar_brep_session_t* session,
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_brep_body_bounds");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_brep_body_bounds";
+    return err;
+  }
   return fn(session, body_id, out_min, out_max);
 }
 
@@ -70,7 +76,13 @@ souxmar_status_t souxmar_brep_body_id(const souxmar_brep_session_t* session, siz
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_brep_body_id");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_brep_body_id";
+    return err;
+  }
   return fn(session, index, out_body_id);
 }
 
@@ -90,7 +102,13 @@ souxmar_status_t souxmar_brep_boolean(souxmar_brep_session_t* session, uint64_t 
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_brep_boolean");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_brep_boolean";
+    return err;
+  }
   return fn(session, target_body_id, tool_body_id, operation);
 }
 
@@ -100,7 +118,13 @@ souxmar_status_t souxmar_brep_chamfer(souxmar_brep_session_t* session, uint64_t 
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_brep_chamfer");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_brep_chamfer";
+    return err;
+  }
   return fn(session, body_id, edge_ids, edge_count, distance);
 }
 
@@ -110,7 +134,13 @@ souxmar_status_t souxmar_brep_delete_body(souxmar_brep_session_t* session, uint6
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_brep_delete_body");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_brep_delete_body";
+    return err;
+  }
   return fn(session, body_id);
 }
 
@@ -130,7 +160,13 @@ souxmar_status_t souxmar_brep_fillet(souxmar_brep_session_t* session, uint64_t b
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_brep_fillet");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_brep_fillet";
+    return err;
+  }
   return fn(session, body_id, edge_ids, edge_count, radius);
 }
 
@@ -140,7 +176,13 @@ souxmar_status_t souxmar_brep_import_iges(souxmar_brep_session_t* session, const
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_brep_import_iges");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_brep_import_iges";
+    return err;
+  }
   return fn(session, path);
 }
 
@@ -150,7 +192,13 @@ souxmar_status_t souxmar_brep_import_step(souxmar_brep_session_t* session, const
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_brep_import_step");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_brep_import_step";
+    return err;
+  }
   return fn(session, path);
 }
 
@@ -180,7 +228,13 @@ souxmar_status_t souxmar_brep_pattern_circular(souxmar_brep_session_t* session, 
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_brep_pattern_circular");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_brep_pattern_circular";
+    return err;
+  }
   return fn(session, source_body_ids, source_count, axis_origin, axis_direction, angle_rad, count);
 }
 
@@ -190,7 +244,13 @@ souxmar_status_t souxmar_brep_pattern_linear(souxmar_brep_session_t* session, co
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_brep_pattern_linear");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_brep_pattern_linear";
+    return err;
+  }
   return fn(session, source_body_ids, source_count, direction, spacing, count);
 }
 
@@ -239,7 +299,13 @@ souxmar_status_t souxmar_brep_tessellate(souxmar_brep_session_t* session, uint64
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_brep_tessellate");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_brep_tessellate";
+    return err;
+  }
   return fn(session, body_id, deflection, out_surface_mesh);
 }
 
@@ -486,7 +552,13 @@ souxmar_status_t souxmar_field_stream_range(const souxmar_field_stream_t* s, dou
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_field_stream_range");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_field_stream_range";
+    return err;
+  }
   return fn(s, out_min, out_max);
 }
 
@@ -506,7 +578,13 @@ souxmar_status_t souxmar_field_stream_values(const souxmar_field_stream_t* s, fl
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_field_stream_values");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_field_stream_values";
+    return err;
+  }
   return fn(s, out, out_capacity);
 }
 
@@ -556,7 +634,13 @@ souxmar_status_t souxmar_geometry_bounding_box(const souxmar_geometry_t* g, doub
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_geometry_bounding_box");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_geometry_bounding_box";
+    return err;
+  }
   return fn(g, out_box);
 }
 
@@ -645,7 +729,13 @@ souxmar_status_t souxmar_geometry_set_name(souxmar_geometry_t* g, uint8_t kind, 
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_geometry_set_name");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_geometry_set_name";
+    return err;
+  }
   return fn(g, kind, index, name);
 }
 
@@ -655,7 +745,13 @@ souxmar_status_t souxmar_geometry_set_tag(souxmar_geometry_t* g, uint8_t kind, u
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_geometry_set_tag");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_geometry_set_tag";
+    return err;
+  }
   return fn(g, kind, index, tag);
 }
 
@@ -675,7 +771,13 @@ souxmar_status_t souxmar_geometry_vertex_position(const souxmar_geometry_t* g, u
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_geometry_vertex_position");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_geometry_vertex_position";
+    return err;
+  }
   return fn(g, vertex_index, out_position);
 }
 
@@ -685,7 +787,13 @@ souxmar_status_t souxmar_mesh_add_cell(souxmar_mesh_t* mesh, uint16_t element_ty
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_mesh_add_cell");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_mesh_add_cell";
+    return err;
+  }
   return fn(mesh, element_type, node_indices, num_node_indices, tag, out_cell_index);
 }
 
@@ -725,7 +833,13 @@ souxmar_status_t souxmar_mesh_cell_nodes(const souxmar_mesh_t* mesh, uint64_t ce
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_mesh_cell_nodes");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_mesh_cell_nodes";
+    return err;
+  }
   return fn(mesh, cell_index, out_node_indices, out_capacity);
 }
 
@@ -794,7 +908,13 @@ souxmar_status_t souxmar_mesh_node(const souxmar_mesh_t* mesh, uint64_t index, d
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_mesh_node");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_mesh_node";
+    return err;
+  }
   return fn(mesh, index, out_position);
 }
 
@@ -852,7 +972,13 @@ souxmar_status_t souxmar_mesh_set_face_tag(souxmar_mesh_t* mesh, uint64_t cell_i
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_mesh_set_face_tag");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_mesh_set_face_tag";
+    return err;
+  }
   return fn(mesh, cell_index, local_face_index, tag);
 }
 
@@ -862,7 +988,13 @@ souxmar_status_t souxmar_registry_add_mesher(souxmar_registry_t* registry, const
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_registry_add_mesher");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_registry_add_mesher";
+    return err;
+  }
   return fn(registry, capability_id, vtable, user_data);
 }
 
@@ -872,7 +1004,13 @@ souxmar_status_t souxmar_registry_add_postproc(souxmar_registry_t* registry, con
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_registry_add_postproc");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_registry_add_postproc";
+    return err;
+  }
   return fn(registry, capability_id, vtable, user_data);
 }
 
@@ -882,7 +1020,13 @@ souxmar_status_t souxmar_registry_add_reader(souxmar_registry_t* registry, const
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_registry_add_reader");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_registry_add_reader";
+    return err;
+  }
   return fn(registry, capability_id, vtable, user_data);
 }
 
@@ -892,7 +1036,13 @@ souxmar_status_t souxmar_registry_add_solver(souxmar_registry_t* registry, const
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_registry_add_solver");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_registry_add_solver";
+    return err;
+  }
   return fn(registry, capability_id, vtable, user_data);
 }
 
@@ -902,7 +1052,13 @@ souxmar_status_t souxmar_registry_add_writer(souxmar_registry_t* registry, const
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_registry_add_writer");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_registry_add_writer";
+    return err;
+  }
   return fn(registry, capability_id, vtable, user_data);
 }
 
@@ -962,7 +1118,13 @@ souxmar_status_t souxmar_sketch_anchor_face(souxmar_sketch_t* sketch, const soux
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_sketch_anchor_face");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_sketch_anchor_face";
+    return err;
+  }
   return fn(sketch, session, face_id);
 }
 
@@ -972,7 +1134,13 @@ souxmar_status_t souxmar_sketch_anchor_world(souxmar_sketch_t* sketch, uint8_t p
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_sketch_anchor_world");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_sketch_anchor_world";
+    return err;
+  }
   return fn(sketch, plane);
 }
 
@@ -1021,7 +1189,13 @@ souxmar_status_t souxmar_sketch_point_position(const souxmar_sketch_t* sketch, u
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_sketch_point_position");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_sketch_point_position";
+    return err;
+  }
   return fn(sketch, point_id, out_u, out_v);
 }
 
@@ -1031,7 +1205,13 @@ souxmar_status_t souxmar_sketch_solve(souxmar_sketch_t* sketch) {
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_sketch_solve");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_sketch_solve";
+    return err;
+  }
   return fn(sketch);
 }
 
@@ -1041,7 +1221,13 @@ souxmar_status_t souxmar_surface_stream_bounds(const souxmar_surface_stream_t* s
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_surface_stream_bounds");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_surface_stream_bounds";
+    return err;
+  }
   return fn(s, out_min, out_max);
 }
 
@@ -1060,7 +1246,13 @@ souxmar_status_t souxmar_surface_stream_face_ids(const souxmar_surface_stream_t*
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_surface_stream_face_ids");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_surface_stream_face_ids";
+    return err;
+  }
   return fn(s, out, out_capacity);
 }
 
@@ -1070,7 +1262,13 @@ souxmar_status_t souxmar_surface_stream_indices(const souxmar_surface_stream_t* 
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_surface_stream_indices");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_surface_stream_indices";
+    return err;
+  }
   return fn(s, out, out_capacity);
 }
 
@@ -1080,7 +1278,13 @@ souxmar_status_t souxmar_surface_stream_normals(const souxmar_surface_stream_t* 
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_surface_stream_normals");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_surface_stream_normals";
+    return err;
+  }
   return fn(s, out, out_capacity);
 }
 
@@ -1100,7 +1304,13 @@ souxmar_status_t souxmar_surface_stream_positions(const souxmar_surface_stream_t
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_surface_stream_positions");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_surface_stream_positions";
+    return err;
+  }
   return fn(s, out, out_capacity);
 }
 
@@ -1130,7 +1340,13 @@ souxmar_status_t souxmar_surface_stream_vertex_ids(const souxmar_surface_stream_
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_surface_stream_vertex_ids");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_surface_stream_vertex_ids";
+    return err;
+  }
   return fn(s, out, out_capacity);
 }
 
@@ -1140,7 +1356,13 @@ souxmar_status_t souxmar_timeseries_cache_preload(souxmar_timeseries_t* series, 
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_timeseries_cache_preload");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_timeseries_cache_preload";
+    return err;
+  }
   return fn(series, start_frame, count);
 }
 
@@ -1150,7 +1372,13 @@ souxmar_status_t souxmar_timeseries_cache_window(souxmar_timeseries_t* series, s
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_timeseries_cache_window");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_timeseries_cache_window";
+    return err;
+  }
   return fn(series, window_size);
 }
 
@@ -1219,7 +1447,13 @@ souxmar_status_t souxmar_timeseries_time(const souxmar_timeseries_t* series, siz
   if (fn == NULL) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_timeseries_time");
   }
-  if (!fn) { souxmar_status_t zero; memset(&zero, 0, sizeof zero); return zero; }
+  if (!fn) {
+    souxmar_status_t err;
+    err.code = SOUXMAR_E_INTERNAL;
+    err.message = "souxmar host ABI symbol not found in the loading executable";
+    err.detail = "souxmar_timeseries_time";
+    return err;
+  }
   return fn(series, frame_index, out_time);
 }
 

@@ -57,6 +57,19 @@ else()
   set(CMAKE_ENABLE_EXPORTS ON)
 endif()
 
+# ENABLE_EXPORTS alone is not enough on Windows. -rdynamic puts *every*
+# symbol in the ELF dynamic table, but MSVC exports only what is marked
+# __declspec(dllexport) or named in a .def — so a host executable built with
+# ENABLE_EXPORTS still exported nothing, GetProcAddress in the plugin shim
+# returned NULL for every lookup, and plugins loaded and registered no
+# capabilities at all.
+#
+# WINDOWS_EXPORT_ALL_SYMBOLS generates that .def from the object files, for
+# a shared library "or executable with ENABLE_EXPORTS". It is the MSVC
+# spelling of -rdynamic, and marking the C ABI dllexport by hand is not an
+# option: those declarations live in include/souxmar-c/**, which is frozen.
+set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
 # Generator-expression predicate: "the consuming target produces a loadable
 # image" — i.e. an executable, a shared library or a module, as opposed to a
 # static archive or another object library.

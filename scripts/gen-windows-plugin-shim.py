@@ -179,6 +179,20 @@ def render(fns) -> str:
         a("  }")
         if ret.replace(" ", "") == "void":
             a(f"  if (fn) fn({argn});")
+        elif ret.replace(" ", "") == "souxmar_status_t":
+            # A zeroed souxmar_status_t has code == SOUXMAR_OK, so the
+            # obvious fallback would report success for a call that never
+            # happened — which is exactly how an unexported host looked like
+            # a plugin that registered nothing. Say what went wrong instead.
+            a("  if (!fn) {")
+            a("    souxmar_status_t err;")
+            a("    err.code = SOUXMAR_E_INTERNAL;")
+            a('    err.message = "souxmar host ABI symbol not found in the loading '
+              'executable";')
+            a(f'    err.detail = "{name}";')
+            a("    return err;")
+            a("  }")
+            a(f"  return fn({argn});")
         else:
             a(f"  if (!fn) {{ {ret} zero; memset(&zero, 0, sizeof zero); return zero; }}")
             a(f"  return fn({argn});")
