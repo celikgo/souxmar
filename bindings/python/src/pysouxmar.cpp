@@ -603,8 +603,8 @@ PYBIND11_MODULE(_pysouxmar, m) {
 
   py::class_<souxmar::ai::ConfirmationPolicy>(ai, "ConfirmationPolicy")
       .def(py::init<>())
-      .def_readwrite("overrides",       &souxmar::ai::ConfirmationPolicy::overrides)
-      .def_readwrite("confirmed_once",  &souxmar::ai::ConfirmationPolicy::confirmed_once)
+      .def_readwrite("overrides", &souxmar::ai::ConfirmationPolicy::overrides)
+      .def_readwrite("confirmed_once", &souxmar::ai::ConfirmationPolicy::confirmed_once)
       // `prompter` is std::function<bool(const Tool&, const Value&)>. It was
       // left unbound because "the C++ Value parameter would need its own
       // pybind11 wrapper" — that stopped being true once value_to_py landed,
@@ -621,24 +621,22 @@ PYBIND11_MODULE(_pysouxmar, m) {
             // callable that produced it; report whether one is installed.
             return py::bool_(static_cast<bool>(p.prompter));
           },
-          py::cpp_function(
-              [](souxmar::ai::ConfirmationPolicy& p, py::object fn) {
-                if (fn.is_none()) {
-                  p.prompter = nullptr;
-                  return;
-                }
-                p.prompter = [fn](const souxmar::ai::Tool& tool,
-                                  const pipeline::Value& inputs) -> bool {
-                  // dispatch_tool runs with the GIL held today, but a future
-                  // caller releasing it would turn an unguarded callback into
-                  // an interpreter crash rather than an error.
-                  py::gil_scoped_acquire gil;
-                  py::object decision =
-                      fn(py::cast(&tool, py::return_value_policy::reference),
-                         value_to_py(inputs));
-                  return decision.cast<bool>();
-                };
-              }),
+          py::cpp_function([](souxmar::ai::ConfirmationPolicy& p, py::object fn) {
+            if (fn.is_none()) {
+              p.prompter = nullptr;
+              return;
+            }
+            p.prompter = [fn](const souxmar::ai::Tool& tool,
+                              const pipeline::Value& inputs) -> bool {
+              // dispatch_tool runs with the GIL held today, but a future
+              // caller releasing it would turn an unguarded callback into
+              // an interpreter crash rather than an error.
+              py::gil_scoped_acquire gil;
+              py::object decision =
+                  fn(py::cast(&tool, py::return_value_policy::reference), value_to_py(inputs));
+              return decision.cast<bool>();
+            };
+          }),
           "Callback invoked when a tool needs confirmation: "
           "`fn(tool, inputs) -> bool`. Assign None to clear it. Reading "
           "returns whether a prompter is installed, not the callable.");
@@ -662,30 +660,36 @@ PYBIND11_MODULE(_pysouxmar, m) {
   // as an indefinite hang on Linux.
   py::class_<souxmar::ai::ToolContext>(ai, "ToolContext")
       .def(py::init<>())
-      .def_property("registry",
+      .def_property(
+          "registry",
           [](const souxmar::ai::ToolContext& c) -> py::object {
             return c.registry ? py::cast(c.registry, py::return_value_policy::reference) : py::none();
           },
           py::cpp_function([](souxmar::ai::ToolContext& c, plugin::Registry* r) { c.registry = r; },
                            py::keep_alive<1, 2>()))
-      .def_property("dispatcher",
+      .def_property(
+          "dispatcher",
           [](const souxmar::ai::ToolContext& c) -> py::object {
             return c.dispatcher ? py::cast(c.dispatcher, py::return_value_policy::reference) : py::none();
           },
-          py::cpp_function([](souxmar::ai::ToolContext& c, pipeline::IDispatcher* d) { c.dispatcher = d; },
-                           py::keep_alive<1, 2>()))
-      .def_property("cache",
+          py::cpp_function(
+              [](souxmar::ai::ToolContext& c, pipeline::IDispatcher* d) { c.dispatcher = d; },
+              py::keep_alive<1, 2>()))
+      .def_property(
+          "cache",
           [](const souxmar::ai::ToolContext& c) -> py::object {
             return c.cache ? py::cast(c.cache, py::return_value_policy::reference) : py::none();
           },
-          py::cpp_function([](souxmar::ai::ToolContext& c, pipeline::Cache* cache) { c.cache = cache; },
-                           py::keep_alive<1, 2>()))
+          py::cpp_function(
+              [](souxmar::ai::ToolContext& c, pipeline::Cache* cache) { c.cache = cache; },
+              py::keep_alive<1, 2>()))
       // session_state is treated as a Python object: assigning a dict /
       // None replaces the underlying Value tree, which ToolContext owns
       // through its `take_session_state` helper. Reads return the
       // current Value tree converted to Python types — tools that
       // mutate session_state during dispatch show up here too.
-      .def_property("session_state",
+      .def_property(
+          "session_state",
           [](souxmar::ai::ToolContext& c) -> py::object {
             return c.session_state ? value_to_py(*c.session_state) : py::none();
           },
@@ -698,18 +702,22 @@ PYBIND11_MODULE(_pysouxmar, m) {
       // SessionBudget objects alive across dispatch_tool calls.
       // keep_alive ties the setters to the context so a GC of the
       // AuditLog while the ctx is alive can't dangle.
-      .def_property("audit_log",
+      .def_property(
+          "audit_log",
           [](const souxmar::ai::ToolContext& c) -> py::object {
             return c.audit_log ? py::cast(c.audit_log, py::return_value_policy::reference) : py::none();
           },
-          py::cpp_function([](souxmar::ai::ToolContext& c, souxmar::ai::AuditLog* log) { c.audit_log = log; },
-                           py::keep_alive<1, 2>()))
-      .def_property("budget",
+          py::cpp_function(
+              [](souxmar::ai::ToolContext& c, souxmar::ai::AuditLog* log) { c.audit_log = log; },
+              py::keep_alive<1, 2>()))
+      .def_property(
+          "budget",
           [](const souxmar::ai::ToolContext& c) -> py::object {
             return c.budget ? py::cast(c.budget, py::return_value_policy::reference) : py::none();
           },
-          py::cpp_function([](souxmar::ai::ToolContext& c, souxmar::ai::SessionBudget* b) { c.budget = b; },
-                           py::keep_alive<1, 2>()));
+          py::cpp_function(
+              [](souxmar::ai::ToolContext& c, souxmar::ai::SessionBudget* b) { c.budget = b; },
+              py::keep_alive<1, 2>()));
 
   // ---- Audit log + session budget (Sprint 5 push 2) ----------------
 
