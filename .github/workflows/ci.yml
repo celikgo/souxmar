@@ -127,6 +127,11 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           # ENGINEERING_PRACTICES.md § Definition of Done item 10.
+          #
+          # --no-merges matters: actions/checkout builds refs/pull/N/merge,
+          # so HEAD is a synthetic merge commit GitHub authored. It has no
+          # sign-off and never will, and failing the PR for it would make
+          # this gate impossible to satisfy.
           missing=0
           while IFS= read -r sha; do
             [ -n "$sha" ] || continue
@@ -135,7 +140,7 @@ jobs:
               echo "::error::commit $sha ($author) has no Signed-off-by line"
               missing=$((missing + 1))
             fi
-          done < <(git rev-list "${{ steps.range.outputs.base }}..HEAD")
+          done < <(git rev-list --no-merges "${{ steps.range.outputs.base }}..HEAD")
           if [ "$missing" -gt 0 ]; then
             echo "Sign your commits: git commit -s (or git rebase --signoff to fix a series)."
             exit 1
@@ -169,16 +174,29 @@ jobs:
           git diff --name-only --diff-filter=ACMR "$base"...HEAD > changed.txt || git diff --name-only --diff-filter=ACMR "$base" HEAD > changed.txt
           echo "changed files:"; cat changed.txt
 
-      - name: clang-format (changed files only)
+      - name: clang-format (changed lines only)
         run: |
-          # Deliberately a ratchet, not a whole-tree check. 54 of the 251
-          # C++ files predate .clang-format, and reformatting them in the
-          # PR that introduces CI would bury the workflow review under a
-          # 10k-line diff and conflict with everything in flight. New and
-          # touched code must be clean; the rest is fixed as it is touched.
-          files="$(grep -E '\.(cpp|h|hpp|cc)$' changed.txt || true)"
-          if [ -z "$files" ]; then echo "no C++ files changed"; exit 0; fi
-          printf '%s\n' "$files" | xargs clang-format --dry-run --Werror
+          # A ratchet on *lines*, not files. 54 of the 251 C++ files
+          # predate .clang-format; a whole-file check would mean that
+          # touching one line of a legacy file forces reformatting the
+          # whole thing, which is how a formatting gate turns every small
+          # fix into an unreviewable diff. clang-format-diff restricts the
+          # check to the hunks the PR actually introduces.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="origin/${{ github.base_ref }}"
+          else
+            base="HEAD~1"
+          fi
+          git diff -U0 --no-color "$base"...HEAD -- '*.cpp' '*.h' '*.hpp' '*.cc' \
+            | clang-format-diff-17 -p1 > fmt.patch || true
+          if [ -s fmt.patch ]; then
+            echo "::error::changed lines are not clang-format clean. Patch:"
+            cat fmt.patch
+            echo ""
+            echo "Apply it with: git diff -U0 HEAD~1 | clang-format-diff-17 -p1 | git apply -p0"
+            exit 1
+          fi
+          echo "clang-format: changed lines are clean."
 
       - name: shellcheck (changed files only)
         run: |

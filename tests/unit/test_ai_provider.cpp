@@ -332,6 +332,7 @@ TEST(OpenAICompatibleResponse, TypedErrorsMapToKinds) {
     const char* body;
     ProviderErrorKind kind;
   };
+
   const Case cases[] = {
       {R"({"error":{"message":"Rate limit reached","type":"rate_limit_error"}})",
        ProviderErrorKind::RateLimited},
@@ -366,9 +367,11 @@ TEST(OpenAICompatibleResponse, MalformedBodyDoesNotThrow) {
 }
 
 TEST(OpenAICompatibleCurlConfig, KeepsCredentialOffTheCommandLine) {
-  const auto cfg = OpenAICompatibleProvider::render_curl_config(
-      "https://api.x.ai/v1/chat/completions", "xai-secret-123", R"({"model":"m"})",
-      std::chrono::seconds(30));
+  const auto cfg =
+      OpenAICompatibleProvider::render_curl_config("https://api.x.ai/v1/chat/completions",
+                                                   "xai-secret-123",
+                                                   R"({"model":"m"})",
+                                                   std::chrono::seconds(30));
   // The config is fed to `curl -K -` on stdin. What matters is that it
   // carries the credential and the body, so neither has to be an argv
   // element visible in `ps`.
@@ -382,7 +385,9 @@ TEST(OpenAICompatibleCurlConfig, KeepsCredentialOffTheCommandLine) {
 
 TEST(OpenAICompatibleCurlConfig, EscapesBackslashesAndNewlines) {
   const auto cfg = OpenAICompatibleProvider::render_curl_config(
-      "https://x/y", "", "{\"a\":\"back\\\\slash\",\"b\":\"line\\nbreak\"}",
+      "https://x/y",
+      "",
+      "{\"a\":\"back\\\\slash\",\"b\":\"line\\nbreak\"}",
       std::chrono::seconds(5));
   // A literal backslash in the JSON must reach curl as a literal
   // backslash, so it is doubled in the config.
@@ -691,13 +696,15 @@ TEST(AnthropicResponse, TypedErrorsMapToKinds) {
     const char* message;
     ProviderErrorKind expected;
   };
+
   const Case cases[] = {
       {"rate_limit_error", "slow down", ProviderErrorKind::RateLimited},
       {"overloaded_error", "try later", ProviderErrorKind::RateLimited},
       {"not_found_error", "model: nope", ProviderErrorKind::ModelNotFound},
       {"authentication_error", "bad key", ProviderErrorKind::ProviderHttpError},
       {"invalid_request_error", "malformed body", ProviderErrorKind::BadRequest},
-      {"invalid_request_error", "context window exceeded",
+      {"invalid_request_error",
+       "context window exceeded",
        ProviderErrorKind::ContextLengthExceeded},
   };
   for (const auto& c : cases) {
@@ -722,9 +729,11 @@ TEST(AnthropicResponse, MalformedBodyDoesNotThrow) {
 }
 
 TEST(AnthropicCurlConfig, KeepsCredentialOffTheCommandLineAndSetsRequiredHeaders) {
-  const auto cfg = AnthropicProvider::render_curl_config(
-      "https://api.anthropic.com/v1/messages", "sk-ant-secret", "2023-06-01", "{}",
-      std::chrono::seconds(30));
+  const auto cfg = AnthropicProvider::render_curl_config("https://api.anthropic.com/v1/messages",
+                                                         "sk-ant-secret",
+                                                         "2023-06-01",
+                                                         "{}",
+                                                         std::chrono::seconds(30));
 
   // The credential is in the stdin config, which is the whole point.
   EXPECT_NE(cfg.find("x-api-key: sk-ant-secret"), std::string::npos);

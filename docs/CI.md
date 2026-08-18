@@ -34,6 +34,18 @@ but not wired is visible rather than assumed.
 | — | Frozen tool contract (ADR-0011) | `governance` → `check-tool-contract.sh` | Yes |
 | — | Agent eval pass rate | `agent-evals` | Yes |
 
+## Repository prerequisites
+
+Two settings have to be on before the pipeline is fully green. Neither is in the tree, so neither
+can be fixed by a PR:
+
+- **Dependency graph** (Settings → Code security). Without it `dependency-review` fails with
+  "Dependency review is not supported on this repository", and the SCA half of Definition-of-Done
+  item 5 is unenforced.
+- **`SOUXMAR_EVAL_ANTHROPIC_KEY`** (Settings → Secrets → Actions), for the nightly LLM-driven eval.
+  Absent, that job skips itself with a notice rather than failing — a missing key is an
+  infrastructure state, not a regression.
+
 ## Branch protection
 
 Require exactly one check: **`CI`** — the `ci-ok` job at the end of `ci.yml`.

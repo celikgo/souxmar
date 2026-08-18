@@ -34,13 +34,12 @@
 #include "souxmar/plugin/registry.h"
 #include "souxmar/version.h"
 
-#include <map>
-#include <memory>
-#include <mutex>
-
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <map>
+#include <memory>
+#include <mutex>
 #include <new>
 #include <regex>
 #include <string>
@@ -273,8 +272,7 @@ struct AgentSession {
     // Load every discoverable plugin so mesh / solve have a populated
     // registry. A failure to load one is not fatal to the session; the
     // tool that needed it reports the missing capability by name.
-    souxmar::plugin::PluginLoader loader(plugin_registry,
-                                         std::string{souxmar::version_string()});
+    souxmar::plugin::PluginLoader loader(plugin_registry, std::string{souxmar::version_string()});
     const auto report = souxmar::plugin::discover_plugins(souxmar::plugin::DiscoveryOptions{});
     for (const auto& d : report.loaded) {
       auto loaded = loader.load(d);
@@ -323,8 +321,8 @@ std::unique_ptr<souxmar::ai::Provider> provider_for(const ResolvedProvider& reso
     const bool local = resolved.base_url.rfind("http://localhost", 0) == 0
                        || resolved.base_url.rfind("http://127.0.0.1", 0) == 0;
     if (opts.api_key.empty() && !resolved.api_key_env.empty() && !local) {
-      error = "no API key for provider '" + resolved.provider_id + "': set $"
-              + resolved.api_key_env + " in the environment souxmar runs in.";
+      error = "no API key for provider '" + resolved.provider_id + "': set $" + resolved.api_key_env
+              + " in the environment souxmar runs in.";
       return nullptr;
     }
     return std::make_unique<ai::OpenAICompatibleProvider>(std::move(opts));
@@ -366,8 +364,7 @@ std::unique_ptr<souxmar::ai::Provider> provider_for(const ResolvedProvider& reso
 }
 
 // Copy a finished or suspended outcome onto the C response handle.
-void fill_response(souxmar_bridge_chat_response_t* out,
-                   const souxmar::ai::AgentOutcome& outcome) {
+void fill_response(souxmar_bridge_chat_response_t* out, const souxmar::ai::AgentOutcome& outcome) {
   namespace ai = souxmar::ai;
   for (const auto& step : outcome.steps) {
     for (const auto& call : step.tool_calls) {
@@ -503,8 +500,8 @@ extern "C" souxmar_bridge_chat_response_t* souxmar_bridge_chat_send(const char* 
 }
 
 extern "C" souxmar_bridge_chat_response_t* souxmar_bridge_chat_confirm(const char* project_id_c,
-                                                                      int32_t allow,
-                                                                      char** out_err) {
+                                                                       int32_t allow,
+                                                                       char** out_err) {
   if (out_err)
     *out_err = nullptr;
   const std::string project_id = project_id_c ? std::string(project_id_c) : std::string{};
@@ -582,7 +579,8 @@ extern "C" const char* souxmar_bridge_chat_tool_call_name(const souxmar_bridge_c
 }
 
 extern "C" const char* souxmar_bridge_chat_tool_call_summary(
-    const souxmar_bridge_chat_response_t* r, int32_t index) {
+    const souxmar_bridge_chat_response_t* r,
+    int32_t index) {
   if (r == nullptr || index < 0 || static_cast<std::size_t>(index) >= r->tool_calls.size())
     return "";
   return r->tool_calls[static_cast<std::size_t>(index)].summary.c_str();

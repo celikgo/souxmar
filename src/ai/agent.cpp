@@ -44,15 +44,14 @@ std::string default_agent_system_prompt() {
   // Deliberately short. Long prompts that restate the tool catalogue in
   // prose drift from the catalogue, and the catalogue is already on the
   // wire with a description per tool.
-  return
-      "You are the souxmar agent, working inside a CAD/FEM/CFD workbench. "
-      "Use the provided tools to inspect and act on the user's project; "
-      "prefer calling a tool over guessing. Tool results are facts about "
-      "the real project — never invent a number that a tool could have "
-      "told you. If a tool fails, read the error and either correct the "
-      "arguments or explain the problem; do not retry the same call "
-      "unchanged. When you have what you need, answer in plain prose "
-      "without calling further tools.";
+  return "You are the souxmar agent, working inside a CAD/FEM/CFD workbench. "
+         "Use the provided tools to inspect and act on the user's project; "
+         "prefer calling a tool over guessing. Tool results are facts about "
+         "the real project — never invent a number that a tool could have "
+         "told you. If a tool fails, read the error and either correct the "
+         "arguments or explain the problem; do not retry the same call "
+         "unchanged. When you have what you need, answer in plain prose "
+         "without calling further tools.";
 }
 
 namespace {
@@ -62,8 +61,7 @@ std::vector<ToolDefinition> build_tool_definitions(const ToolRegistry& registry,
                                                    const std::vector<std::string>& allowed) {
   std::vector<ToolDefinition> defs;
   for (const auto& name : registry.list()) {
-    if (!allowed.empty()
-        && std::find(allowed.begin(), allowed.end(), name) == allowed.end()) {
+    if (!allowed.empty() && std::find(allowed.begin(), allowed.end(), name) == allowed.end()) {
       continue;
     }
     if (const Tool* t = registry.find(name); t != nullptr) {
@@ -159,9 +157,9 @@ AgentToolCall execute_call(const ToolRegistry& registry,
   const auto dispatched = dispatch_tool(registry, call.name, inputs, context, policy);
 
   executed.ok = !dispatched.error.has_value();
-  executed.refused = dispatched.error
-                     && (dispatched.error->code == "NOT_CONFIRMED"
-                         || dispatched.error->code == "DENIED");
+  executed.refused =
+      dispatched.error
+      && (dispatched.error->code == "NOT_CONFIRMED" || dispatched.error->code == "DENIED");
   executed.result_summary = render_tool_result(dispatched);
 
   // No "tool result:" prefix — the Tool role already says what this
@@ -324,8 +322,7 @@ AgentOutcome resume_agent_turn(Provider& provider,
     denied.arguments_json = pending.arguments_json;
     denied.ok = false;
     denied.refused = true;
-    denied.result_summary =
-        "error [DENIED]: the user declined to run '" + pending.tool_name + "'";
+    denied.result_summary = "error [DENIED]: the user declined to run '" + pending.tool_name + "'";
     history.push_back({ChatMessage::Role::Tool, denied.result_summary, pending.call_id, {}});
     step.tool_calls.push_back(std::move(denied));
   }

@@ -2,9 +2,8 @@
 //
 // provider_config loader tests. Sprint 15 push 2 (ADR-0020).
 
-#include "souxmar/ai/provider_config.h"
-
 #include "souxmar/ai/provider.h"  // openai_compatible_presets()
+#include "souxmar/ai/provider_config.h"
 
 #include <gtest/gtest.h>
 
@@ -142,8 +141,7 @@ TEST(ProviderConfig, EveryPresetResolvesOrDemandsABaseUrl) {
   // would be a dead entry in the UI dropdown.
   for (const auto& preset : souxmar::ai::openai_compatible_presets()) {
     auto dir = scratch_dir("preset");
-    write_toml(dir,
-               "schema = 1\nprovider = \"" + std::string(preset.id) + "\"\nmodel = \"m\"\n");
+    write_toml(dir, "schema = 1\nprovider = \"" + std::string(preset.id) + "\"\nmodel = \"m\"\n");
     auto r = load_provider_config(dir);
     if (preset.base_url.empty()) {
       // The escape hatch: must ask for a base_url rather than silently

@@ -240,10 +240,7 @@ TaskOutcome run_one(ai::Provider&            provider,
       } else {
         tool_text = td.summary;
       }
-      messages.push_back({ai::ChatMessage::Role::Tool,
-                          "tool result: " + tool_text,
-                          tc.id,
-                          {}});
+      messages.push_back({ai::ChatMessage::Role::Tool, "tool result: " + tool_text, tc.id, {}});
     }
   }
 

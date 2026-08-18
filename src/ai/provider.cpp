@@ -547,7 +547,8 @@ std::string OpenAICompatibleProvider::render_curl_config(std::string_view url,
 }
 
 std::string OpenAICompatibleProvider::render_request_body(
-    const ChatRequest& req, const std::vector<Tool>& tool_definitions) {
+    const ChatRequest& req,
+    const std::vector<Tool>& tool_definitions) {
   std::vector<ToolDefinition> tools;
   tools.reserve(tool_definitions.size() + req.tools.size());
   for (const auto& t : tool_definitions)
@@ -839,9 +840,9 @@ ChatResult OpenAICompatibleProvider::chat_completion(const ChatRequest& req) {
                              + std::to_string(r.exit_code) + ")"};
   }
   if (r.exit_code != 0) {
-    return ProviderError{ProviderErrorKind::HttpClientFailed,
-                         opts_.provider_id + ": curl exit " + std::to_string(r.exit_code) + ": "
-                             + r.stderr_bytes};
+    return ProviderError{
+        ProviderErrorKind::HttpClientFailed,
+        opts_.provider_id + ": curl exit " + std::to_string(r.exit_code) + ": " + r.stderr_bytes};
   }
 
   // Split the status marker off the tail of the body.
@@ -916,8 +917,8 @@ void append_tool_use_block(std::string& out, const ToolCall& tc) {
 }  // namespace
 
 std::string AnthropicProvider::render_request_body(const ChatRequest& req,
-                                                    const std::vector<Tool>& tool_definitions,
-                                                    std::uint32_t default_max_tokens) {
+                                                   const std::vector<Tool>& tool_definitions,
+                                                   std::uint32_t default_max_tokens) {
   std::vector<ToolDefinition> tools;
   tools.reserve(tool_definitions.size() + req.tools.size());
   for (const auto& t : tool_definitions)
@@ -1080,8 +1081,7 @@ ChatResult AnthropicProvider::parse_response_body(std::string_view body) {
     } else if (type == "not_found_error") {
       kind = ProviderErrorKind::ModelNotFound;
     } else if (type == "invalid_request_error") {
-      kind = msg.find("context") != std::string::npos
-                     || msg.find("max_tokens") != std::string::npos
+      kind = msg.find("context") != std::string::npos || msg.find("max_tokens") != std::string::npos
                  ? ProviderErrorKind::ContextLengthExceeded
                  : ProviderErrorKind::BadRequest;
     }
@@ -1112,7 +1112,7 @@ ChatResult AnthropicProvider::parse_response_body(std::string_view body) {
       } else if (type == "tool_use") {
         ToolCall tc;
         tc.id = block["id"] && block["id"].IsScalar() ? block["id"].as<std::string>()
-                                                       : "toolu_" + std::to_string(i);
+                                                      : "toolu_" + std::to_string(i);
         if (block["name"] && block["name"].IsScalar())
           tc.name = block["name"].as<std::string>();
         if (auto input = block["input"]; input) {
@@ -1149,10 +1149,10 @@ ChatResult AnthropicProvider::parse_response_body(std::string_view body) {
 }
 
 std::string AnthropicProvider::render_curl_config(std::string_view url,
-                                                   std::string_view api_key,
-                                                   std::string_view api_version,
-                                                   std::string_view json_body,
-                                                   std::chrono::seconds timeout) {
+                                                  std::string_view api_key,
+                                                  std::string_view api_version,
+                                                  std::string_view json_body,
+                                                  std::chrono::seconds timeout) {
   std::string cfg;
   cfg += "url = ";
   curl_config_escape_append(cfg, url);
@@ -1242,9 +1242,9 @@ ChatResult AnthropicProvider::chat_completion(const ChatRequest& req) {
                          "anthropic: curl spawn failed: " + r.error_message};
   }
   if (r.timed_out) {
-    return ProviderError{ProviderErrorKind::HttpClientFailed,
-                         "anthropic: request timed out after "
-                             + std::to_string(opts_.timeout.count()) + "s"};
+    return ProviderError{
+        ProviderErrorKind::HttpClientFailed,
+        "anthropic: request timed out after " + std::to_string(opts_.timeout.count()) + "s"};
   }
   if (r.exit_code == 6 || r.exit_code == 7) {
     return ProviderError{ProviderErrorKind::ProviderHttpError,
@@ -1252,9 +1252,9 @@ ChatResult AnthropicProvider::chat_completion(const ChatRequest& req) {
                              + std::to_string(r.exit_code) + ")"};
   }
   if (r.exit_code != 0) {
-    return ProviderError{ProviderErrorKind::HttpClientFailed,
-                         "anthropic: curl exit " + std::to_string(r.exit_code) + ": "
-                             + r.stderr_bytes};
+    return ProviderError{
+        ProviderErrorKind::HttpClientFailed,
+        "anthropic: curl exit " + std::to_string(r.exit_code) + ": " + r.stderr_bytes};
   }
 
   std::string payload = r.stdout_bytes;
@@ -1271,8 +1271,7 @@ ChatResult AnthropicProvider::chat_completion(const ChatRequest& req) {
   if (auto* err = std::get_if<ProviderError>(&parsed)) {
     if (http_status == 401 || http_status == 403) {
       return ProviderError{ProviderErrorKind::ProviderHttpError,
-                           "anthropic: authentication rejected (HTTP "
-                               + std::to_string(http_status)
+                           "anthropic: authentication rejected (HTTP " + std::to_string(http_status)
                                + "). Check $ANTHROPIC_API_KEY. Detail: " + err->message};
     }
     if (http_status == 429) {

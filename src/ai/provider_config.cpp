@@ -171,8 +171,8 @@ ProviderConfigResult load_provider_config(const std::filesystem::path& project_d
   // cannot ignore. Checked before anything else uses the table so the
   // message is the first thing they see.
   for (const char* key : {"api_key", "apikey", "key", "token", "secret"}) {
-    if (tbl[key] || (tbl["openai_compatible"].as_table()
-                     && (*tbl["openai_compatible"].as_table())[key])) {
+    if (tbl[key]
+        || (tbl["openai_compatible"].as_table() && (*tbl["openai_compatible"].as_table())[key])) {
       return make_error(
           ProviderConfigErrorKind::SecretInConfig,
           fmt::format("'{}' must not appear in '{}' — this file lives beside pipeline.yaml "

@@ -5,7 +5,6 @@
 // run for real — only the model is simulated.
 
 #include "souxmar/ai/agent.h"
-
 #include "souxmar/ai/audit_log.h"
 #include "souxmar/ai/tool.h"
 #include "souxmar/pipeline/value.h"
@@ -84,9 +83,11 @@ class ScriptedProvider final : public Provider {
   [[nodiscard]] std::string_view name() const noexcept override {
     return "scripted";
   }
+
   [[nodiscard]] std::vector<std::string> available_models() const override {
     return {"m"};
   }
+
   ChatResult chat_completion(const ChatRequest& req) override {
     seen.push_back(req);
     if (index_ >= queue_.size()) {

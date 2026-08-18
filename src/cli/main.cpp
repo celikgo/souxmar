@@ -18,8 +18,6 @@
 //   70 internal error (plugin load / dispatch failure)
 
 #include "souxmar/ai/agent.h"
-
-#include <iostream>  // agent chat confirmation prompt
 #include "souxmar/ai/audit_log.h"
 #include "souxmar/ai/budget_config.h"  // Sprint 6 push 6
 #include "souxmar/ai/provider.h"
@@ -42,6 +40,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <iostream>  // agent chat confirmation prompt
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -714,15 +713,13 @@ std::unique_ptr<souxmar::ai::Provider> make_provider(const std::string& provider
       ai::AnthropicProviderOptions opts;
       if (!cfg.base_url.empty())
         opts.base_url = cfg.base_url;
-      const std::string env_name =
-          cfg.api_key_env.empty() ? "ANTHROPIC_API_KEY" : cfg.api_key_env;
+      const std::string env_name = cfg.api_key_env.empty() ? "ANTHROPIC_API_KEY" : cfg.api_key_env;
       if (const char* key = std::getenv(env_name.c_str()); key != nullptr && *key != '\0') {
         opts.api_key = key;
       }
       if (opts.api_key.empty()) {
-        fmt::print(stderr,
-                   "error: no API key for 'anthropic'. Export ${} and try again.\n",
-                   env_name);
+        fmt::print(
+            stderr, "error: no API key for 'anthropic'. Export ${} and try again.\n", env_name);
         return nullptr;
       }
       chosen_name = "anthropic";
@@ -759,9 +756,8 @@ std::unique_ptr<souxmar::ai::Provider> make_provider(const std::string& provider
       opts.api_key = key;
     }
     if (opts.api_key.empty()) {
-      fmt::print(stderr,
-                 "error: no API key for 'anthropic'. Export ${} and try again.\n",
-                 env_name);
+      fmt::print(
+          stderr, "error: no API key for 'anthropic'. Export ${} and try again.\n", env_name);
       return nullptr;
     }
     chosen_name = "anthropic";
@@ -797,8 +793,8 @@ std::unique_ptr<souxmar::ai::Provider> make_provider(const std::string& provider
       opts.api_key = key;
     }
   }
-  const bool local = base_url.rfind("http://localhost", 0) == 0
-                     || base_url.rfind("http://127.0.0.1", 0) == 0;
+  const bool local =
+      base_url.rfind("http://localhost", 0) == 0 || base_url.rfind("http://127.0.0.1", 0) == 0;
   if (opts.api_key.empty() && !local) {
     fmt::print(stderr,
                "error: no API key for '{}'. Export ${} and try again.\n",
@@ -814,7 +810,8 @@ std::unique_ptr<souxmar::ai::Provider> make_provider(const std::string& provider
 // discoverable without reading the docs.
 int cmd_agent_providers() {
   fmt::print("{:<20} {:<34} {}\n", "PROVIDER", "ENDPOINT", "API KEY FROM");
-  fmt::print("{:<20} {:<34} {}\n", "anthropic", "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY");
+  fmt::print(
+      "{:<20} {:<34} {}\n", "anthropic", "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY");
   fmt::print("{:<20} {:<34} {}\n", "ollama", "http://localhost:11434", "(none — local)");
   for (const auto& preset : souxmar::ai::openai_compatible_presets()) {
     fmt::print("{:<20} {:<34} {}\n",
@@ -952,10 +949,7 @@ int cmd_agent_chat(const std::string& prompt,
     return kExitInputData;
   }
   if (outcome.input_tokens || outcome.output_tokens) {
-    fmt::print(stderr,
-               "tokens: {} in / {} out\n",
-               outcome.input_tokens,
-               outcome.output_tokens);
+    fmt::print(stderr, "tokens: {} in / {} out\n", outcome.input_tokens, outcome.output_tokens);
   }
   return kExitOk;
 }
