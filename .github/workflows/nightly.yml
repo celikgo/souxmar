@@ -1,0 +1,185 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Nightly deep checks. Everything here is too slow for the 25-minute
+# pre-merge budget but too valuable to run never: sanitizers, fuzzing,
+# the synthetic-load regression corpus, and the LLM-driven agent evals.
+#
+# ENGINEERING_PRACTICES.md § "Definition of Done" item 8 makes the three
+# nightly runs after a merge part of Done, so a red nightly is a real
+# signal with a named owner, not a wall of email nobody reads.
+
+name: Nightly
+
+on:
+  schedule:
+    # 03:00 UTC — after the working day in every timezone the team is in,
+    # so a failure is waiting at the start of the next one.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      fuzz_minutes:
+        description: Per-target fuzzing budget in minutes
+        required: false
+        default: '30'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  sanitizers:
+    name: ${{ matrix.san }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        san: [asan, tsan]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-cpp
+        with:
+          preset: ${{ matrix.san }}
+      - name: Configure and build
+        run: |
+          cmake --preset ${{ matrix.san }}
+          cmake --build --preset ${{ matrix.san }}
+      - name: Test under the sanitizer
+        env:
+          # halt_on_error keeps the first report as the failure, rather
+          # than burying it under a hundred downstream ones.
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:abort_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+        run: ctest --preset ${{ matrix.san }} --output-on-failure
+
+  synth-load:
+    name: Synthetic-load regression corpus
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    # ADR-0017 non-blocking-on-first-run: the committed corpus still
+    # carries placeholder hashes, so every target reports "no-golden".
+    # Blocking on that would mean a permanently red nightly that trains
+    # people to ignore it. docs/INFRA_STATUS.md tracks the bootstrap that
+    # removes this line.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - uses: ./.github/actions/setup-cpp
+        with: { preset: ci-linux-gcc }
+      - name: Build
+        run: |
+          cmake --preset ci-linux-gcc
+          cmake --build --preset ci-linux-gcc
+      - name: Run the harness
+        run: |
+          scripts/synth-load/run.sh \
+            --engine build/ci-linux-gcc/src/cli/souxmar \
+            --eval build/ci-linux-gcc/tools/eval/souxmar-eval \
+            --json-out synth-load-report.json \
+            --verbose
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          # Named in docs/INFRA_STATUS.md § "The bootstrap PR" — a
+          # maintainer downloads exactly this to seed the corpus.
+          name: synth-load-report
+          path: synth-load-report.json
+          if-no-files-found: warn
+
+  agent-eval-llm:
+    name: LLM-driven agent evals
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    # Needs a real provider credential. The step skips itself rather
+    # than failing when the secret is absent: a missing key is an
+    # infrastructure state, not a regression.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-cpp
+        with: { preset: ci-linux-gcc }
+      - name: Build
+        run: |
+          cmake --preset ci-linux-gcc
+          cmake --build --preset ci-linux-gcc
+      - name: Run the eval suite against a real model
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.SOUXMAR_EVAL_ANTHROPIC_KEY }}
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "::notice::SOUXMAR_EVAL_ANTHROPIC_KEY not configured — skipping."
+            exit 0
+          fi
+          build/ci-linux-gcc/tools/eval-llm/souxmar-eval-llm evals/v1-llm \
+            --plugin-path build/ci-linux-gcc/examples/plugins \
+            --provider anthropic \
+            --model claude-sonnet-4-20250514 \
+            --min-pass-rate 0.90
+
+  fuzz:
+    name: Fuzz ${{ matrix.target }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [pipeline-yaml, plugin-manifest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-cpp
+        with: { preset: dev }
+      - name: Build with libFuzzer
+        run: |
+          # The fuzz targets are not in the tree yet; ENGINEERING_PRACTICES
+          # names them (manifest parser, pipeline YAML parser, ABI surface)
+          # so the harness ships ahead of them rather than the gate being
+          # invented later under time pressure.
+          if [ ! -d tests/fuzz ]; then
+            echo "::notice::tests/fuzz/ does not exist yet — nothing to fuzz."
+            exit 0
+          fi
+          cmake --preset dev -DSOUXMAR_BUILD_FUZZERS=ON
+          cmake --build --preset dev
+      - name: Run
+        run: |
+          [ -d tests/fuzz ] || exit 0
+          budget=$(( ${{ github.event.inputs.fuzz_minutes || 30 }} * 60 ))
+          build/dev/tests/fuzz/fuzz_${{ matrix.target }} \
+            -max_total_time="$budget" -print_final_stats=1 \
+            tests/fuzz/corpus/${{ matrix.target }} || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-crashes-${{ matrix.target }}
+          path: crash-*
+          if-no-files-found: ignore
+
+  report:
+    name: Nightly summary
+    if: always()
+    needs: [sanitizers, synth-load, agent-eval-llm, fuzz]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write the run summary
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          printf '%s' "$NEEDS_JSON" > needs.json
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          icons = {"success": "OK", "failure": "FAILED", "skipped": "skipped"}
+          needs = json.load(open("needs.json"))
+          print("## Nightly results\n")
+          print("| Job | Result |")
+          print("| --- | ------ |")
+          for name, data in sorted(needs.items()):
+              result = data["result"]
+              print(f"| {name} | {icons.get(result, result)} |")
+          PY

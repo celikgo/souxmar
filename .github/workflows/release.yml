@@ -1,0 +1,211 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Tag-driven release.
+#
+# The signing flow already exists in scripts/release/. build-release.sh
+# is a *signing* orchestrator, not a builder — its header says as much,
+# and anticipates this file ("the orchestrator final step in release.yml
+# runs with --target=manifest"). So this workflow owns compiling and
+# packaging, and delegates every signature to those scripts. CI and a
+# maintainer's laptop therefore run identical signing code.
+#
+# Signing degrades to a loud warning when credentials are absent, so a
+# fork can still produce a testable artifact. An unsigned build that says
+# it is unsigned beats a release pipeline nobody outside the org can run.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build (e.g. v0.9.0)
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify the tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Tag, VERSION and CHANGELOG agree
+        id: v
+        run: |
+          # A release whose VERSION file disagrees with its tag produces
+          # an updater manifest that points at the wrong thing, so this
+          # is a hard gate rather than a warning.
+          raw="${{ github.event.inputs.tag }}"
+          [ -n "$raw" ] || raw="${GITHUB_REF_NAME}"
+          version="${raw#v}"
+          in_file="$(tr -d ' \n\r' < VERSION)"
+          if [ "$version" != "$in_file" ]; then
+            echo "::error::tag v$version disagrees with VERSION ($in_file)"
+            exit 1
+          fi
+          if ! grep -q "$version" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no entry for $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "releasing $version"
+
+  build:
+    name: Build and sign (${{ matrix.name }})
+    needs: [verify]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x64,   os: ubuntu-22.04, preset: ci-linux-gcc, target: linux }
+          - { name: macos-arm64, os: macos-14,     preset: ci-macos,     target: macos }
+          - { name: windows-x64, os: windows-2022, preset: ci-windows,   target: windows }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: ./.github/actions/setup-cpp
+        with:
+          preset: ${{ matrix.preset }}
+
+      - name: Build
+        run: |
+          cmake --preset ${{ matrix.preset }}
+          cmake --build --preset ${{ matrix.preset }}
+
+      - name: Smoke-test before signing anything
+        shell: bash
+        run: |
+          # Signing a broken binary is worse than not releasing: the
+          # signature is what makes people trust it.
+          ctest --preset ${{ matrix.preset }} --output-on-failure
+
+      - name: Stage and package
+        id: pkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ needs.verify.outputs.version }}"
+          stage="stage/souxmar-$version-${{ matrix.name }}"
+          mkdir -p "$stage" dist
+          cmake --install "build/${{ matrix.preset }}" --prefix "$stage" --config RelWithDebInfo
+          cp LICENSE THIRD_PARTY_LICENSES.md CHANGELOG.md "$stage/"
+
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            artifact="dist/souxmar-$version-${{ matrix.name }}.zip"
+            powershell -Command "Compress-Archive -Path '$stage/*' -DestinationPath '$artifact'"
+          else
+            artifact="dist/souxmar-$version-${{ matrix.name }}.tar.gz"
+            tar -czf "$artifact" -C stage "souxmar-$version-${{ matrix.name }}"
+          fi
+          echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
+          ls -la dist/
+
+      - name: Sign
+        shell: bash
+        env:
+          # Names taken from build-release.sh's own header — it documents
+          # exactly which variables each --target requires.
+          AC_USERNAME: ${{ secrets.AC_USERNAME }}
+          AC_PASSWORD: ${{ secrets.AC_PASSWORD }}
+          AC_TEAM_ID: ${{ secrets.AC_TEAM_ID }}
+          SOUXMAR_EV_THUMBPRINT: ${{ secrets.SOUXMAR_EV_THUMBPRINT }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          have_creds() {
+            case "${{ matrix.target }}" in
+              macos)   [ -n "${AC_USERNAME:-}" ] ;;
+              windows) [ -n "${SOUXMAR_EV_THUMBPRINT:-}" ] ;;
+              linux)   [ -n "${GPG_KEY_ID:-}" ] ;;
+            esac
+          }
+          if ! have_creds; then
+            echo "::warning::no signing credentials for ${{ matrix.target }} — this artifact is UNSIGNED."
+            touch "${{ steps.pkg.outputs.artifact }}.UNSIGNED"
+            exit 0
+          fi
+          if [ "${{ matrix.target }}" = "linux" ] && [ -n "${GPG_PRIVATE_KEY:-}" ]; then
+            printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          fi
+          scripts/release/build-release.sh \
+            --version "${{ needs.verify.outputs.version }}" \
+            --target "${{ matrix.target }}" \
+            --artifact "${{ steps.pkg.outputs.artifact }}"
+
+      - name: Checksums
+        shell: bash
+        run: |
+          cd dist
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum ./* > "SHA256SUMS-${{ matrix.name }}.txt"
+          else
+            shasum -a 256 ./* > "SHA256SUMS-${{ matrix.name }}.txt"
+          fi
+          cat "SHA256SUMS-${{ matrix.name }}.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.name }}
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish draft release
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Inventory
+        run: |
+          ls -la dist/
+          if ls dist/*.UNSIGNED >/dev/null 2>&1; then
+            echo "::warning::this release contains UNSIGNED artifacts:"
+            ls dist/*.UNSIGNED
+          fi
+
+      - name: Build provenance attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: 'dist/*.tar.gz,dist/*.zip'
+
+      - name: Create the draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Draft, always. A tag push should never put bits in front of
+          # users without a human reading the notes first.
+          draft: true
+          tag_name: v${{ needs.verify.outputs.version }}
+          name: souxmar v${{ needs.verify.outputs.version }}
+          generate_release_notes: true
+          files: dist/*

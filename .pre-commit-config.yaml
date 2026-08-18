@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# ENGINEERING_PRACTICES.md § Security promises "a pre-commit hook + CI
+# scan". This is the hook half; .github/workflows/ci.yml is the CI half,
+# and both call the same scripts so they cannot disagree.
+#
+#   pip install pre-commit && pre-commit install
+#
+# Everything here runs in under a second on a normal commit. Anything
+# slower belongs in CI — a hook people disable protects nothing.
+
+repos:
+  - repo: local
+    hooks:
+      - id: secret-scan
+        name: No credential-shaped strings
+        entry: scripts/check-secrets.sh
+        language: script
+        pass_filenames: true
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.(md|patch)$'
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-added-large-files
+        # Meshes and reference PNGs are legitimately large; anything
+        # bigger than this in source is almost certainly a mistake.
+        args: [--maxkb=2048]
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v17.0.6
+    hooks:
+      - id: clang-format
+        types_or: [c++, c]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.10.0
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning, --exclude=SC2086]

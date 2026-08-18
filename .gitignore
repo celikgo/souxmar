@@ -48,6 +48,11 @@ src/desktop/src-tauri/gen/
 src/desktop/dist/
 src/desktop/package-lock.json
 src/desktop/src-tauri/Cargo.lock
+src/desktop/src-tauri/souxmar-bridge/Cargo.lock
+# Same policy for the service crates — these appear the first time
+# anyone runs cargo in them, and were untracked-but-not-ignored, which
+# meant every `cargo build` dirtied `git status`.
+services/*/Cargo.lock
 # tsc -b incremental cache; regenerated on every typecheck.
 src/desktop/tsconfig.tsbuildinfo
 
@@ -77,6 +82,11 @@ project.ai.toml
 # Sprint 41 — manufacturing block. Example pipelines write their results next
 # to the pipeline.yaml that produced them, the same way the older examples do.
 # The pipeline and the README are the deliverables; the run artefacts are not.
+# `souxmar run <pipeline>` from the repo root writes its output into the
+# cwd, so a dev following the README leaves artefacts at the top level.
+/*.vtu
+/*.pvd
+
 examples/**/*.vtu
 examples/**/*.pvd
 examples/**/*.gcode

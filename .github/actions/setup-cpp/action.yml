@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Composite action: toolchain + vcpkg + binary cache.
+#
+# Every job that compiles the engine needs the same four things, and
+# copy-pasting them across seven workflows is how they drift. The vcpkg
+# checkout is pinned to the same commit as the `builtin-baseline` in
+# vcpkg.json — the baseline pins package *versions*, but the vcpkg tool
+# itself still has to match, or a job resolves ports the manifest never
+# saw.
+
+name: Set up C++ toolchain
+description: Installs compilers, pins vcpkg, and restores the binary cache.
+
+inputs:
+  preset:
+    description: CMake configure preset (used only to key the cache).
+    required: true
+  vcpkg-features:
+    description: Semicolon-separated VCPKG_MANIFEST_FEATURES value.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install Linux toolchain
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        # ninja + pkg-config for the build; the rest are vcpkg's build
+        # dependencies for the ports in vcpkg.json.
+        sudo apt-get install -y --no-install-recommends \
+          ninja-build pkg-config curl zip unzip tar bison flex
+        if [ "${{ inputs.preset }}" = "ci-linux-gcc" ]; then
+          sudo apt-get install -y --no-install-recommends gcc-13 g++-13
+        fi
+        if [ "${{ inputs.preset }}" = "ci-linux-clang" ]; then
+          sudo apt-get install -y --no-install-recommends clang-17 || {
+            # The GitHub image does not always carry clang-17; fall back
+            # to the LLVM apt channel rather than silently using a
+            # different compiler than the preset names.
+            wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+              | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
+            sudo add-apt-repository -y "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-17 main"
+            sudo apt-get update && sudo apt-get install -y clang-17
+          }
+        fi
+
+    - name: Install macOS toolchain
+      if: runner.os == 'macOS'
+      shell: bash
+      run: brew install ninja pkg-config autoconf automake libtool
+
+    - name: Install Windows toolchain
+      if: runner.os == 'Windows'
+      shell: bash
+      run: choco install ninja --no-progress -y
+
+    - name: Read the pinned vcpkg baseline
+      id: baseline
+      shell: bash
+      run: |
+        # Single source of truth: whatever vcpkg.json pins, we check out.
+        baseline="$(python3 -c "import json;print(json.load(open('vcpkg.json'))['vcpkg-configuration']['default-registry']['baseline'])")"
+        echo "sha=$baseline" >> "$GITHUB_OUTPUT"
+        echo "vcpkg baseline: $baseline"
+
+    - name: Check out vcpkg at the pinned baseline
+      uses: actions/checkout@v4
+      with:
+        repository: microsoft/vcpkg
+        ref: ${{ steps.baseline.outputs.sha }}
+        path: .vcpkg
+        fetch-depth: 1
+
+    - name: Bootstrap vcpkg
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          ./.vcpkg/bootstrap-vcpkg.bat -disableMetrics
+        else
+          ./.vcpkg/bootstrap-vcpkg.sh -disableMetrics
+        fi
+        echo "VCPKG_ROOT=$GITHUB_WORKSPACE/.vcpkg" >> "$GITHUB_ENV"
+
+    - name: Enable the GitHub Actions binary cache
+      uses: actions/github-script@v7
+      with:
+        script: |
+          core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+          core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+    - name: Configure vcpkg environment
+      shell: bash
+      run: |
+        # Binary caching turns a 20-minute cold port build into seconds.
+        echo "VCPKG_BINARY_SOURCES=clear;x-gha,readwrite" >> "$GITHUB_ENV"
+        echo "VCPKG_DISABLE_METRICS=1" >> "$GITHUB_ENV"
+        if [ -n "${{ inputs.vcpkg-features }}" ]; then
+          echo "VCPKG_MANIFEST_FEATURES=${{ inputs.vcpkg-features }}" >> "$GITHUB_ENV"
+        fi
+
+    - name: Set up MSVC environment
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@v1
