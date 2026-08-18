@@ -128,22 +128,15 @@ jobs:
   npm-audit:
     name: npm advisories
     runs-on: ubuntu-latest
-    # Non-blocking, and unlike the other continue-on-error jobs this is
-    # not a gate waiting on data — it works, and on its first run it found
-    # four real pre-existing advisories in the frontend tree (js-yaml and
-    # brace-expansion DoS, both high; @babel/core arbitrary file read;
-    # esbuild dev-server request forgery). Three take `npm audit fix`; the
-    # esbuild one is reachable only by moving vite 5 -> 8, three majors.
-    # That is a deliberate upgrade PR, not a rider on the change that
-    # introduced the scanner. Blocking here would have held CI hostage to
-    # an unrelated dependency bump; weakening --audit-level to hide it
-    # would have been worse. See docs/CI.md.
-    continue-on-error: true
+    # Blocking. It was not, for as long as the frontend carried four
+    # advisories that needed a vite 5 -> 8 bump to clear. That bump has
+    # landed and the tree is clean, so the gate does what a gate is for.
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          # vite 8 requires ^20.19.0 || >=22.12.0.
+          node-version: '22'
       - name: Audit the desktop frontend
         working-directory: src/desktop
         run: |

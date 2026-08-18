@@ -143,7 +143,7 @@ Prerequisites:
 - [vcpkg](https://github.com/microsoft/vcpkg) — cloned and `VCPKG_ROOT` exported
 
 ```bash
-git clone https://github.com/souxmar/souxmar.git
+git clone https://github.com/celikgo/souxmar.git
 cd souxmar
 
 export VCPKG_ROOT="$HOME/vcpkg"   # or wherever you cloned vcpkg
