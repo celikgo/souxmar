@@ -54,6 +54,12 @@ def strip_noise(text: str) -> str:
     text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)   # block comments
     text = re.sub(r"//[^\n]*", " ", text)                # line comments
     text = re.sub(r"^\s*#.*$", " ", text, flags=re.M)    # preprocessor
+    # The C-linkage scoping macros carry no semicolon, so without this they
+    # merge into the statement that follows and the *first* declaration in
+    # every header stops matching — which is how souxmar_mesh_new and
+    # souxmar_value_kind went missing while their neighbours did not.
+    text = re.sub(r"\bSOUXMAR_C_(?:BEGIN|END)\b", " ", text)
+    text = re.sub(r'\bextern\s+"C"\s*\{', " ", text)
     return text
 
 

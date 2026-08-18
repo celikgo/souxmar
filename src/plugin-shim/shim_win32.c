@@ -302,6 +302,16 @@ int souxmar_buffer_is_mmap(const souxmar_buffer_t* buffer) {
   return fn(buffer);
 }
 
+souxmar_buffer_t* souxmar_buffer_new(size_t size_bytes) {
+  typedef souxmar_buffer_t* (*fn_t)(size_t size_bytes);
+  static fn_t fn = NULL;
+  if (fn == NULL) {
+    fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_buffer_new");
+  }
+  if (!fn) { souxmar_buffer_t* zero; memset(&zero, 0, sizeof zero); return zero; }
+  return fn(size_bytes);
+}
+
 souxmar_buffer_t* souxmar_buffer_new_mmap(const char* path, size_t size_bytes, uint32_t flags) {
   typedef souxmar_buffer_t* (*fn_t)(const char* path, size_t size_bytes, uint32_t flags);
   static fn_t fn = NULL;
@@ -409,6 +419,16 @@ const char* souxmar_field_name(const souxmar_field_t* field) {
   }
   if (!fn) { const char* zero; memset(&zero, 0, sizeof zero); return zero; }
   return fn(field);
+}
+
+souxmar_field_t* souxmar_field_new(const char* name, uint8_t location, uint8_t kind, size_t count, size_t num_time_steps) {
+  typedef souxmar_field_t* (*fn_t)(const char* name, uint8_t location, uint8_t kind, size_t count, size_t num_time_steps);
+  static fn_t fn = NULL;
+  if (fn == NULL) {
+    fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_field_new");
+  }
+  if (!fn) { souxmar_field_t* zero; memset(&zero, 0, sizeof zero); return zero; }
+  return fn(name, location, kind, count, num_time_steps);
 }
 
 size_t souxmar_field_num_time_steps(const souxmar_field_t* field) {
@@ -567,6 +587,16 @@ const char* souxmar_geometry_name(const souxmar_geometry_t* g, uint8_t kind, uin
   }
   if (!fn) { const char* zero; memset(&zero, 0, sizeof zero); return zero; }
   return fn(g, kind, index);
+}
+
+souxmar_geometry_t* souxmar_geometry_new(void) {
+  typedef souxmar_geometry_t* (*fn_t)(void);
+  static fn_t fn = NULL;
+  if (fn == NULL) {
+    fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_geometry_new");
+  }
+  if (!fn) { souxmar_geometry_t* zero; memset(&zero, 0, sizeof zero); return zero; }
+  return fn();
 }
 
 size_t souxmar_geometry_num_edges(const souxmar_geometry_t* g) {
@@ -746,6 +776,16 @@ souxmar_mesh_t* souxmar_mesh_from_buffers(const souxmar_mesh_buffers_t* buffers,
   }
   if (!fn) { souxmar_mesh_t* zero; memset(&zero, 0, sizeof zero); return zero; }
   return fn(buffers, out_status);
+}
+
+souxmar_mesh_t* souxmar_mesh_new(void) {
+  typedef souxmar_mesh_t* (*fn_t)(void);
+  static fn_t fn = NULL;
+  if (fn == NULL) {
+    fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_mesh_new");
+  }
+  if (!fn) { souxmar_mesh_t* zero; memset(&zero, 0, sizeof zero); return zero; }
+  return fn();
 }
 
 souxmar_status_t souxmar_mesh_node(const souxmar_mesh_t* mesh, uint64_t index, double out_position[3]) {
@@ -1220,6 +1260,16 @@ const char* souxmar_value_as_string(const souxmar_value_t* value) {
     fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_value_as_string");
   }
   if (!fn) { const char* zero; memset(&zero, 0, sizeof zero); return zero; }
+  return fn(value);
+}
+
+uint8_t souxmar_value_kind(const souxmar_value_t* value) {
+  typedef uint8_t (*fn_t)(const souxmar_value_t* value);
+  static fn_t fn = NULL;
+  if (fn == NULL) {
+    fn = (fn_t)(void*)souxmar_shim_lookup("souxmar_value_kind");
+  }
+  if (!fn) { uint8_t zero; memset(&zero, 0, sizeof zero); return zero; }
   return fn(value);
 }
 
