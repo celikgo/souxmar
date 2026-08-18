@@ -115,6 +115,32 @@ runs:
           echo "VCPKG_MANIFEST_FEATURES=${{ inputs.vcpkg-features }}" >> "$GITHUB_ENV"
         fi
 
+    - name: Pre-seed the autotools tarballs vcpkg fetches
+      shell: bash
+      run: |
+        # vcpkg's vcpkg-make provisions its own automake regardless of
+        # what apt or brew installed, and it fetches from
+        # ftpmirror.gnu.org — a redirector that round-robins to whichever
+        # GNU mirror is up, and which has returned 502 on every run so
+        # far. libsodium builds with autotools, so that one 502 fails the
+        # whole matrix.
+        #
+        # Dropping the tarball into vcpkg's downloads/ directory first
+        # makes it skip the download entirely; the SHA is verified by
+        # vcpkg either way, so a corrupt or substituted file cannot slip
+        # through. Best-effort: if the direct mirror is also down, vcpkg
+        # falls back to its own retry logic and we are no worse off.
+        mkdir -p "$VCPKG_ROOT/downloads"
+        for f in automake-1.17.tar.gz autoconf-2.72.tar.gz libtool-2.5.4.tar.gz; do
+          tool="${f%%-*}"
+          [ -f "$VCPKG_ROOT/downloads/$f" ] && continue
+          curl -fsSL --retry 3 --retry-delay 5 --max-time 120 \
+            "https://ftp.gnu.org/gnu/$tool/$f" \
+            -o "$VCPKG_ROOT/downloads/$f" \
+            && echo "seeded $f" \
+            || { rm -f "$VCPKG_ROOT/downloads/$f"; echo "could not seed $f (vcpkg will fetch it)"; }
+        done
+
     - name: Restore the vcpkg binary cache
       uses: actions/cache@v4
       with:

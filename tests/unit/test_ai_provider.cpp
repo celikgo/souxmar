@@ -425,10 +425,14 @@ TEST(OpenAICompatibleProviderCalls, ReportsItsConfiguredName) {
 // Against a local echo server it validates the wire format. Against a
 // real endpoint it validates the service:
 //
-//   SOUXMAR_TEST_OPENAI_BASE_URL=https://api.x.ai/v1 \
-//   SOUXMAR_TEST_OPENAI_KEY=$XAI_API_KEY \
-//   SOUXMAR_TEST_OPENAI_MODEL=<a model your account can reach> \
-//   ./souxmar_unit_tests --gtest_filter='OpenAICompatibleLive.*'
+//   env SOUXMAR_TEST_OPENAI_BASE_URL=https://api.x.ai/v1
+//       SOUXMAR_TEST_OPENAI_KEY=$XAI_API_KEY
+//       SOUXMAR_TEST_OPENAI_MODEL=<a model your account can reach>
+//       ./souxmar_unit_tests --gtest_filter='OpenAICompatibleLive.*'
+//
+// (written without trailing backslashes on purpose: a `//` comment that
+//  ends in one is a line continuation, which -Wcomment rejects and
+//  -Werror then turns into a build failure.)
 
 TEST(OpenAICompatibleLive, RoundTripsAgainstConfiguredEndpoint) {
   const char* base = std::getenv("SOUXMAR_TEST_OPENAI_BASE_URL");
