@@ -68,7 +68,7 @@ runs:
         echo "vcpkg baseline: $baseline"
 
     - name: Check out vcpkg at the pinned baseline
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         repository: microsoft/vcpkg
         ref: ${{ steps.baseline.outputs.sha }}
@@ -86,7 +86,7 @@ runs:
         echo "VCPKG_ROOT=$GITHUB_WORKSPACE/.vcpkg" >> "$GITHUB_ENV"
 
     - name: Enable the GitHub Actions binary cache
-      uses: actions/github-script@v7
+      uses: actions/github-script@v9
       with:
         script: |
           core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');

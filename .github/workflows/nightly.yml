@@ -39,7 +39,7 @@ jobs:
       matrix:
         san: [asan, tsan]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-cpp
         with:
           preset: ${{ matrix.san }}
@@ -67,8 +67,8 @@ jobs:
     # removes this line.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: { python-version: '3.12' }
       - uses: ./.github/actions/setup-cpp
         with: { preset: ci-linux-gcc }
@@ -83,7 +83,7 @@ jobs:
             --eval build/ci-linux-gcc/tools/eval/souxmar-eval \
             --json-out synth-load-report.json \
             --verbose
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           # Named in docs/INFRA_STATUS.md § "The bootstrap PR" — a
@@ -101,7 +101,7 @@ jobs:
     # infrastructure state, not a regression.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-cpp
         with: { preset: ci-linux-gcc }
       - name: Build
@@ -132,7 +132,7 @@ jobs:
       matrix:
         target: [pipeline-yaml, plugin-manifest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-cpp
         with: { preset: dev }
       - name: Build with libFuzzer
@@ -154,7 +154,7 @@ jobs:
           build/dev/tests/fuzz/fuzz_${{ matrix.target }} \
             -max_total_time="$budget" -print_final_stats=1 \
             tests/fuzz/corpus/${{ matrix.target }} || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: fuzz-crashes-${{ matrix.target }}

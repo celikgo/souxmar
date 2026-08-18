@@ -49,8 +49,8 @@ jobs:
       plugins:   ${{ steps.filter.outputs.plugins }}
       agent:     ${{ steps.filter.outputs.agent }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -96,7 +96,7 @@ jobs:
     name: Governance gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The frozen-header and tool-contract gates diff against the
           # base ref and read commit messages for ratchet markers, so
@@ -146,7 +146,7 @@ jobs:
     name: Format and lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -203,7 +203,7 @@ jobs:
     # completing. Never blocking.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install clang-format
         run: |
           sudo apt-get update
@@ -241,7 +241,7 @@ jobs:
           - { name: macos,       os: macos-14,     preset: ci-macos }
           - { name: windows,     os: windows-2022, preset: ci-windows }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/setup-cpp
         with:
@@ -273,7 +273,7 @@ jobs:
         # Only the platforms the downstream jobs consume: the determinism
         # gate needs all three OSes, everything else uses linux-gcc.
         if: matrix.name != 'linux-clang'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: engine-${{ matrix.name }}
           path: |
@@ -293,8 +293,8 @@ jobs:
     if: needs.changes.outputs.plugins == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: engine-linux-gcc, path: engine }
       - run: chmod -R +x engine/
       - name: Run the v1 conformance suite
@@ -306,8 +306,8 @@ jobs:
     if: needs.changes.outputs.agent == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: engine-linux-gcc, path: engine }
       - run: chmod -R +x engine/
       - name: Scripted evals
@@ -319,7 +319,7 @@ jobs:
             --min-pass-rate 1.0 \
             --latency-output eval-latency.json \
             --max-p95-ms 250
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: eval-latency
@@ -338,10 +338,10 @@ jobs:
     # people to ignore red gates.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: { python-version: '3.12' }
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with: { name: engine-linux-gcc, path: engine }
       - run: chmod -R +x engine/
       - name: Agent tool reference matches the binary
@@ -359,11 +359,11 @@ jobs:
     if: needs.changes.outputs.engine == 'true'
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: { python-version: '3.12' }
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with: { pattern: engine-*, path: artifacts }
 
       - name: Compare fingerprints across platforms
@@ -407,8 +407,8 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: { python-version: '3.12' }
       - uses: ./.github/actions/setup-cpp
         with:
@@ -430,7 +430,7 @@ jobs:
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with: { components: rustfmt, clippy }
       - uses: Swatinem/rust-cache@v2
@@ -481,8 +481,8 @@ jobs:
       run:
         working-directory: src/desktop
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: npm
@@ -508,8 +508,8 @@ jobs:
     runs-on: ubuntu-22.04
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: { python-version: '3.12' }
       - uses: ./.github/actions/setup-cpp
         with: { preset: ci-linux-gcc }
@@ -530,7 +530,7 @@ jobs:
             --baseline-dir benchmarks/baselines \
             --current-dir bench-out \
             --threshold 0.05
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: benchmark-results, path: bench-out/ }
 
