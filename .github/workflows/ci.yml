@@ -328,6 +328,28 @@ jobs:
       - name: Test
         run: ctest --preset ${{ matrix.preset }} --output-on-failure
 
+      - name: Host exports the C ABI (Windows)
+        # The Windows plugin shim resolves through
+        # GetProcAddress(GetModuleHandle(NULL), ...), so a host that exports
+        # nothing turns every plugin into one that loads and registers
+        # nothing. That surfaced once as 91 unexplained integration failures;
+        # this says it in one line instead.
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          exe="build/${{ matrix.preset }}/src/cli/souxmar.exe"
+          [ -f "$exe" ] || { echo "::error::$exe not built"; exit 1; }
+          if dumpbin //exports "$exe" | grep -q "souxmar_registry_add_mesher"; then
+            echo "host exports the C ABI — plugins can resolve against it."
+          else
+            echo "::error::$exe exports no souxmar_registry_add_mesher."
+            echo "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS is not taking effect, so the"
+            echo "plugin shim's GetProcAddress lookups will all return NULL."
+            echo "--- what it does export (first 40) ---"
+            dumpbin //exports "$exe" | head -40
+            exit 1
+          fi
+
       - name: Fingerprint pipeline output for the determinism gate
         shell: bash
         run: |
