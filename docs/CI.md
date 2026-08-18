@@ -138,6 +138,25 @@ out of the change that introduced the scanner, because holding CI hostage to an 
 dependency bump and quietly raising `--audit-level` to hide the finding are both worse than saying
 plainly that the gate reports and does not yet block. It should go blocking the moment vite moves.
 
+## Windows builds but does not link the example plugins
+
+`Engine (windows)` runs and reports; it does not block. The cause is stated in
+`cmake/SouxmarPlugin.cmake` itself: host-ABI symbols (`souxmar_mesh_*`, `souxmar_registry_*`, …)
+are deliberately left undefined in a plugin and resolved against the host process at `dlopen`.
+Linux's `ld` allows that by default and macOS opts in with `-undefined dynamic_lookup`, but a
+Windows DLL must resolve every symbol at link time against an import library — which the project
+does not ship. Every in-tree example plugin fails with `LNK2019`, and `SOUXMAR_BUILD_TESTS` pulls
+the examples in, so the whole leg fails.
+
+This is a real portability gap in the plugin ABI, not a CI configuration problem, and closing it is
+a design decision: export the host ABI from a shared `souxmar-core.dll` and link plugins against
+its import library, or pass a function table into `souxmar_plugin_register_v1` so plugins never
+reference host symbols directly. The second is the more portable shape and would remove the
+`-undefined dynamic_lookup` opt-in on macOS too.
+
+Until then the leg stays visible rather than deleted, because a Windows job that nobody can see
+fail is how a platform quietly stops being supported.
+
 ## Gaps
 
 Named here rather than left for someone to discover:
