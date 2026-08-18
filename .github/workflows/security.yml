@@ -110,9 +110,17 @@ jobs:
           for manifest in $(git ls-files '*/Cargo.toml' | grep -v '/target/'); do
             dir="$(dirname "$manifest")"
             echo "::group::$dir"
+            # Vulnerabilities and yanked crates fail. `unmaintained` and
+            # `unsound` are reported but do not, because every one of them
+            # today is in the Tauri -> GTK3 chain (gtk, gdk, glib, atk and
+            # friends, which gtk-rs deprecated in favour of GTK4) and none
+            # is reachable from code this project controls. --deny warnings
+            # would make the job permanently red over someone else's
+            # ecosystem migration, and a gate that is always red is a gate
+            # nobody reads. See docs/CI.md for the current list.
             ( cd "$dir" \
               && cargo generate-lockfile --quiet \
-              && cargo audit --deny warnings ) || status=1
+              && cargo audit --deny yanked ) || status=1
             echo "::endgroup::"
           done
           exit $status

@@ -165,6 +165,23 @@ reference host symbols directly. The second is the more portable shape and would
 Until then the leg stays visible rather than deleted, because a Windows job that nobody can see
 fail is how a platform quietly stops being supported.
 
+## Rust advisories that are reported, not enforced
+
+`cargo audit` fails the build on **vulnerabilities** and **yanked** crates. It reports
+`unmaintained` and `unsound` without failing, because every advisory in that category today comes
+from one place — the GTK3 stack Tauri depends on for the Linux desktop shell, which gtk-rs
+deprecated in favour of GTK4:
+
+    atk  atk-sys  gdk  gdk-sys  gdkwayland-sys  gdkx11  gdkx11-sys
+    glib  gtk  gtk-sys  gtk3-macros  proc-macro-error  unic-*
+
+17 advisories, zero of them vulnerabilities, and none reachable from code this project controls.
+`--deny warnings` would make the job permanently red over an upstream ecosystem migration, and a
+job that is always red is one nobody reads — which costs more than the advisories do.
+
+It clears when Tauri's Linux backend moves to GTK4. Until then a real vulnerability still fails the
+build, which is the property worth protecting.
+
 ## Gaps
 
 Named here rather than left for someone to discover:
