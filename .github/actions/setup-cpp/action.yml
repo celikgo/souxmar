@@ -93,22 +93,31 @@ runs:
         fi
         echo "VCPKG_ROOT=$GITHUB_WORKSPACE/.vcpkg" >> "$GITHUB_ENV"
 
-    - name: Enable the GitHub Actions binary cache
-      uses: actions/github-script@v9
-      with:
-        script: |
-          core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-          core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-
     - name: Configure vcpkg environment
       shell: bash
       run: |
-        # Binary caching turns a 20-minute cold port build into seconds.
-        echo "VCPKG_BINARY_SOURCES=clear;x-gha,readwrite" >> "$GITHUB_ENV"
+        # A plain directory cache rather than vcpkg's `x-gha` provider.
+        # x-gha speaks the Actions Cache v1 API, which the vcpkg pinned by
+        # vcpkg.json predates the retirement of — so it is a moving target
+        # tied to the baseline commit. A directory plus actions/cache
+        # behaves the same on every vcpkg version and every runner OS.
+        cache_dir="$GITHUB_WORKSPACE/.vcpkg-cache"
+        mkdir -p "$cache_dir"
+        echo "VCPKG_DEFAULT_BINARY_CACHE=$cache_dir" >> "$GITHUB_ENV"
+        echo "VCPKG_BINARY_SOURCES=clear;files,$cache_dir,readwrite" >> "$GITHUB_ENV"
         echo "VCPKG_DISABLE_METRICS=1" >> "$GITHUB_ENV"
         if [ -n "${{ inputs.vcpkg-features }}" ]; then
           echo "VCPKG_MANIFEST_FEATURES=${{ inputs.vcpkg-features }}" >> "$GITHUB_ENV"
         fi
+
+    - name: Restore the vcpkg binary cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}/.vcpkg-cache
+        # Ports only change when the manifest or the baseline changes.
+        key: vcpkg-${{ runner.os }}-${{ inputs.preset }}-${{ hashFiles('vcpkg.json') }}
+        restore-keys: |
+          vcpkg-${{ runner.os }}-${{ inputs.preset }}-
 
     - name: Set up MSVC environment
       if: runner.os == 'Windows'

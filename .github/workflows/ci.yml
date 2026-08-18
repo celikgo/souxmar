@@ -268,6 +268,24 @@ jobs:
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}
 
+      - name: Surface the vcpkg log when configure fails
+        # Without this, a failed `vcpkg install` reports only "see logs
+        # for more information" and points at a path inside a runner that
+        # no longer exists — which makes the one failure most likely to
+        # happen on a cold cache the one that cannot be diagnosed.
+        if: failure()
+        shell: bash
+        run: |
+          for f in build/${{ matrix.preset }}/vcpkg-manifest-install.log \
+                   build/${{ matrix.preset }}/vcpkg_installed/vcpkg/issue_body.md; do
+            [ -f "$f" ] || continue
+            echo "::group::$f"; cat "$f"; echo "::endgroup::"
+          done
+          find build/${{ matrix.preset }} -name '*.log' -path '*buildtrees*' 2>/dev/null \
+            | head -20 | while read -r log; do
+                echo "::group::$log"; tail -60 "$log"; echo "::endgroup::"
+              done
+
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
 
