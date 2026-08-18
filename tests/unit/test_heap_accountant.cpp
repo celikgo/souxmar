@@ -104,11 +104,13 @@ class ForceArenaAllocation {
     // then measures whatever the default policy gives and reports it.
     ok_ = mallopt(M_MMAP_MAX, 0) == 1;
   }
+
   ~ForceArenaAllocation() {
     if (ok_) {
       mallopt(M_MMAP_MAX, kDefaultMmapMax);
     }
   }
+
   ForceArenaAllocation(const ForceArenaAllocation&) = delete;
   ForceArenaAllocation& operator=(const ForceArenaAllocation&) = delete;
 

@@ -42,8 +42,12 @@ const pipeline::Value* find(const pipeline::Value& v, const char* key) {
 
 std::string lower(std::string_view s) {
   std::string out(s);
-  std::transform(
-      out.begin(), out.end(), out.begin(), [](unsigned char c) { return std::tolower(c); });
+  // static_cast because std::tolower returns int, and assigning that
+  // back into a char is a narrowing conversion MSVC rejects under /W4
+  // /WX (C4242). src/plugin-host/index.cpp already does it this way.
+  std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
   return out;
 }
 

@@ -64,7 +64,13 @@ runs:
     - name: Install macOS toolchain
       if: runner.os == 'macOS'
       shell: bash
-      run: brew install ninja pkg-config autoconf automake libtool
+      run: |
+        # autoconf-archive is not optional: libsodium's port checks for
+        # autoconf, autoconf-archive, automake and libtoolize by name and
+        # refuses to build without all four. It was in the apt list and
+        # missing here, which is exactly why Linux went green and macOS
+        # did not.
+        brew install ninja pkg-config autoconf autoconf-archive automake libtool
 
     - name: Install Windows toolchain
       if: runner.os == 'Windows'
