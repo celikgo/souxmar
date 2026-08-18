@@ -64,11 +64,33 @@ endif()
 # returned NULL for every lookup, and plugins loaded and registered no
 # capabilities at all.
 #
-# WINDOWS_EXPORT_ALL_SYMBOLS generates that .def from the object files, for
-# a shared library "or executable with ENABLE_EXPORTS". It is the MSVC
-# spelling of -rdynamic, and marking the C ABI dllexport by hand is not an
-# option: those declarations live in include/souxmar-c/**, which is frozen.
+# WINDOWS_EXPORT_ALL_SYMBOLS documents itself as applying to "a shared
+# library or executable with ENABLE_EXPORTS", which is what these are — but
+# it produced no exports here: every host executable shipped with an empty
+# export table, and CI proved it by dumping them. Left on because it costs
+# nothing and is correct for the shared libraries.
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
+# The mechanism that actually works, and the one worth relying on: name the
+# symbols. /EXPORT: is explicit, needs no property to be honoured, and
+# exports exactly the ABI rather than every global symbol that happens to
+# be in the binary. Marking the declarations __declspec(dllexport) is not
+# available — they live in include/souxmar-c/**, which is frozen.
+#
+# The list is generated from those same headers by
+# scripts/gen-windows-plugin-shim.py, alongside the plugin-side shim, so the
+# two halves of the handshake cannot drift. Applied through the global
+# executable link flags rather than per target, for the same reason
+# ENABLE_EXPORTS is set here: a new tool or test binary is a plugin host the
+# moment someone writes it, and must not have to remember.
+if(MSVC)
+  include("${CMAKE_CURRENT_LIST_DIR}/../src/plugin-shim/host_exports.cmake")
+  foreach(sym IN LISTS SOUXMAR_HOST_ABI_SYMBOLS)
+    string(APPEND CMAKE_EXE_LINKER_FLAGS " /EXPORT:${sym}")
+  endforeach()
+  list(LENGTH SOUXMAR_HOST_ABI_SYMBOLS _souxmar_abi_count)
+  message(STATUS "souxmar: exporting ${_souxmar_abi_count} C ABI symbols from every executable")
+endif()
 
 # Generator-expression predicate: "the consuming target produces a loadable
 # image" — i.e. an executable, a shared library or a module, as opposed to a
