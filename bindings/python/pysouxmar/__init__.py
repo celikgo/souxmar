@@ -26,7 +26,38 @@ The C++-side ABI is independent of the Python package version. Check
 
 from __future__ import annotations
 
-from . import _pysouxmar as _ext
+import sys
+
+# Load the extension with RTLD_GLOBAL on POSIX.
+#
+# souxmar plugins are built expecting the *host process* to supply the C
+# ABI symbols (souxmar_field_data_const, souxmar_mesh_new, ...) — see
+# cmake/SouxmarPlugin.cmake, which leaves them undefined on purpose and
+# resolves them at dlopen. When the host is the souxmar CLI those symbols
+# are in the executable and everything works. When the host is Python,
+# they live inside _pysouxmar.so, which CPython loads with RTLD_LOCAL by
+# default — so they are absent from the global symbol table and the very
+# next dlopen of a plugin fails with:
+#
+#     undefined symbol: souxmar_field_data_const
+#
+# Promoting this one module to RTLD_GLOBAL puts the host ABI where the
+# plugins expect to find it. The flags are restored immediately after, so
+# nothing else the interpreter imports is affected.
+#
+# macOS resolves this differently and worked without the flag, which is
+# why the failure only ever appeared on Linux.
+if hasattr(sys, "setdlopenflags"):
+    import os
+
+    _prev_flags = sys.getdlopenflags()
+    sys.setdlopenflags(_prev_flags | os.RTLD_GLOBAL | os.RTLD_NOW)
+    try:
+        from . import _pysouxmar as _ext
+    finally:
+        sys.setdlopenflags(_prev_flags)
+else:  # Windows: no dlopen flags; the loader has its own rules.
+    from . import _pysouxmar as _ext
 
 # Re-export the C++-side names so users can `from pysouxmar import X`.
 version       = _ext.version
