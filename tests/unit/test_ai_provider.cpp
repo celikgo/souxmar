@@ -380,7 +380,12 @@ TEST(OpenAICompatibleCurlConfig, KeepsCredentialOffTheCommandLine) {
   EXPECT_NE(cfg.find("max-time = 30"), std::string::npos);
   // The JSON body must be escaped for curl's config grammar: every
   // embedded quote backslash-escaped, so curl reconstructs it exactly.
-  EXPECT_NE(cfg.find(R"(data-binary = "{\"model\":\"m\"}")"), std::string::npos);
+  // Hoisted out of the EXPECT_NE: MSVC's legacy preprocessor mis-tokenises a
+  // raw string literal passed as a macro argument, and gtest's assertions are
+  // macros. The alternative is /Zc:preprocessor across the whole project,
+  // which is a bigger change than this test needs.
+  constexpr const char* kEscapedBody = R"(data-binary = "{\"model\":\"m\"}")";
+  EXPECT_NE(cfg.find(kEscapedBody), std::string::npos);
 }
 
 TEST(OpenAICompatibleCurlConfig, EscapesBackslashesAndNewlines) {
@@ -391,7 +396,8 @@ TEST(OpenAICompatibleCurlConfig, EscapesBackslashesAndNewlines) {
       std::chrono::seconds(5));
   // A literal backslash in the JSON must reach curl as a literal
   // backslash, so it is doubled in the config.
-  EXPECT_NE(cfg.find(R"(\\\\)"), std::string::npos);
+  constexpr const char* kEscapedBackslashes = R"(\\\\)";  // same reason as above
+  EXPECT_NE(cfg.find(kEscapedBackslashes), std::string::npos);
   // No key configured → no Authorization header at all, rather than an
   // empty bearer that reads as a malformed credential upstream.
   EXPECT_EQ(cfg.find("Authorization"), std::string::npos);
