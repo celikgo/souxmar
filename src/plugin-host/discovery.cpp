@@ -130,11 +130,34 @@ std::optional<fs::path> resolve_plugin_binary(const fs::path& dir, std::string_v
     return std::nullopt;
   }
 
+  // The `lib` prefix is as platform-dependent as the extension, and for the
+  // same reason: a manifest names the ELF artefact, `libfoo.so`, but CMake
+  // emits `libfoo.dylib` on macOS and `foo.dll` on Windows — Windows carries
+  // no prefix at all. Retrying only the extension therefore resolved on
+  // macOS and failed on Windows, where every plugin was rejected with
+  // `binary_not_found` for a file sitting right next to the manifest.
+  //
+  // So each extension is tried against a small, fixed list of stems: the
+  // declared one, the same with a leading `lib` removed, and the same with
+  // one added. Fixed order, not filesystem iteration — a directory holding
+  // both `foo.dll` and `libfoo.dll` must resolve identically on every run,
+  // or the determinism gate cannot mean anything.
+  std::array<std::string, 3> stems{
+      std::string(stem),
+      stem.substr(0, 3) == "lib" ? std::string(stem.substr(3)) : std::string(stem),
+      "lib" + std::string(stem),
+  };
+
   for (const auto ext : kBinaryExtensions) {
-    auto candidate = dir / fs::path(std::string(stem) + std::string(ext));
-    ec.clear();
-    if (fs::exists(candidate, ec)) {
-      return candidate;
+    for (const auto& candidate_stem : stems) {
+      if (candidate_stem.empty()) {
+        continue;
+      }
+      auto candidate = dir / fs::path(candidate_stem + std::string(ext));
+      ec.clear();
+      if (fs::exists(candidate, ec)) {
+        return candidate;
+      }
     }
   }
   return std::nullopt;

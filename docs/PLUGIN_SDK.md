@@ -84,7 +84,7 @@ souxmar = ">=1.0,<2.0"
 Discovery therefore resolves `file` in two steps:
 
 1. **The declared name wins whenever it exists on disk.** A plugin that genuinely ships `libfoo.dylib` and says so is loaded from exactly that file, and a directory holding several artefacts side by side yields the one the manifest asked for.
-2. **Otherwise the same stem is retried with each canonical shared-library extension** — `.so`, `.dylib`, `.dll` — with the host platform's own extension tried first. So a manifest declaring `libfoo.so` loads `libfoo.dylib` on macOS and `libfoo.dll` on Windows without any per-platform manifest.
+2. **Otherwise the stem is retried with each canonical shared-library extension** — `.so`, `.dylib`, `.dll` — host platform first, and against three stems: the declared one, the same without a leading `lib`, and the same with one added. The prefix is as platform-dependent as the extension: CMake emits `libfoo.dylib` on macOS but `foo.dll` on Windows, with no prefix at all. So a manifest declaring `libfoo.so` loads `libfoo.dylib` on macOS and `foo.dll` on Windows, with no per-platform manifest.
 
 The extension order is fixed at compile time rather than derived from directory iteration, so a directory containing two artefacts with the same stem resolves identically on every machine and every run. If none of the three candidates exists, discovery reports the unchanged `binary_not_found` rejection naming the *declared* path. A declared name that exists but carries an extension outside those three is still rejected as `binary_unrecognised_extension`.
 
