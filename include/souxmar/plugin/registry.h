@@ -140,6 +140,9 @@ class Registry {
   [[nodiscard]] std::size_t size() const noexcept;
 
   [[nodiscard]] std::vector<std::string> list_capabilities() const;
+  // Capabilities whose id starts with `ns` followed by a dot, sorted.
+  // A trailing dot on `ns` is accepted and ignored, so "mesher.tetra" and
+  // "mesher.tetra." return the same thing.
   [[nodiscard]] std::vector<std::string> list_capabilities_in_namespace(std::string_view ns) const;
 
   [[nodiscard]] const CapabilityEntry* find(std::string_view capability_id) const;

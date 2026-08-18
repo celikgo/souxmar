@@ -535,7 +535,7 @@ jobs:
           # produces a cancelled job and no information at all.
           PYTHONPATH="$PWD/build/dev-python/bindings/python:$PYTHONPATH" \
             timeout --signal=ABRT 600 \
-            python -X faulthandler -m pytest bindings/python/tests -v -x
+            python -X faulthandler -m pytest bindings/python/tests -v
 
   rust:
     name: Rust services and bridge
