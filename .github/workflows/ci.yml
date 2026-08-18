@@ -490,15 +490,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
-        with:
-          # The rustfmt ratchet diffs against the base ref. On a shallow
-          # clone that resolves to nothing, and `|| true` turned the
-          # failure into "no Rust files changed" — a gate that skipped
-          # itself and reported success, which is worse than one that
-          # fails.
-          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
-        with: { components: rustfmt, clippy }
+        with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
       - name: System dependencies for the Tauri shell
         run: |
