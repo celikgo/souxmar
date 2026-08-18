@@ -1,0 +1,216 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+"""Generate the Windows plugin shim from the frozen C ABI headers.
+
+A souxmar plugin leaves the host ABI symbols undefined and lets the loader
+resolve them against the process that dlopen()s it. ELF permits that
+outright, Mach-O opts in with `-undefined dynamic_lookup`, and Windows
+permits it not at all: every symbol in a DLL must be bound at link time to
+a named module.
+
+Binding plugins to one host's import library is not an option — souxmar has
+several hosts (the CLI, the test runners, the conformance tool, the desktop
+bridge) and a plugin must load into any of them. So on Windows each ABI
+function gets a thunk that resolves itself on first call via
+GetProcAddress(GetModuleHandle(NULL), ...). GetModuleHandle(NULL) is the
+running executable, which is precisely the "resolve against the host
+process" rule the other two platforms give for free, and
+CMAKE_EXECUTABLE_ENABLE_EXPORTS (cmake/SouxmarOptions.cmake) already makes
+every host export those symbols.
+
+The output is committed rather than generated during the build, so the
+thunks are reviewable and a header change that this script cannot parse
+fails a CI check instead of silently emitting a shim with a hole in it.
+
+Usage:
+    scripts/gen-windows-plugin-shim.py --out src/plugin-shim/shim_win32.c
+    scripts/gen-windows-plugin-shim.py --out <path> --check-only
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+ABI_DIR = REPO_ROOT / "include" / "souxmar-c"
+
+# Implemented by the *plugin*, not the host: shimming them would have a
+# plugin call into itself through the host.
+PLUGIN_PROVIDED = {"souxmar_plugin_register_v1"}
+
+# One declaration: return type, name, parameter list. Declarations span
+# lines, so the header is flattened before matching.
+DECL = re.compile(
+    r"(?P<ret>(?:const\s+)?[A-Za-z_][A-Za-z0-9_]*\s*\**)\s+"
+    r"(?P<name>souxmar_[a-z0-9_]+)\s*\((?P<args>[^;{]*)\)\s*;",
+    re.S,
+)
+
+
+def strip_noise(text: str) -> str:
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)   # block comments
+    text = re.sub(r"//[^\n]*", " ", text)                # line comments
+    text = re.sub(r"^\s*#.*$", " ", text, flags=re.M)    # preprocessor
+    return text
+
+
+def split_params(args: str) -> list[tuple[str, str]]:
+    """Return [(declaration, argument-name)] for a parameter list."""
+    args = args.strip()
+    if args in ("", "void"):
+        return []
+    out, depth, cur = [], 0, ""
+    for ch in args:
+        if ch == "," and depth == 0:
+            out.append(cur)
+            cur = ""
+            continue
+        depth += (ch == "(") - (ch == ")")
+        cur += ch
+    out.append(cur)
+
+    params = []
+    for i, raw in enumerate(out):
+        p = " ".join(raw.split())
+        # An array parameter carries its name before the brackets
+        # ("double out_min[3]"), so match those separately rather than
+        # anchoring at end-of-string.
+        m = re.search(r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:\[[^\]]*\])*\s*$", p)
+        # An unnamed parameter (`int`, `const char*`) needs a name to forward.
+        if not m or m.group(1) in {
+            "const", "unsigned", "signed", "int", "char", "void",
+            "float", "double", "size_t", "long", "short",
+        }:
+            name = f"a{i}"
+            arr = re.search(r"((?:\[[^\]]*\])+)\s*$", p)
+            if arr:
+                p = f"{p[:arr.start()].rstrip()} {name}{arr.group(1)}"
+            else:
+                p = f"{p} {name}"
+        else:
+            name = m.group(1)
+        params.append((p, name))
+    return params
+
+
+def collect() -> list[tuple[str, str, list[tuple[str, str]]]]:
+    fns: dict[str, tuple[str, str, list[tuple[str, str]]]] = {}
+    for header in sorted(ABI_DIR.glob("*.h")):
+        text = strip_noise(header.read_text())
+        # Statement at a time. Matching the whole file lets a function-pointer
+        # typedef — `typedef souxmar_status_t (*souxmar_mesher_mesh_fn)(...)`
+        # — look exactly like a declaration of a function called
+        # souxmar_mesher_mesh_fn, and the shim then defines a symbol the ABI
+        # never had.
+        for stmt in text.split(";"):
+            stmt = stmt.strip()
+            if not stmt or stmt.startswith("typedef") or "(*" in stmt:
+                continue
+            m = DECL.fullmatch(stmt + ";")
+            if not m:
+                continue
+            name = m.group("name")
+            if name in PLUGIN_PROVIDED or name in fns:
+                continue
+            ret = " ".join(m.group("ret").split())
+            fns[name] = (ret, name, split_params(m.group("args")))
+    return [fns[k] for k in sorted(fns)]
+
+
+def render(fns) -> str:
+    L: list[str] = []
+    a = L.append
+    a("/* SPDX-License-Identifier: Apache-2.0")
+    a(" *")
+    a(" * GENERATED by scripts/gen-windows-plugin-shim.py — do not edit.")
+    a(" * Regenerate after any change to include/souxmar-c/**; CI checks it.")
+    a(" *")
+    a(" * Windows-only. Every souxmar host ABI function gets a thunk that")
+    a(" * resolves itself on first call against the running executable, which")
+    a(" * is what ELF and Mach-O do for a dlopen()ed plugin automatically and")
+    a(" * what a Windows DLL cannot express in its import table.")
+    a(" *")
+    a(" * A plugin links this statically. It is not part of the ABI: the symbol")
+    a(" * names, signatures and semantics are exactly those of souxmar-c/**.")
+    a(" */")
+    a("")
+    a("#if defined(_WIN32)")
+    a("")
+    a("#include <windows.h>")
+    a("#include <stddef.h>")
+    a("#include <string.h>")  # memset, for the unresolved-symbol path
+    a("")
+    for h in sorted(p.name for p in ABI_DIR.glob("*.h")):
+        a(f'#include "souxmar-c/{h}"')
+    a("")
+    a("/* Resolve against the executable that loaded this plugin. Hosts are")
+    a(" * built with CMAKE_EXECUTABLE_ENABLE_EXPORTS, so the symbols are in")
+    a(" * the EXE's export table. A miss means the loader is not a souxmar")
+    a(" * host, which is a caller error, not something a plugin can recover")
+    a(" * from — the thunk returns a zeroed value rather than jumping to")
+    a(" * NULL, so the failure is a diagnosable bad result and not a crash")
+    a(" * inside the plugin. */")
+    a("static FARPROC souxmar_shim_lookup(const char* name) {")
+    a("  static HMODULE host = NULL;")
+    a("  if (host == NULL) {")
+    a("    host = GetModuleHandleW(NULL);")
+    a("  }")
+    a("  return host ? GetProcAddress(host, name) : NULL;")
+    a("}")
+    a("")
+    for ret, name, params in fns:
+        sig = ", ".join(p for p, _ in params) or "void"
+        argn = ", ".join(n for _, n in params)
+        ptr_args = ", ".join(p for p, _ in params) or "void"
+        a(f"{ret} {name}({sig}) {{")
+        a(f"  typedef {ret} (*fn_t)({ptr_args});")
+        a("  static fn_t fn = NULL;")
+        a("  if (fn == NULL) {")
+        a(f'    fn = (fn_t)(void*)souxmar_shim_lookup("{name}");')
+        a("  }")
+        if ret.replace(" ", "") == "void":
+            a(f"  if (fn) fn({argn});")
+        else:
+            a(f"  if (!fn) {{ {ret} zero; memset(&zero, 0, sizeof zero); return zero; }}")
+            a(f"  return fn({argn});")
+        a("}")
+        a("")
+    a("#endif /* _WIN32 */")
+    return "\n".join(L) + "\n"
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--out", required=True, type=Path)
+    ap.add_argument("--check-only", action="store_true")
+    args = ap.parse_args(argv)
+
+    fns = collect()
+    if len(fns) < 100:
+        print(f"gen-shim: only parsed {len(fns)} functions — the header style "
+              f"probably changed and the regex no longer matches. Refusing to "
+              f"emit a shim with holes in it.", file=sys.stderr)
+        return 2
+
+    text = render(fns)
+    if args.check_only:
+        if not args.out.exists() or args.out.read_text() != text:
+            print(f"gen-shim: {args.out} is out of date "
+                  f"({len(fns)} ABI functions). Regenerate with:\n"
+                  f"  scripts/gen-windows-plugin-shim.py --out {args.out}",
+                  file=sys.stderr)
+            return 1
+        print(f"gen-shim: {args.out} is current ({len(fns)} ABI functions).")
+        return 0
+
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(text)
+    print(f"gen-shim: wrote {args.out} ({len(fns)} ABI functions)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

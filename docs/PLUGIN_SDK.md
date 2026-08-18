@@ -219,6 +219,19 @@ souxmar_add_plugin(my_mesher
 
 The `souxmar_add_plugin` macro produces a shared library, copies the manifest next to it, and adds an `install` rule that places both in the per-user plugins directory. That is the entire build.
 
+Use it rather than a bare `add_library(... SHARED)`, because it also settles how your plugin's
+references to the host ABI (`souxmar_mesh_new`, `souxmar_registry_add_mesher`, …) get resolved, and
+that differs per platform:
+
+| Platform | How host symbols resolve |
+| --- | --- |
+| Linux | Undefined symbols are permitted in a shared object; the loader binds them to the host process. Nothing to do. |
+| macOS | Same effect, opted into with `-undefined dynamic_lookup`. |
+| Windows | Not expressible in an import table — the plugin links `souxmar::plugin_shim`, whose thunks resolve against the loading executable on first call. |
+
+Left to yourself on Windows you get `LNK2019` on every host ABI symbol you touch, because a DLL
+must bind each one at link time to a named module and the provider is not known until load time.
+
 ## Conformance suite
 
 Sprint 5 ships **conformance suite v1** as a binary plugin authors run against any plugin tree:

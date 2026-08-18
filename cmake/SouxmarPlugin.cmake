@@ -66,13 +66,31 @@ function(souxmar_add_plugin TARGET_NAME)
   # Linux's default `ld` already permits undefined symbols in SHARED
   # objects, so no flag is needed there. macOS's `ld` is strict by
   # default and requires opt-in via `-undefined dynamic_lookup`.
-  # Windows is unsupported by this path (plugins on Windows need an
-  # import library against the host executable, which the project does
-  # not yet ship; out-of-tree Windows plugins should link against
-  # souxmar-core.dll's .lib explicitly).
+  #
+  # Windows permits it not at all — every symbol a DLL references must be
+  # bound at link time to a named module, and there is no module to name:
+  # the provider is whichever host executable ends up loading the plugin,
+  # and souxmar has several. So Windows plugins link a static shim whose
+  # thunks resolve through GetProcAddress(GetModuleHandle(NULL), ...) on
+  # first call, which reproduces the same "resolve against the loading
+  # process" rule the other two platforms apply natively. See
+  # src/plugin-shim/CMakeLists.txt.
+  #
+  # Out-of-tree plugins get this automatically through
+  # souxmar_add_plugin(); a plugin built without it will fail to link on
+  # Windows with LNK2019 on souxmar_mesh_new and friends.
   if(APPLE)
     target_link_options(${TARGET_NAME} PRIVATE
       "LINKER:-undefined,dynamic_lookup")
+  elseif(WIN32)
+    if(TARGET souxmar::plugin_shim)
+      target_link_libraries(${TARGET_NAME} PRIVATE souxmar::plugin_shim)
+    else()
+      message(FATAL_ERROR
+        "souxmar_add_plugin(${TARGET_NAME}): souxmar::plugin_shim is required "
+        "on Windows but was not found. In-tree builds get it from "
+        "src/plugin-shim; out-of-tree builds need find_package(souxmar).")
+    endif()
   endif()
 
   # Keep the manifest beside the built binary so discovery finds them

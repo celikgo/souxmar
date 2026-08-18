@@ -123,6 +123,15 @@ jobs:
       - name: Secret scan
         run: scripts/check-secrets.sh
 
+      - name: Windows plugin shim is current
+        # The shim is generated from include/souxmar-c/** and committed. If a
+        # header gains a function and nobody regenerates, Windows plugins fail
+        # to link on that symbol alone — a failure that shows up only on the
+        # platform least likely to be built locally. Cheap to check here.
+        run: |
+          python3 scripts/gen-windows-plugin-shim.py \
+            --out src/plugin-shim/shim_win32.c --check-only
+
       - name: DCO sign-off
         if: github.event_name == 'pull_request'
         run: |
@@ -261,7 +270,6 @@ jobs:
     if: needs.changes.outputs.engine == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
-    continue-on-error: ${{ matrix.allow-failure == true }}
     strategy:
       fail-fast: false
       matrix:
@@ -269,16 +277,7 @@ jobs:
           - { name: linux-gcc,   os: ubuntu-22.04, preset: ci-linux-gcc }
           - { name: linux-clang, os: ubuntu-22.04, preset: ci-linux-clang }
           - { name: macos,       os: macos-14,     preset: ci-macos }
-          # Reported, not blocking. cmake/SouxmarPlugin.cmake says it
-          # outright: "Windows is unsupported by this path (plugins on
-          # Windows need an import library against the host executable,
-          # which the project does not yet ship)". Every in-tree example
-          # plugin therefore fails to link with LNK2019 on the host-ABI
-          # symbols, and SOUXMAR_BUILD_TESTS pulls the examples in. That
-          # is a real portability gap in the plugin ABI, not something a
-          # workflow can fix, so the leg runs and reports while the gap
-          # is open. See docs/CI.md.
-          - { name: windows,     os: windows-2022, preset: ci-windows, allow-failure: true }
+          - { name: windows,     os: windows-2022, preset: ci-windows }
     steps:
       - uses: actions/checkout@v7
 
