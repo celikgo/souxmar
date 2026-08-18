@@ -31,6 +31,19 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
       -Wlogical-op
       -Wuseless-cast
     )
+    # GCC 13 reports -Wnull-dereference inside <streambuf> once
+    # optimisation is on, in code the project never wrote — any
+    # translation unit that includes <sstream> and is built at -O2 trips
+    # it. The diagnostic stays visible, but it must not be promoted to an
+    # error: the alternative is that the whole RelWithDebInfo build fails
+    # on a libstdc++ false positive, which is how -Werror gets deleted
+    # wholesale instead of narrowed.
+    #
+    # Debug builds are unaffected and keep the hard error, so a real null
+    # dereference in souxmar's own code still stops the local build.
+    target_compile_options(souxmar_warnings INTERFACE
+      $<$<NOT:$<CONFIG:Debug>>:-Wno-error=null-dereference>
+    )
   endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   target_compile_options(souxmar_warnings INTERFACE

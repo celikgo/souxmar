@@ -101,14 +101,25 @@ The artifact names in those jobs are load-bearing — that runbook tells a maint
 
 ## Format is a ratchet, not a sweep
 
-`clang-format` and `rustfmt` are checked **only on the files a PR changes**. 54 of 251 C++ files and
-seven of eight Rust crates predate any formatting enforcement. Reformatting them wholesale in the
-change that introduces CI would bury the workflow review under a five-figure diff and conflict with
-everything in flight, so instead new and touched code is held to the standard and the rest converts
-as it is edited.
+`clang-format` is checked **only on the lines a PR changes**, via `clang-format-diff`. 54 of 251
+C++ files predate `.clang-format`; a whole-file check would mean that touching one line of a legacy
+file forces reformatting all of it, which turns every small fix into an unreviewable diff.
 
 The `format-debt` job reports the remaining count on every run, so the ratchet has a visible finish
 line rather than quietly never completing.
+
+**There is no `rustfmt` gate.** Seven of the eight Rust crates fail `cargo fmt --check`, and the
+reason is that the codebase aligns struct fields deliberately:
+
+```rust
+pub error:      Option<ChatErrorSummary>,
+pub tokens_in:  i64,
+```
+
+rustfmt has no option that expresses that, so enforcing it — even as a ratchet — would mean
+reformatting the Rust tree against a style its authors chose on purpose. Adopting rustfmt is a
+project decision, not something a CI change should impose. `clippy -D warnings` and `cargo test`
+are blocking, and those are the gates that catch defects rather than taste.
 
 ## Outstanding advisories
 

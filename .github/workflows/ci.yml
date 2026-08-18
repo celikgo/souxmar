@@ -519,22 +519,6 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run build
-      - name: rustfmt (changed files only)
-        run: |
-          # Same ratchet as clang-format: seven of the eight crates
-          # predate any fmt enforcement, and reformatting them all in the
-          # PR that introduces CI would bury the review. New and touched
-          # code is held to rustfmt; the rest converts as it is touched.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            base="origin/${{ github.base_ref }}"
-          else
-            base="HEAD~1"
-          fi
-          files="$(git diff --name-only --diff-filter=ACMR "$base"...HEAD -- '*.rs' || true)"
-          if [ -z "$files" ]; then echo "no Rust files changed"; exit 0; fi
-          echo "$files"
-          printf '%s\n' "$files" | xargs rustfmt --check --edition 2021
-
       - name: Clippy and tests, every crate
         run: |
           # Each service is its own workspace; iterate rather than
