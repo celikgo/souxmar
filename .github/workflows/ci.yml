@@ -508,6 +508,14 @@ jobs:
           vcpkg-features: tests;python
       - name: Configure and build
         shell: bash
+        env:
+          # dev-python is a local development preset and names no
+          # compiler, so CI was building it with whatever the image
+          # defaults to. Pinning it to the same gcc-13 the engine legs use
+          # is what stops this job from being the only one that disagrees
+          # about warnings.
+          CC: gcc-13
+          CXX: g++-13
         run: |
           # Same retry as the engine job: vcpkg pulls source tarballs from
           # mirrors nobody here controls.
