@@ -528,8 +528,14 @@ jobs:
       - name: pytest
         run: |
           python -m pip install --upgrade pip pytest
+          # Bounded, and aborted with SIGABRT rather than SIGTERM: with
+          # faulthandler enabled that makes Python dump every thread's
+          # stack on the way out, so a hang names the line it hung on.
+          # Letting the job's own 45-minute timeout catch it instead
+          # produces a cancelled job and no information at all.
           PYTHONPATH="$PWD/build/dev-python/bindings/python:$PYTHONPATH" \
-            python -m pytest bindings/python/tests -v
+            timeout --signal=ABRT 600 \
+            python -X faulthandler -m pytest bindings/python/tests -v -x
 
   rust:
     name: Rust services and bridge
