@@ -337,18 +337,30 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          exe="build/${{ matrix.preset }}/src/cli/souxmar.exe"
-          [ -f "$exe" ] || { echo "::error::$exe not built"; exit 1; }
-          if dumpbin //exports "$exe" | grep -q "souxmar_registry_add_mesher"; then
-            echo "host exports the C ABI — plugins can resolve against it."
-          else
-            echo "::error::$exe exports no souxmar_registry_add_mesher."
-            echo "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS is not taking effect, so the"
-            echo "plugin shim's GetProcAddress lookups will all return NULL."
-            echo "--- what it does export (first 40) ---"
-            dumpbin //exports "$exe" | head -40
-            exit 1
+          # Every executable that can load a plugin, not just the CLI: the
+          # test runners are hosts too, and they are where the plugin
+          # integration tests actually run.
+          status=0
+          found=0
+          while IFS= read -r exe; do
+            found=1
+            if dumpbin //exports "$exe" | grep -q "souxmar_registry_add_mesher"; then
+              echo "  OK   $exe"
+            else
+              echo "::error::$exe exports no souxmar_registry_add_mesher"
+              status=1
+            fi
+          done < <(find "build/${{ matrix.preset }}" -name '*.exe' \
+                     -not -path '*/vcpkg_installed/*' -not -path '*/CMakeFiles/*')
+          if [ "$found" = "0" ]; then
+            echo "::error::no host executables found to check"; exit 1
           fi
+          if [ "$status" != "0" ]; then
+            echo "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS is not reaching those targets, so"
+            echo "the plugin shim's GetProcAddress lookups return NULL there and every"
+            echo "plugin loads without registering anything."
+          fi
+          exit $status
 
       - name: Fingerprint pipeline output for the determinism gate
         shell: bash
