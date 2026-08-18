@@ -17,6 +17,8 @@ import {
 interface Props {
   projectId:      string;
   onRun?:         () => void;
+  /** True while a pipeline run is in flight. */
+  running?:       boolean;
   onNewProject:   () => void;
   onOpenProject:  () => void;
   onImportModel:  () => void;
@@ -25,6 +27,7 @@ interface Props {
 export function TitleBar({
   projectId,
   onRun,
+  running = false,
   onNewProject,
   onOpenProject,
   onImportModel,
@@ -82,12 +85,21 @@ export function TitleBar({
 
         <button
           type="button"
-          style={runButtonStyle}
-          title="Run pipeline"
+          style={{
+            ...runButtonStyle,
+            opacity: running || !projectId ? 0.55 : 1,
+            cursor:  running || !projectId ? "default" : "pointer",
+          }}
+          title={
+            !projectId  ? "Open a project to run its pipeline"
+            : running   ? "Pipeline running…"
+                        : "Run pipeline"
+          }
+          disabled={running || !projectId}
           onClick={onRun}
         >
           <IconRun />
-          <span style={{ fontWeight: 500 }}>Run</span>
+          <span style={{ fontWeight: 500 }}>{running ? "Running…" : "Run"}</span>
         </button>
         <button type="button" style={iconButtonStyle} title="Settings">
           <IconSettings />

@@ -2,21 +2,29 @@
 //
 // Bottom dock panel with tab strip. Today the panel hosts three tabs:
 //
-//   - Terminal:  a read-only log of pipeline runs + plugin output.
-//                A future push wires this to a real PTY via a new
-//                Tauri command. For now it tails an in-memory log
-//                buffer; the `Run` button in the title bar pushes a
-//                synthetic line so the placeholder UI is alive.
+//   - Terminal:  a read-only transcript of pipeline runs + plugin
+//                output. The `Run` button in the title bar dispatches
+//                the project's pipeline through the souxmar CLI
+//                (commands::run_pipeline) and every line below comes
+//                from that child process. Output arrives when the run
+//                finishes; incremental streaming needs a Tauri event
+//                channel and is not wired yet.
 //   - Inspector: re-uses the existing pipeline / state inspector
 //                that used to live in the bottom-left corner.
-//   - Problems:  pipeline / solver / agent warnings + errors. Empty
-//                until the FFI bridge surfaces them.
+//   - Problems:  pipeline diagnostics. Derived in diagnostics.ts from
+//                the project's own pipeline.yaml, the discovered
+//                capability ids, and the last run's output. It used to
+//                render a fixed "No problems detected." string with no
+//                check behind it, which read as a clean bill of health
+//                for a project that had never been looked at.
 
 import { useEffect, useRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Inspector } from "./Inspector";
 import { LoadsPanel } from "./LoadsPanel";
+import { ProblemsPanel } from "./ProblemsPanel";
 import type { BridgeFeatureSet, LoadSpec } from "../tauri/bridge";
+import type { StageStatus } from "./diagnostics";
 import { useLayoutStore, type BottomTab } from "../store/layout";
 import { IconClose } from "./icons";
 
@@ -29,6 +37,12 @@ interface Props {
   loads:          LoadSpec[];
   setLoads:       (next: LoadSpec[]) => void;
   onLog:          (line: string) => void;
+  /** Output lines of the most recent run, for diagnostics. */
+  runLines:       string[];
+  /** Per-stage status from the most recent run. */
+  stageStatus:    Record<string, StageStatus>;
+  /** Bumped when the project's files change on disk. */
+  reloadToken:    number;
 }
 
 const TABS: { id: BottomTab; label: string }[] = [
@@ -47,6 +61,9 @@ export function Terminal({
   loads,
   setLoads,
   onLog,
+  runLines,
+  stageStatus,
+  reloadToken,
 }: Props) {
   const { bottomTab, setBottomTab, toggleBottom } = useLayoutStore();
 
@@ -100,10 +117,18 @@ export function Terminal({
               projectId={projectId}
               features={features}
               onOpenProject={onOpenProject}
+              stageStatus={stageStatus}
+              reloadToken={reloadToken}
             />
           </div>
         )}
-        {bottomTab === "problems" && <EmptyState>No problems detected.</EmptyState>}
+        {bottomTab === "problems" && (
+          <ProblemsPanel
+            projectId={projectId}
+            runLines={runLines}
+            reloadToken={reloadToken}
+          />
+        )}
       </div>
     </section>
   );

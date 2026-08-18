@@ -33,9 +33,12 @@ interface Props {
   /** Called when the user clicks a result file's Open button in the
    *  Results panel; Workbench swaps the viewer to that file. */
   onOpenResult?:  (relPath: string) => void;
+  /** Called after a successful save, so panels reading this file off
+   *  disk (Inspector, Problems) can re-read it. */
+  onSaved?:       () => void;
 }
 
-export function YamlViewer({ projectPath, relPath, onOpenResult }: Props) {
+export function YamlViewer({ projectPath, relPath, onOpenResult, onSaved }: Props) {
   const [originalText, setOriginalText] = useState<string | null>(null);
   const [text, setText] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +91,7 @@ export function YamlViewer({ projectPath, relPath, onOpenResult }: Props) {
       });
       setOriginalText(text);
       setSavedAt(Date.now());
+      onSaved?.();
     } catch (e) {
       setSaveError(String(e));
     } finally {

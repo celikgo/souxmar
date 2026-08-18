@@ -4,8 +4,17 @@
 // Sprint 13 push 3 — first real FFI call: when
 // `pipeline_introspection` is on, the panel parses the loaded
 // project's pipeline.yaml through libsouxmar-c-bridge and renders
-// the stage list. When the flag is off, the empty-state copy
-// stays the same as Sprint 11 (honest scaffolding pattern).
+// the stage list.
+//
+// The stage list used to come from a `CANTILEVER_PIPELINE_YAML`
+// constant embedded in this file — on *both* the FFI and the fallback
+// path — so the panel printed the open project's path above a stage
+// list belonging to a different project. It now reads the project's own
+// pipeline.yaml off disk (read_geometry_bytes, the same path-restricted
+// command the YAML editor uses) and hands that to whichever parser is
+// available. Stage status comes from the last run's transcript, and is
+// "not run" when there hasn't been one, rather than a permanent
+// "pending".
 
 import { useEffect, useState } from "react";
 import {
@@ -13,61 +22,29 @@ import {
   type BridgeFeatureSet,
   type PipelineSummary,
 } from "../tauri/bridge";
+import { parseStages, type StageStatus } from "./diagnostics";
 
 interface Props {
   projectId: string;
   features:  BridgeFeatureSet;
   onOpenProject: (id: string) => void;
+  /** Per-stage status from the last run, keyed by stage id. */
+  stageStatus?: Record<string, StageStatus>;
+  /** Bump to re-read pipeline.yaml (after a save or a run). */
+  reloadToken?: number;
 }
 
-// Placeholder loader for the sample's pipeline.yaml. Sprint 14+
-// reads the project file off disk via a Tauri command; for now
-// the cantilever sample's content is small enough to hard-code
-// so the FFI call has something deterministic to parse.
-const CANTILEVER_PIPELINE_YAML = `version: 1
-stages:
-  - id: mesh
-    plugin: mesher.tetra.hello
-    input:
-      target_size: 0.05
-      element_order: 1
-  - id: write
-    plugin: writer.vtu
-    input:
-      mesh: { from: mesh }
-      path: cantilever.vtu
-`;
-
-// Lightweight YAML stage extractor for the inspector fallback path.
-// Only recognises the shape the cantilever sample (and other docs/)
-// examples use — `id:` and `plugin:` keys directly under each list
-// item in the top-level `stages:` array. Good enough to render the
-// stage list when the FFI introspection feature is off; the real
-// parse still happens in libsouxmar-c-bridge.
-function parseStagesFromYaml(yaml: string): { id: string; plugin: string; status: string }[] {
-  const stages: { id: string; plugin: string; status: string }[] = [];
-  let curId: string | null = null;
-  let curPlugin: string | null = null;
-  const flush = () => {
-    if (curId && curPlugin) stages.push({ id: curId, plugin: curPlugin, status: "pending" });
-    curId = null;
-    curPlugin = null;
-  };
-  for (const raw of yaml.split("\n")) {
-    if (/^\s*-\s+id:\s*/.test(raw)) {
-      flush();
-      curId = raw.replace(/^\s*-\s+id:\s*/, "").trim();
-    } else if (/^\s*plugin:\s*/.test(raw)) {
-      curPlugin = raw.replace(/^\s*plugin:\s*/, "").trim();
-    }
-  }
-  flush();
-  return stages;
-}
-
-export function Inspector({ projectId, features, onOpenProject }: Props) {
+export function Inspector({
+  projectId,
+  features,
+  onOpenProject,
+  stageStatus = {},
+  reloadToken = 0,
+}: Props) {
   const [summary, setSummary] = useState<PipelineSummary | null>(null);
   const [summaryErr, setSummaryErr] = useState<string | null>(null);
+  const [yaml, setYaml] = useState<string | null>(null);
+  const [yamlErr, setYamlErr] = useState<string | null>(null);
 
   const openSample = async () => {
     try {
@@ -79,12 +56,42 @@ export function Inspector({ projectId, features, onOpenProject }: Props) {
       // Surfaces clearly in the inspector — better than a silent
       // failure. Sprint 12+ swaps this for a toast-notification
       // pattern shared across panels.
+      // eslint-disable-next-line no-console
       console.error("[inspector] open_sample_project failed", err);
     }
   };
 
+  // Read the open project's pipeline.yaml. Everything the panel renders
+  // below is derived from this text.
   useEffect(() => {
-    if (!projectId || !features.pipeline_introspection) {
+    if (!projectId) {
+      setYaml(null);
+      setYamlErr(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const bytes = await invokeCommand<number[]>("read_geometry_bytes", {
+          projectPath: projectId,
+          relPath:     "pipeline.yaml",
+        });
+        if (cancelled) return;
+        setYaml(new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes)));
+        setYamlErr(null);
+      } catch (err) {
+        if (cancelled) return;
+        setYaml(null);
+        setYamlErr(String(err));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, reloadToken]);
+
+  useEffect(() => {
+    if (!projectId || !features.pipeline_introspection || yaml === null) {
       setSummary(null);
       setSummaryErr(null);
       return;
@@ -94,7 +101,7 @@ export function Inspector({ projectId, features, onOpenProject }: Props) {
       try {
         const r = await invokeCommand<PipelineSummary>("pipeline_summary", {
           projectId,
-          pipelineYaml: CANTILEVER_PIPELINE_YAML,
+          pipelineYaml: yaml,
         });
         if (!cancelled) {
           setSummary(r);
@@ -110,7 +117,7 @@ export function Inspector({ projectId, features, onOpenProject }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [projectId, features.pipeline_introspection]);
+  }, [projectId, features.pipeline_introspection, yaml]);
 
   return (
     <div style={containerStyle}>
@@ -135,35 +142,61 @@ export function Inspector({ projectId, features, onOpenProject }: Props) {
             </p>
           )}
 
-          {(() => {
-            // Render pipeline stages with the FFI summary if it's
-            // available; otherwise fall back to parsing the embedded
-            // cantilever YAML on the React side. The fallback keeps
-            // the inspector useful when the souxmar-bridge FFI isn't
-            // wired in this build (status reads as "pending").
+          {yamlErr ? (
+            <p style={{ marginTop: "var(--space-4)", color: "var(--fg-tertiary)", fontSize: 12 }}>
+              No readable pipeline.yaml in this project — {yamlErr}
+            </p>
+          ) : yaml === null ? (
+            <p style={{ marginTop: "var(--space-4)", color: "var(--fg-tertiary)", fontSize: 12 }}>
+              Reading pipeline.yaml…
+            </p>
+          ) : (() => {
+            // Both paths now parse *this project's* YAML: the FFI summary
+            // when the bridge is wired, the local shape-parser otherwise.
             const stages = features.pipeline_introspection && summary
-              ? summary.stages
-              : parseStagesFromYaml(CANTILEVER_PIPELINE_YAML);
-            const stageCount = stages.length;
+              ? summary.stages.map(s => ({ id: s.id, plugin: s.plugin, status: s.status }))
+              : parseStages(yaml).map(s => ({
+                  id:     s.id,
+                  plugin: s.plugin || "(no plugin)",
+                  // The engine is the only thing that can say a stage ran.
+                  status: stageStatus[s.id] ?? "not run",
+                }));
             return (
               <div style={{ marginTop: "var(--space-4)" }}>
                 <p style={{ margin: 0, fontSize: 12, color: "var(--fg-secondary)" }}>
-                  Pipeline stages ({stageCount})
+                  Pipeline stages ({stages.length})
                   {!features.pipeline_introspection && (
                     <span style={{ marginLeft: "var(--space-2)", color: "var(--fg-tertiary)" }}>
                       — parsed locally; FFI introspection off in this build
                     </span>
                   )}
                 </p>
-                <ul style={stageListStyle}>
-                  {stages.map((s) => (
-                    <li key={s.id} style={stageItemStyle}>
-                      <code style={stageIdStyle}>{s.id}</code>
-                      <span style={stagePluginStyle}>{s.plugin}</span>
-                      <span style={stageStatusStyle}>{s.status}</span>
-                    </li>
-                  ))}
-                </ul>
+                {stages.length === 0 ? (
+                  <p style={{ marginTop: "var(--space-2)", fontSize: 12, color: "var(--fg-tertiary)" }}>
+                    No stages defined in pipeline.yaml.
+                  </p>
+                ) : (
+                  <ul style={stageListStyle}>
+                    {/* Keyed by position, not id: the panel now renders
+                        whatever the user wrote, and a pipeline with two
+                        stages of the same id is exactly the case the
+                        Problems tab flags. */}
+                    {stages.map((s, i) => (
+                      <li key={`${i}-${s.id}`} style={stageItemStyle}>
+                        <code style={stageIdStyle}>{s.id}</code>
+                        <span style={stagePluginStyle}>{s.plugin}</span>
+                        <span style={{
+                          ...stageStatusStyle,
+                          color: s.status === "failed"  ? "var(--danger)"
+                               : s.status === "ok"      ? "var(--success, var(--accent-default))"
+                               : "var(--fg-tertiary)",
+                        }}>
+                          {s.status}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             );
           })()}

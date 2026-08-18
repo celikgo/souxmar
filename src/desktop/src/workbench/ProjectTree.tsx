@@ -17,34 +17,6 @@ interface Node {
   children?: Node[];
 }
 
-function demoTree(projectName: string): Node {
-  const safe = projectName || "untitled";
-  return {
-    id: "root",
-    name: safe,
-    kind: "folder",
-    children: [
-      { id: "pipeline", name: "pipeline.yaml", kind: "file" },
-      { id: "readme", name: "README.md", kind: "file" },
-      {
-        id: "plugins",
-        name: "plugins",
-        kind: "folder",
-        children: [
-          { id: "hello-mesher", name: "hello-mesher/", kind: "folder" },
-          { id: "vtu-writer", name: "vtu-writer/", kind: "folder" },
-        ],
-      },
-      {
-        id: "outputs",
-        name: "outputs",
-        kind: "folder",
-        children: [{ id: "result", name: "cantilever.vtu", kind: "file" }],
-      },
-    ],
-  };
-}
-
 function toNode(entry: FileEntry): Node {
   return {
     id: entry.path,
@@ -59,9 +31,12 @@ interface Props {
   /** Called with the path *relative to the project root* when the user
    *  clicks a file leaf. Workbench uses this to dispatch viewers. */
   onSelectFile?: (relPath: string) => void;
+  /** Bump to force a re-read of the tree — e.g. after a pipeline run
+   *  writes new files into `outputs/`. */
+  reloadToken?:  number;
 }
 
-export function ProjectTree({ projectId, onSelectFile }: Props) {
+export function ProjectTree({ projectId, onSelectFile, reloadToken = 0 }: Props) {
   const [tree, setTree] = useState<Node | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string>("");
@@ -79,18 +54,20 @@ export function ProjectTree({ projectId, onSelectFile }: Props) {
       setTree(toNode(root));
       setError(null);
     } catch (e) {
-      // Fall back to the static demo so the sidebar still shows something
-      // (e.g. when running under `vite preview` without the Tauri runtime).
-      setTree(demoTree(projectId.split("/").pop() || ""));
+      // No fallback tree. This used to render a fabricated five-file
+      // listing (pipeline.yaml, README.md, plugins/, outputs/) that did
+      // not exist on disk and whose rows were inert when clicked — the
+      // sidebar's default state on every launch, since no project is
+      // open until the user picks one. An empty sidebar that says why
+      // is worth more than a populated one that is wrong.
+      setTree(null);
       setError(String(e));
     }
   }, [projectId]);
 
   useEffect(() => {
     void reload();
-  }, [reload]);
-
-  const display = tree ?? demoTree(projectId.split("/").pop() || "");
+  }, [reload, reloadToken]);
 
   return (
     <aside style={panelStyle}>
@@ -106,28 +83,38 @@ export function ProjectTree({ projectId, onSelectFile }: Props) {
           <IconRefresh />
         </button>
       </header>
-      {error && (
-        <div style={errorStyle} title={error}>
-          Live tree unavailable — showing demo layout.
+      {!projectId ? (
+        <p style={emptyStyle}>
+          No project open. Use <strong style={{ color: "var(--fg-secondary)" }}>New</strong>,{" "}
+          <strong style={{ color: "var(--fg-secondary)" }}>Open</strong> or{" "}
+          <strong style={{ color: "var(--fg-secondary)" }}>Open sample</strong> to load one.
+        </p>
+      ) : error ? (
+        <p style={emptyStyle} title={error}>
+          Couldn't read this project directory.
+          <span style={errorDetailStyle}>{error}</span>
+        </p>
+      ) : !tree ? (
+        <p style={emptyStyle}>Reading project…</p>
+      ) : (
+        <div style={treeStyle} role="tree">
+          <TreeNode
+            node={tree}
+            depth={0}
+            selected={selected}
+            onSelect={n => {
+              setSelected(n.id);
+              if (n.kind !== "file" || !onSelectFile) return;
+              // Tree ids are absolute paths from the bridge; strip the
+              // project prefix so the viewer gets a project-rel path.
+              const prefix = projectId.endsWith("/") ? projectId : projectId + "/";
+              const rel = n.id.startsWith(prefix) ? n.id.slice(prefix.length) : n.id;
+              onSelectFile(rel);
+            }}
+            forceOpen
+          />
         </div>
       )}
-      <div style={treeStyle} role="tree">
-        <TreeNode
-          node={display}
-          depth={0}
-          selected={selected}
-          onSelect={n => {
-            setSelected(n.id);
-            if (n.kind !== "file" || !onSelectFile) return;
-            // Tree ids are absolute paths from the bridge; strip the
-            // project prefix so the viewer gets a project-rel path.
-            const prefix = projectId.endsWith("/") ? projectId : projectId + "/";
-            const rel = n.id.startsWith(prefix) ? n.id.slice(prefix.length) : n.id;
-            onSelectFile(rel);
-          }}
-          forceOpen
-        />
-      </div>
     </aside>
   );
 }
@@ -230,12 +217,20 @@ const reloadButtonStyle: CSSProperties = {
   cursor: "pointer",
 };
 
-const errorStyle: CSSProperties = {
-  padding: "4px var(--space-3)",
+const emptyStyle: CSSProperties = {
+  margin: 0,
+  padding: "var(--space-3)",
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: "var(--fg-tertiary)",
+};
+
+const errorDetailStyle: CSSProperties = {
+  display: "block",
+  marginTop: "var(--space-2)",
+  fontFamily: "var(--font-mono)",
   fontSize: 10,
-  color: "var(--warning, #ffd43b)",
-  background: "rgba(255, 212, 59, 0.06)",
-  borderBottom: "1px solid var(--border-subtle)",
+  wordBreak: "break-word",
 };
 
 const treeStyle: CSSProperties = {
