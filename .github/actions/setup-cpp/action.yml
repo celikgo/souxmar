@@ -34,7 +34,15 @@ runs:
         sudo apt-get install -y --no-install-recommends \
           ninja-build pkg-config curl zip unzip tar bison flex
         if [ "${{ inputs.preset }}" = "ci-linux-gcc" ]; then
-          sudo apt-get install -y --no-install-recommends gcc-13 g++-13
+          # ubuntu-22.04 tops out at gcc-12 in the default archive, and
+          # the preset names gcc-13 — installing whatever apt happens to
+          # have would mean CI silently testing a different compiler than
+          # the preset claims.
+          sudo apt-get install -y --no-install-recommends gcc-13 g++-13 || {
+            sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends gcc-13 g++-13
+          }
         fi
         if [ "${{ inputs.preset }}" = "ci-linux-clang" ]; then
           sudo apt-get install -y --no-install-recommends clang-17 || {

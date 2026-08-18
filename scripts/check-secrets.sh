@@ -59,7 +59,7 @@ list_candidates "$@" | while IFS= read -r f; do
     */.git/*|.git/*|build/*|*/build/*|node_modules/*|*/node_modules/*) continue ;;
     target/*|*/target/*|__pycache__/*|*/__pycache__/*) continue ;;
     *.lock|*.png|*.jpg|*.jpeg|*.gif|*.ico|*.pdf|*.woff|*.woff2) continue ;;
-    Cargo.lock|*/Cargo.lock|package-lock.json|*/package-lock.json) continue ;;
+    package-lock.json|*/package-lock.json) continue ;;
     THIRD_PARTY_LICENSES.md) continue ;;
   esac
   printf '%s\n' "$f"

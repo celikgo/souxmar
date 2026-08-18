@@ -110,6 +110,23 @@ as it is edited.
 The `format-debt` job reports the remaining count on every run, so the ratchet has a visible finish
 line rather than quietly never completing.
 
+## Outstanding advisories
+
+`npm-audit` is non-blocking, and not because it lacks data — it works. Its first run surfaced four
+pre-existing advisories in the desktop dependency tree:
+
+| Package | Severity | Fix |
+| --- | --- | --- |
+| `js-yaml` | high | `npm audit fix` |
+| `brace-expansion` | high | `npm audit fix` |
+| `@babel/core` | moderate | `npm audit fix` |
+| `esbuild` (via `vite`) | moderate | needs vite 5 → 8, a three-major bump |
+
+The first three are a one-command upgrade. The fourth is a deliberate frontend PR. Both were left
+out of the change that introduced the scanner, because holding CI hostage to an unrelated
+dependency bump and quietly raising `--audit-level` to hide the finding are both worse than saying
+plainly that the gate reports and does not yet block. It should go blocking the moment vite moves.
+
 ## Gaps
 
 Named here rather than left for someone to discover:
