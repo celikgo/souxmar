@@ -266,7 +266,23 @@ jobs:
           preset: ${{ matrix.preset }}
 
       - name: Configure
-        run: cmake --preset ${{ matrix.preset }}
+        shell: bash
+        run: |
+          # Retried, because the first cold run died on a 502 from
+          # ftpmirror.gnu.org while vcpkg fetched a build tool. Source
+          # tarballs come from mirrors nobody here controls, and failing a
+          # PR for someone else's flaky CDN trains people to re-run
+          # everything — which then hides the real failures. Three
+          # attempts, and it still fails loudly if the cause is ours.
+          for attempt in 1 2 3; do
+            if cmake --preset ${{ matrix.preset }}; then
+              exit 0
+            fi
+            echo "::warning::configure attempt $attempt failed"
+            [ "$attempt" -lt 3 ] && sleep $((attempt * 20))
+          done
+          echo "::error::configure failed after 3 attempts"
+          exit 1
 
       - name: Surface the vcpkg log when configure fails
         # Without this, a failed `vcpkg install` reports only "see logs
@@ -451,8 +467,15 @@ jobs:
           preset: dev-python
           vcpkg-features: tests;python
       - name: Configure and build
+        shell: bash
         run: |
-          cmake --preset dev-python
+          # Same retry as the engine job: vcpkg pulls source tarballs from
+          # mirrors nobody here controls.
+          for attempt in 1 2 3; do
+            cmake --preset dev-python && break
+            echo "::warning::configure attempt $attempt failed"
+            [ "$attempt" -lt 3 ] && sleep $((attempt * 20)) || exit 1
+          done
           cmake --build --preset dev-python
       - name: pytest
         run: |
@@ -467,6 +490,13 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The rustfmt ratchet diffs against the base ref. On a shallow
+          # clone that resolves to nothing, and `|| true` turned the
+          # failure into "no Rust files changed" — a gate that skipped
+          # itself and reported success, which is worse than one that
+          # fails.
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
         with: { components: rustfmt, clippy }
       - uses: Swatinem/rust-cache@v2
@@ -476,6 +506,19 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
             libjavascriptcoregtk-4.1-dev librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+      - name: Build the frontend the Tauri shell embeds
+        # tauri::generate_context! reads tauri.conf.json at compile time
+        # and fails if frontendDist ("../dist") is absent, so the desktop
+        # crate cannot even be type-checked without the frontend built
+        # first. This is what a developer does locally; CI was skipping it.
+        working-directory: src/desktop
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
       - name: rustfmt (changed files only)
         run: |
           # Same ratchet as clang-format: seven of the eight crates

@@ -31,8 +31,13 @@ runs:
         sudo apt-get update
         # ninja + pkg-config for the build; the rest are vcpkg's build
         # dependencies for the ports in vcpkg.json.
+        # autoconf/automake/libtool are here because libsodium builds with
+        # autotools. Without them vcpkg provisions its own from
+        # ftpmirror.gnu.org, which round-robins to a random GNU mirror and
+        # returned 502 on the first cold run.
         sudo apt-get install -y --no-install-recommends \
-          ninja-build pkg-config curl zip unzip tar bison flex
+          ninja-build pkg-config curl zip unzip tar bison flex \
+          autoconf automake autoconf-archive libtool m4
         if [ "${{ inputs.preset }}" = "ci-linux-gcc" ]; then
           # ubuntu-22.04 tops out at gcc-12 in the default archive, and
           # the preset names gcc-13 — installing whatever apt happens to
