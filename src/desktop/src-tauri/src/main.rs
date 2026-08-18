@@ -15,8 +15,15 @@ fn main() {
             commands::onboarding_complete,
             commands::byok_store_key,
             commands::byok_test_connection,
+            // Reading the saved key back — without these the keychain
+            // entry was write-only and BYOK never reached the engine.
+            commands::byok_has_key,
+            commands::byok_clear_key,
+            commands::byok_set_active,
+            commands::byok_active,
             commands::open_sample_project,
             commands::chat_send,
+            commands::chat_confirm,
             commands::bridge_feature_set,
             // Sprint 13 push 3 — first real FFI command.
             commands::pipeline_summary,
@@ -35,6 +42,9 @@ fn main() {
             commands::write_text_file,
             commands::list_solver_capabilities,
             commands::list_mesher_capabilities,
+            commands::list_capabilities,
+            // Pipeline execution — shells out to the souxmar CLI per ADR-0022.
+            commands::run_pipeline,
         ])
         .run(tauri::generate_context!())
         .expect("error launching souxmar-desktop");

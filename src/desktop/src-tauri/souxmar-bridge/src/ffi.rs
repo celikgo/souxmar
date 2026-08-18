@@ -13,7 +13,11 @@
 // the feature off, the high-level wrapper functions in this file
 // return SkeletonNoFfi without ever calling into the externs.
 
-#![cfg_attr(not(feature = "real-ffi"), allow(dead_code))]
+// `unused_imports` joins `dead_code` here for the same reason: with
+// the feature off, nothing in this file calls the externs, so the FFI
+// string and pointer types it imports are genuinely unused. Gating
+// the imports themselves would mean two `use` blocks kept in sync.
+#![cfg_attr(not(feature = "real-ffi"), allow(dead_code, unused_imports))]
 
 use std::ffi::{c_char, CStr, CString};
 use std::ptr;
@@ -74,6 +78,28 @@ extern "C" {
     pub fn souxmar_bridge_chat_provider  (r: *const souxmar_bridge_chat_response_t) -> i32;
     pub fn souxmar_bridge_chat_tokens_in (r: *const souxmar_bridge_chat_response_t) -> i64;
     pub fn souxmar_bridge_chat_tokens_out(r: *const souxmar_bridge_chat_response_t) -> i64;
+
+    // Agent-loop additions: a turn can pause on a tool needing the
+    // user's approval, and the transcript of what ran comes back with it.
+    pub fn souxmar_bridge_chat_confirm(
+        project_id: *const c_char,
+        allow:      i32,
+        out_err:    *mut *mut c_char,
+    ) -> *mut souxmar_bridge_chat_response_t;
+
+    pub fn souxmar_bridge_chat_tool_call_count(r: *const souxmar_bridge_chat_response_t) -> i32;
+    pub fn souxmar_bridge_chat_tool_call_name(
+        r: *const souxmar_bridge_chat_response_t, i: i32) -> *const c_char;
+    pub fn souxmar_bridge_chat_tool_call_summary(
+        r: *const souxmar_bridge_chat_response_t, i: i32) -> *const c_char;
+    pub fn souxmar_bridge_chat_tool_call_ok(
+        r: *const souxmar_bridge_chat_response_t, i: i32) -> i32;
+    pub fn souxmar_bridge_chat_tool_call_refused(
+        r: *const souxmar_bridge_chat_response_t, i: i32) -> i32;
+    pub fn souxmar_bridge_chat_pending_tool(
+        r: *const souxmar_bridge_chat_response_t) -> *const c_char;
+    pub fn souxmar_bridge_chat_pending_arguments(
+        r: *const souxmar_bridge_chat_response_t) -> *const c_char;
 
     pub fn souxmar_bridge_chat_response_free(r: *mut souxmar_bridge_chat_response_t);
 
@@ -241,6 +267,9 @@ pub enum ChatErrorKind {
     QuotaExhausted,
     NotConfigured,
     Internal,
+    /// The turn paused on a tool needing the user's approval. Not a
+    /// failure — resume with chat_confirm().
+    AwaitingConfirmation,
     Unknown(i32),
 }
 
@@ -256,6 +285,7 @@ impl From<i32> for ChatErrorKind {
             6 => Self::QuotaExhausted,
             7 => Self::NotConfigured,
             8 => Self::Internal,
+            9 => Self::AwaitingConfirmation,
             n => Self::Unknown(n),
         }
     }
@@ -267,6 +297,25 @@ pub struct ChatOk {
     pub provider:   ChatProvider,
     pub tokens_in:  i64,
     pub tokens_out: i64,
+    /// Tools the turn executed, in order.
+    pub tool_calls: Vec<ChatToolCall>,
+    /// Set when the turn paused: the tool the agent wants to run and the
+    /// arguments it chose, for the panel to show before asking.
+    pub pending:    Option<PendingTool>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChatToolCall {
+    pub name:    String,
+    pub summary: String,
+    pub ok:      bool,
+    pub refused: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingTool {
+    pub tool_name: String,
+    pub arguments: String,
 }
 
 #[derive(Debug, Clone)]
@@ -310,24 +359,96 @@ pub fn chat_send(request_json: &str, project_id: &str) -> FfiOutcome<Result<Chat
         return FfiOutcome::FfiError(msg);
     }
 
-    let kind_i  = unsafe { souxmar_bridge_chat_error_kind(handle) };
-    let kind    = ChatErrorKind::from(kind_i);
-    let provider = ChatProvider::from(unsafe { souxmar_bridge_chat_provider(handle) });
-
-    let result = if kind == ChatErrorKind::Ok {
-        let reply = unsafe { CStr::from_ptr(souxmar_bridge_chat_reply_text(handle)) }
-            .to_string_lossy().into_owned();
-        let tin   = unsafe { souxmar_bridge_chat_tokens_in(handle) };
-        let tout  = unsafe { souxmar_bridge_chat_tokens_out(handle) };
-        Ok(ChatOk { reply_text: reply, provider, tokens_in: tin, tokens_out: tout })
-    } else {
-        let txt = unsafe { CStr::from_ptr(souxmar_bridge_chat_error_text(handle)) }
-            .to_string_lossy().into_owned();
-        Err(ChatErr { kind, text: txt, provider })
-    };
-
+    let result = unsafe { read_chat_response(handle) };
     unsafe { souxmar_bridge_chat_response_free(handle) };
     FfiOutcome::FfiOk(result)
+}
+
+/// Read a response handle into owned Rust values.
+///
+/// # Safety
+/// `handle` must be a live response from the bridge; it is not freed here.
+#[cfg(feature = "real-ffi")]
+unsafe fn read_chat_response(
+    handle: *mut souxmar_bridge_chat_response_t,
+) -> Result<ChatOk, ChatErr> {
+    let kind = ChatErrorKind::from(souxmar_bridge_chat_error_kind(handle));
+    let provider = ChatProvider::from(souxmar_bridge_chat_provider(handle));
+
+    let cstr = |p: *const c_char| CStr::from_ptr(p).to_string_lossy().into_owned();
+
+    let mut tool_calls = Vec::new();
+    let n = souxmar_bridge_chat_tool_call_count(handle);
+    for i in 0..n {
+        tool_calls.push(ChatToolCall {
+            name:    cstr(souxmar_bridge_chat_tool_call_name(handle, i)),
+            summary: cstr(souxmar_bridge_chat_tool_call_summary(handle, i)),
+            ok:      souxmar_bridge_chat_tool_call_ok(handle, i) != 0,
+            refused: souxmar_bridge_chat_tool_call_refused(handle, i) != 0,
+        });
+    }
+
+    // A pause is a success with a question attached, not an error: the
+    // panel has a transcript to render and a decision to ask for.
+    if kind == ChatErrorKind::Ok || kind == ChatErrorKind::AwaitingConfirmation {
+        let pending = if kind == ChatErrorKind::AwaitingConfirmation {
+            Some(PendingTool {
+                tool_name: cstr(souxmar_bridge_chat_pending_tool(handle)),
+                arguments: cstr(souxmar_bridge_chat_pending_arguments(handle)),
+            })
+        } else {
+            None
+        };
+        Ok(ChatOk {
+            reply_text: cstr(souxmar_bridge_chat_reply_text(handle)),
+            provider,
+            tokens_in:  souxmar_bridge_chat_tokens_in(handle),
+            tokens_out: souxmar_bridge_chat_tokens_out(handle),
+            tool_calls,
+            pending,
+        })
+    } else {
+        Err(ChatErr {
+            kind,
+            text: cstr(souxmar_bridge_chat_error_text(handle)),
+            provider,
+        })
+    }
+}
+
+/// Answer a pending confirmation and continue the suspended turn.
+#[cfg(feature = "real-ffi")]
+pub fn chat_confirm(project_id: &str, allow: bool) -> FfiOutcome<Result<ChatOk, ChatErr>> {
+    let actual = unsafe { souxmar_bridge_abi_version() };
+    if actual != EXPECTED_ABI_VERSION {
+        return FfiOutcome::AbiMismatch { expected: EXPECTED_ABI_VERSION, actual };
+    }
+    let cpid = match CString::new(project_id) {
+        Ok(c) => c,
+        Err(_) => return FfiOutcome::FfiError("project_id contains an interior NUL byte".into()),
+    };
+    let mut err: *mut c_char = ptr::null_mut();
+    let handle = unsafe {
+        souxmar_bridge_chat_confirm(cpid.as_ptr(), i32::from(allow), &mut err as *mut _)
+    };
+    if handle.is_null() {
+        let msg = if err.is_null() {
+            "souxmar-c-bridge: chat_confirm returned NULL with no error message".to_string()
+        } else {
+            let m = unsafe { CStr::from_ptr(err) }.to_string_lossy().into_owned();
+            unsafe { souxmar_bridge_free_string(err) };
+            m
+        };
+        return FfiOutcome::FfiError(msg);
+    }
+    let result = unsafe { read_chat_response(handle) };
+    unsafe { souxmar_bridge_chat_response_free(handle) };
+    FfiOutcome::FfiOk(result)
+}
+
+#[cfg(not(feature = "real-ffi"))]
+pub fn chat_confirm(_project_id: &str, _allow: bool) -> FfiOutcome<Result<ChatOk, ChatErr>> {
+    FfiOutcome::SkeletonNoFfi
 }
 
 #[cfg(not(feature = "real-ffi"))]

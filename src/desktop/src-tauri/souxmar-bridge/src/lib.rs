@@ -179,6 +179,39 @@ impl Bridge {
     /// Sprint 13 push 3's pipeline_introspection. The engine
     /// today routes to StubProvider; Sprint 15 push 1 swaps in
     /// a per-project provider lookup.
+    /// Answer a pending confirmation and continue the suspended turn.
+    ///
+    /// The turn's session — including the mesh and field handles earlier
+    /// tools produced — is held in the C bridge, keyed by project, so a
+    /// pause costs nothing but the wait.
+    pub fn chat_confirm(&self, project_id: &str, allow: bool) -> Result<ChatSummary, BridgeError> {
+        match ffi::chat_confirm(project_id, allow) {
+            ffi::FfiOutcome::SkeletonNoFfi => {
+                Err(BridgeError::FeatureNotWired("provider_call".into()))
+            }
+            ffi::FfiOutcome::AbiMismatch { expected, actual } => {
+                Err(BridgeError::FfiCallFailed(format!(
+                    "souxmar-c-bridge ABI mismatch: bridge built against \
+                     v{}, library reports v{}", expected, actual
+                )))
+            }
+            ffi::FfiOutcome::FfiError(msg) => Err(BridgeError::FfiCallFailed(msg)),
+            ffi::FfiOutcome::FfiOk(Ok(ok)) => Ok(chat_summary_from(ok)),
+            ffi::FfiOutcome::FfiOk(Err(err)) => Ok(ChatSummary {
+                reply_text: String::new(),
+                provider:   format!("{:?}", err.provider).to_lowercase(),
+                tokens_in:  0,
+                tokens_out: 0,
+                tool_calls: Vec::new(),
+                pending:    None,
+                error: Some(ChatErrorSummary {
+                    kind: format!("{:?}", err.kind),
+                    text: err.text,
+                }),
+            }),
+        }
+    }
+
     pub fn chat_send(
         &self,
         request_json: &str,
@@ -197,18 +230,14 @@ impl Bridge {
             ffi::FfiOutcome::FfiError(msg) => {
                 Err(BridgeError::FfiCallFailed(msg))
             }
-            ffi::FfiOutcome::FfiOk(Ok(ok)) => Ok(ChatSummary {
-                reply_text: ok.reply_text,
-                provider:   format!("{:?}", ok.provider).to_lowercase(),
-                tokens_in:  ok.tokens_in,
-                tokens_out: ok.tokens_out,
-                error:      None,
-            }),
+            ffi::FfiOutcome::FfiOk(Ok(ok)) => Ok(chat_summary_from(ok)),
             ffi::FfiOutcome::FfiOk(Err(err)) => Ok(ChatSummary {
                 reply_text: String::new(),
                 provider:   format!("{:?}", err.provider).to_lowercase(),
                 tokens_in:  0,
                 tokens_out: 0,
+                tool_calls: Vec::new(),
+                pending:    None,
                 error: Some(ChatErrorSummary {
                     kind: format!("{:?}", err.kind),
                     text: err.text,
@@ -225,6 +254,51 @@ pub struct ChatSummary {
     pub tokens_in:  i64,
     pub tokens_out: i64,
     pub error:      Option<ChatErrorSummary>,
+    /// Tools the agent ran during this turn, in order.
+    #[serde(default)]
+    pub tool_calls: Vec<ChatToolCallSummary>,
+    /// Present when the turn paused for the user's approval. The panel
+    /// renders a confirmation card and calls `chat_confirm`.
+    #[serde(default)]
+    pub pending:    Option<PendingToolSummary>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ChatToolCallSummary {
+    pub name:    String,
+    pub summary: String,
+    pub ok:      bool,
+    pub refused: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PendingToolSummary {
+    pub tool_name: String,
+    pub arguments: String,
+}
+
+fn chat_summary_from(ok: ffi::ChatOk) -> ChatSummary {
+    ChatSummary {
+        reply_text: ok.reply_text,
+        provider:   format!("{:?}", ok.provider).to_lowercase(),
+        tokens_in:  ok.tokens_in,
+        tokens_out: ok.tokens_out,
+        error:      None,
+        tool_calls: ok
+            .tool_calls
+            .into_iter()
+            .map(|c| ChatToolCallSummary {
+                name:    c.name,
+                summary: c.summary,
+                ok:      c.ok,
+                refused: c.refused,
+            })
+            .collect(),
+        pending: ok.pending.map(|p| PendingToolSummary {
+            tool_name: p.tool_name,
+            arguments: p.arguments,
+        }),
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -320,3 +394,133 @@ impl std::fmt::Display for BridgeError {
 }
 
 impl std::error::Error for BridgeError {}
+
+#[cfg(test)]
+mod real_ffi_tests {
+    use super::*;
+
+    /// Under `real-ffi` every structural flag must be true; without it,
+    /// false. This is the assertion that would have caught the link line
+    /// being broken — the feature compiled, so the flags read true in
+    /// source, but nothing ever linked to prove the symbols resolved.
+    #[test]
+    fn feature_flags_track_the_real_ffi_build() {
+        let fs = Bridge::new().feature_set();
+        let expect = cfg!(feature = "real-ffi");
+        assert_eq!(fs.pipeline_introspection, expect);
+        assert_eq!(fs.provider_call, expect);
+        assert_eq!(fs.auto_updater_menu, expect);
+    }
+
+    /// End-to-end through the C bridge into the engine's provider layer.
+    ///
+    /// Opt-in because it needs an endpoint: point SOUXMAR_TEST_CHAT_BASE_URL
+    /// at any OpenAI-compatible server (a local fake is enough) and the
+    /// test writes a project.ai.toml selecting it, then sends a chat
+    /// through exactly the path the desktop Chat panel uses.
+    #[test]
+    fn chat_send_reaches_a_configured_openai_compatible_provider() {
+        if !cfg!(feature = "real-ffi") {
+            eprintln!("skipping: built without real-ffi");
+            return;
+        }
+        let base = match std::env::var("SOUXMAR_TEST_CHAT_BASE_URL") {
+            Ok(v) if !v.is_empty() => v,
+            _ => {
+                eprintln!("skipping: set SOUXMAR_TEST_CHAT_BASE_URL");
+                return;
+            }
+        };
+
+        let dir = std::env::temp_dir().join(format!("souxmar-bridge-chat-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("temp project");
+        std::fs::write(
+            dir.join("project.ai.toml"),
+            format!(
+                "schema = 1\nprovider = \"openai-compatible\"\nmodel = \"test-model\"\n\n\
+                 [openai_compatible]\nbase_url = \"{base}\"\n"
+            ),
+        )
+        .expect("write config");
+
+        let request = r#"{"model":"test-model","messages":[{"role":"user","content":"ping"}]}"#;
+        let out = Bridge::new().chat_send(request, &dir.to_string_lossy());
+        let _ = std::fs::remove_dir_all(&dir);
+
+        match out {
+            Ok(summary) => {
+                assert!(
+                    !summary.reply_text.is_empty(),
+                    "provider returned an empty reply: {summary:?}"
+                );
+            }
+            Err(e) => panic!("chat_send failed: {e:?}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod agent_loop_tests {
+    use super::*;
+
+    /// The whole desktop path: a chat turn that reaches a tool needing
+    /// approval must pause (not deny, not block), and resuming must run
+    /// the tool and let the model answer.
+    ///
+    /// Point SOUXMAR_TEST_AGENT_BASE_URL at an OpenAI-compatible server
+    /// that asks for a guarded tool. Skipped otherwise so the suite
+    /// stays hermetic.
+    #[test]
+    fn chat_pauses_for_confirmation_and_resumes() {
+        if !cfg!(feature = "real-ffi") {
+            eprintln!("skipping: built without real-ffi");
+            return;
+        }
+        let base = match std::env::var("SOUXMAR_TEST_AGENT_BASE_URL") {
+            Ok(v) if !v.is_empty() => v,
+            _ => {
+                eprintln!("skipping: set SOUXMAR_TEST_AGENT_BASE_URL");
+                return;
+            }
+        };
+
+        let dir = std::env::temp_dir().join(format!("souxmar-agent-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("temp project");
+        std::fs::write(
+            dir.join("project.ai.toml"),
+            format!(
+                "schema = 1\nprovider = \"openai-compatible\"\nmodel = \"test-model\"\n\n\
+                 [openai_compatible]\nbase_url = \"{base}\"\n"
+            ),
+        )
+        .expect("write config");
+        let project = dir.to_string_lossy().into_owned();
+
+        let bridge = Bridge::new();
+        let first = bridge
+            .chat_send(
+                r#"{"model":"test-model","messages":[{"role":"user","content":"solve it"}]}"#,
+                &project,
+            )
+            .expect("chat_send");
+
+        assert!(
+            first.pending.is_some(),
+            "expected the turn to pause on a confirmation, got {first:?}"
+        );
+        let pending = first.pending.clone().unwrap();
+        assert_eq!(pending.tool_name, "solve");
+
+        // Declining must reach the model, not abort the turn.
+        let declined = bridge.chat_confirm(&project, false).expect("chat_confirm");
+        assert!(
+            declined.tool_calls.iter().any(|c| c.refused),
+            "the declined call was not reported as refused: {declined:?}"
+        );
+        assert!(declined.pending.is_none(), "still paused after answering");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
