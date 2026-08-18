@@ -56,6 +56,14 @@ typedef struct souxmar_bridge_chat_response_t souxmar_bridge_chat_response_t;
  *   3  BYOK OpenAI
  *   4  Ollama
  *   5  Managed (proxy.souxmar.dev — Pro tier, Sprint 15+)
+ *   6  OpenAI-compatible (xAI/Grok, DeepSeek, Groq, OpenRouter,
+ *      Mistral, Together, or any self-hosted server speaking the
+ *      /chat/completions shape). The service is decided by the
+ *      base_url in project.ai.toml, not by this constant.
+ *
+ * Adding a constant here is an additive Tier-0 change per ADR-0016:
+ * an older client that does not know value 6 falls through to its
+ * default branch, which is the stub.
  */
 #define SOUXMAR_BRIDGE_PROVIDER_UNKNOWN 0
 #define SOUXMAR_BRIDGE_PROVIDER_STUB 1
@@ -63,6 +71,7 @@ typedef struct souxmar_bridge_chat_response_t souxmar_bridge_chat_response_t;
 #define SOUXMAR_BRIDGE_PROVIDER_OPENAI 3
 #define SOUXMAR_BRIDGE_PROVIDER_OLLAMA 4
 #define SOUXMAR_BRIDGE_PROVIDER_MANAGED 5
+#define SOUXMAR_BRIDGE_PROVIDER_OPENAI_COMPATIBLE 6
 
 /* Provider-error kinds. Mirrors `souxmar::ai::ProviderErrorKind`
  * (provider.h on the C++ side). Returned only when the call
@@ -78,6 +87,9 @@ typedef struct souxmar_bridge_chat_response_t souxmar_bridge_chat_response_t;
 #define SOUXMAR_BRIDGE_PE_QUOTA_EXHAUSTED 6
 #define SOUXMAR_BRIDGE_PE_NOT_CONFIGURED 7
 #define SOUXMAR_BRIDGE_PE_INTERNAL 8
+/* The turn paused on a tool needing the user's approval. Not a
+ * failure: call souxmar_bridge_chat_confirm() to continue. */
+#define SOUXMAR_BRIDGE_PE_AWAITING_CONFIRMATION 9
 
 /* Dispatch one chat-completion call. `request_json` is a UTF-8
  * JSON string matching the ChatRequest schema (model, messages,
@@ -111,6 +123,47 @@ const char* souxmar_bridge_chat_reply_text(const souxmar_bridge_chat_response_t*
 int32_t souxmar_bridge_chat_provider(const souxmar_bridge_chat_response_t* r);
 int64_t souxmar_bridge_chat_tokens_in(const souxmar_bridge_chat_response_t* r);
 int64_t souxmar_bridge_chat_tokens_out(const souxmar_bridge_chat_response_t* r);
+
+/* ---- Agent loop (additive) -------------------------------------------
+ *
+ * souxmar_bridge_chat_send() runs a full agent turn: the model is given
+ * the tool catalogue, its calls are dispatched against the engine, and
+ * results go back until it answers. A turn that reaches a tool needing
+ * the user's approval does not block — it suspends and reports
+ * SOUXMAR_BRIDGE_PE_AWAITING_CONFIRMATION, because a GUI cannot answer
+ * a blocking prompt from inside a synchronous call.
+ *
+ * The suspended session is held in the library, keyed by project_id, so
+ * the mesh and field handles the turn produced survive the pause.
+ * Resume it with souxmar_bridge_chat_confirm(). A session is discarded
+ * when it completes, when it is resumed, or when a new turn starts for
+ * the same project. */
+
+/* Tool calls the turn executed, in order. Valid until the handle is
+ * freed. `ok` is 0 for a failure, `refused` is 1 when the user or the
+ * policy declined it rather than the tool itself failing. */
+int32_t souxmar_bridge_chat_tool_call_count(const souxmar_bridge_chat_response_t* r);
+const char* souxmar_bridge_chat_tool_call_name(const souxmar_bridge_chat_response_t* r,
+                                               int32_t index);
+const char* souxmar_bridge_chat_tool_call_summary(const souxmar_bridge_chat_response_t* r,
+                                                  int32_t index);
+int32_t souxmar_bridge_chat_tool_call_ok(const souxmar_bridge_chat_response_t* r, int32_t index);
+int32_t souxmar_bridge_chat_tool_call_refused(const souxmar_bridge_chat_response_t* r,
+                                              int32_t index);
+
+/* Populated iff error_kind == SOUXMAR_BRIDGE_PE_AWAITING_CONFIRMATION.
+ * The arguments are the JSON the model produced, for display. */
+const char* souxmar_bridge_chat_pending_tool(const souxmar_bridge_chat_response_t* r);
+const char* souxmar_bridge_chat_pending_arguments(const souxmar_bridge_chat_response_t* r);
+
+/* Answer a pending confirmation and run the turn to completion (or to
+ * the next confirmation). `allow` is 1 to permit, 0 to decline; a
+ * decline is reported to the model as a tool error so it can respond
+ * rather than stall. Returns NULL with *out_err set when no session is
+ * suspended for this project. */
+souxmar_bridge_chat_response_t* souxmar_bridge_chat_confirm(const char* project_id,
+                                                            int32_t allow,
+                                                            char** out_err);
 
 /* Release a response handle. Safe to call with NULL. */
 void souxmar_bridge_chat_response_free(souxmar_bridge_chat_response_t* r);

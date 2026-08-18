@@ -6,6 +6,10 @@
 
 #include "souxmar/ai/provider_config.h"
 
+// The preset table lives with the provider that consumes it; the
+// loader only resolves names against it.
+#include "souxmar/ai/provider.h"
+
 #include <fmt/core.h>
 #include <toml++/toml.hpp>
 
@@ -29,6 +33,8 @@ std::string_view to_string(ProviderKind k) noexcept {
       return "ollama";
     case ProviderKind::Managed:
       return "managed";
+    case ProviderKind::OpenAICompatible:
+      return "openai-compatible";
   }
   return "?";
 }
@@ -47,6 +53,8 @@ std::string_view to_string(ProviderConfigErrorKind k) noexcept {
       return "MalformedToml";
     case ProviderConfigErrorKind::IoError:
       return "IoError";
+    case ProviderConfigErrorKind::SecretInConfig:
+      return "SecretInConfig";
   }
   return "?";
 }
@@ -62,15 +70,37 @@ ProviderConfigError make_error(ProviderConfigErrorKind kind,
 ProviderKind parse_provider_kind(std::string_view s) {
   if (s == "stub")
     return ProviderKind::Stub;
-  if (s == "byok-anthropic")
+  // "anthropic" is the name to use; "byok-anthropic" is the original
+  // spelling and stays accepted so existing configs keep working.
+  if (s == "byok-anthropic" || s == "anthropic" || s == "claude")
     return ProviderKind::BYOKAnthropic;
+  // "byok-openai" predates the OpenAI-compatible provider and used to
+  // resolve to a kind nothing could construct. It is now an alias for
+  // the `openai` preset, so the configs that already say it start
+  // working rather than continuing to error.
   if (s == "byok-openai")
-    return ProviderKind::BYOKOpenAI;
+    return ProviderKind::OpenAICompatible;
   if (s == "ollama")
     return ProviderKind::Ollama;
   if (s == "managed")
     return ProviderKind::Managed;
+  // Any preset id ("grok", "openai", "deepseek", ...) and the generic
+  // "openai-compatible" escape hatch resolve to one kind; which service
+  // it is comes from base_url. `byok-openai` above keeps its own kind
+  // for backwards compatibility with configs written before this.
+  if (find_openai_compatible_preset(s) != nullptr)
+    return ProviderKind::OpenAICompatible;
   return ProviderKind::Default;  // sentinel for "unknown" — caller maps to error
+}
+
+// The `provider` values the loader accepts, for the error message.
+std::string known_provider_list() {
+  std::string out = "stub / anthropic / ollama / managed";
+  for (const auto& p : openai_compatible_presets()) {
+    out += " / ";
+    out += p.id;
+  }
+  return out;
 }
 
 }  // namespace
@@ -121,10 +151,10 @@ ProviderConfigResult load_provider_config(const std::filesystem::path& project_d
   const auto kind = parse_provider_kind(*provider_name);
   if (kind == ProviderKind::Default) {
     return make_error(ProviderConfigErrorKind::ProviderUnknown,
-                      fmt::format("'provider' = '{}' at '{}' is not one of "
-                                  "stub / byok-anthropic / byok-openai / ollama / managed",
+                      fmt::format("'provider' = '{}' at '{}' is not one of {}",
                                   *provider_name,
-                                  config_path.string()),
+                                  config_path.string(),
+                                  known_provider_list()),
                       config_path);
   }
 
@@ -133,6 +163,25 @@ ProviderConfigResult load_provider_config(const std::filesystem::path& project_d
   out.source = config_path;
   if (auto model = tbl["model"].value<std::string>(); model) {
     out.model = *model;
+  }
+
+  // A key in this file would be a secret in a file that sits next to
+  // pipeline.yaml and gets committed. Refuse the whole config rather
+  // than reading it — a hard error is the only version of this the user
+  // cannot ignore. Checked before anything else uses the table so the
+  // message is the first thing they see.
+  for (const char* key : {"api_key", "apikey", "key", "token", "secret"}) {
+    if (tbl[key] || (tbl["openai_compatible"].as_table()
+                     && (*tbl["openai_compatible"].as_table())[key])) {
+      return make_error(
+          ProviderConfigErrorKind::SecretInConfig,
+          fmt::format("'{}' must not appear in '{}' — this file lives beside pipeline.yaml "
+                      "and is routinely committed. Put the key in an environment variable "
+                      "and name it with `[openai_compatible] api_key_env`.",
+                      key,
+                      config_path.string()),
+          config_path);
+    }
   }
 
   // BYOK providers require a model — the upstream API
@@ -144,6 +193,23 @@ ProviderConfigResult load_provider_config(const std::filesystem::path& project_d
         fmt::format(
             "provider '{}' requires a `model` value at '{}'", *provider_name, config_path.string()),
         config_path);
+  }
+
+  // Anthropic: fixed endpoint and conventional key variable, both
+  // overridable from an `[anthropic]` subtable so a gateway or a
+  // differently-named variable is reachable without a code change.
+  if (kind == ProviderKind::BYOKAnthropic) {
+    out.provider_id = "anthropic";
+    out.base_url = "https://api.anthropic.com/v1";
+    out.api_key_env = "ANTHROPIC_API_KEY";
+    if (auto sub = tbl["anthropic"].as_table(); sub) {
+      if (auto base = (*sub)["base_url"].value<std::string>(); base) {
+        out.base_url = *base;
+      }
+      if (auto env = (*sub)["api_key_env"].value<std::string>(); env) {
+        out.api_key_env = *env;
+      }
+    }
   }
 
   // Provider-specific endpoint subtable.
@@ -158,6 +224,45 @@ ProviderConfigResult load_provider_config(const std::filesystem::path& project_d
       if (auto endpoint = (*sub)["endpoint"].value<std::string>(); endpoint) {
         out.endpoint = *endpoint;
       }
+    }
+  } else if (kind == ProviderKind::OpenAICompatible) {
+    // `byok-openai` is the legacy spelling of the `openai` preset;
+    // normalise so preset lookup and the UI's "via <provider>" chip
+    // both see the service name rather than the alias.
+    out.provider_id = *provider_name == "byok-openai" ? "openai" : *provider_name;
+    // Start from the named preset, then let the file override. A
+    // service we have never heard of is reachable by setting base_url
+    // under `provider = "openai-compatible"`.
+    if (const auto* preset = find_openai_compatible_preset(out.provider_id); preset) {
+      out.base_url = std::string(preset->base_url);
+      out.api_key_env = std::string(preset->key_env);
+    }
+    if (auto sub = tbl["openai_compatible"].as_table(); sub) {
+      if (auto base = (*sub)["base_url"].value<std::string>(); base) {
+        out.base_url = *base;
+      }
+      if (auto env = (*sub)["api_key_env"].value<std::string>(); env) {
+        out.api_key_env = *env;
+      }
+    }
+    // Every service needs a model id and we will not guess one: a
+    // wrong default produces a 404 that reads like a broken install.
+    if (out.model.empty()) {
+      return make_error(ProviderConfigErrorKind::MissingField,
+                        fmt::format("provider '{}' requires a `model` value at '{}' — set the "
+                                    "model id your account can reach",
+                                    *provider_name,
+                                    config_path.string()),
+                        config_path);
+    }
+    if (out.base_url.empty()) {
+      return make_error(
+          ProviderConfigErrorKind::MissingField,
+          fmt::format("provider '{}' needs `[openai_compatible] base_url` at '{}' — it has no "
+                      "built-in endpoint",
+                      *provider_name,
+                      config_path.string()),
+          config_path);
     }
   }
 

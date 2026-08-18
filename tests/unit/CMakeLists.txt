@@ -61,6 +61,7 @@ add_executable(souxmar_unit_tests
   test_update_embedded_trust.cpp
   # Sprint 10 push 9.
   test_ai_provider.cpp
+  test_agent_loop.cpp
   # Sprint 11 push 1.
   test_crypto_primitives.cpp
   # Sprint 11 push 2.

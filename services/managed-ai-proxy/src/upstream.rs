@@ -22,7 +22,10 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-#[derive(Debug, Clone, Serialize)]
+// `Deserialize` as well as `Serialize`: main.rs's ChatBody derives
+// Deserialize over Vec<ChatMessage>, so this type is both an inbound
+// request field and an outbound upstream field.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role:    String,    // "user" | "assistant" | "system" | "tool"
     pub content: String,

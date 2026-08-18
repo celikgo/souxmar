@@ -22,8 +22,21 @@
 
 #include "souxmar-c-bridge/provider.h"
 
+#include "souxmar/ai/agent.h"
 #include "souxmar/ai/provider.h"
 #include "souxmar/ai/provider_config.h"
+#include "souxmar/ai/tool.h"
+#include "souxmar/pipeline/cache.h"
+#include "souxmar/pipeline/registry_dispatcher.h"
+#include "souxmar/pipeline/value.h"
+#include "souxmar/plugin/discovery.h"
+#include "souxmar/plugin/loader.h"
+#include "souxmar/plugin/registry.h"
+#include "souxmar/version.h"
+
+#include <map>
+#include <memory>
+#include <mutex>
 
 #include <cstdlib>
 #include <cstring>
@@ -38,18 +51,16 @@ namespace {
 
 std::string fmt_provider_not_yet_wired(int32_t kind) {
   switch (kind) {
-    case SOUXMAR_BRIDGE_PROVIDER_ANTHROPIC:
-      return "BYOK Anthropic not yet wired through the bridge "
-             "(Sprint 15 push 3 lands the forwarder). For now, "
-             "set provider = \"stub\" or \"ollama\" in project.ai.toml.";
     case SOUXMAR_BRIDGE_PROVIDER_OPENAI:
-      return "BYOK OpenAI not yet wired through the bridge "
-             "(Sprint 16+ lands the forwarder). For now, "
-             "set provider = \"stub\" or \"ollama\" in project.ai.toml.";
+      // Reachable only if a config predates the loader change that
+      // aliases `byok-openai` onto the `openai` preset.
+      return "provider = \"byok-openai\" is the old spelling. Use "
+             "provider = \"openai\" in project.ai.toml.";
     case SOUXMAR_BRIDGE_PROVIDER_MANAGED:
-      return "Managed-AI proxy not yet reachable through the bridge "
-             "(Sprint 17 wires the account portal). For now, "
-             "set provider = \"stub\" or \"ollama\" in project.ai.toml.";
+      return "The managed (subscription) provider is not reachable yet — "
+             "the account portal that issues its tokens is not wired. Use your own key "
+             "instead: set provider to \"anthropic\", \"openai\", \"grok\", or any other "
+             "service in project.ai.toml, or \"ollama\" to run locally.";
     default:
       return "provider not yet wired";
   }
@@ -122,6 +133,13 @@ std::vector<souxmar::ai::ChatMessage> extract_messages(const std::string& json) 
 
 }  // namespace
 
+struct souxmar_bridge_chat_tool_call_t {
+  std::string name;
+  std::string summary;
+  bool ok = true;
+  bool refused = false;
+};
+
 struct souxmar_bridge_chat_response_t {
   int32_t error_kind = SOUXMAR_BRIDGE_PE_OK;
   std::string error_text;
@@ -129,6 +147,12 @@ struct souxmar_bridge_chat_response_t {
   int32_t provider = SOUXMAR_BRIDGE_PROVIDER_UNKNOWN;
   int64_t tokens_in = 0;
   int64_t tokens_out = 0;
+  // The tools the turn ran, so the panel can show what happened to the
+  // project rather than only the closing prose.
+  std::vector<souxmar_bridge_chat_tool_call_t> tool_calls;
+  // Set when the turn suspended on a confirmation.
+  std::string pending_tool;
+  std::string pending_arguments;
 };
 
 namespace {
@@ -142,6 +166,11 @@ struct ResolvedProvider {
   int32_t bridge_kind = SOUXMAR_BRIDGE_PROVIDER_STUB;
   std::string model;
   std::string endpoint;
+  // OpenAI-compatible only: which service, where, and the name of the
+  // environment variable holding its key.
+  std::string provider_id;
+  std::string base_url;
+  std::string api_key_env;
   // When non-empty, a config-parse error to surface back to the
   // caller (instead of attempting a stub call as a silent fallback).
   std::string config_error;
@@ -183,6 +212,9 @@ ResolvedProvider resolve_provider(const std::string& project_id) {
       break;
     case K::BYOKAnthropic:
       rp.bridge_kind = SOUXMAR_BRIDGE_PROVIDER_ANTHROPIC;
+      rp.provider_id = cfg.provider_id;
+      rp.base_url = cfg.base_url;
+      rp.api_key_env = cfg.api_key_env;
       break;
     case K::BYOKOpenAI:
       rp.bridge_kind = SOUXMAR_BRIDGE_PROVIDER_OPENAI;
@@ -193,11 +225,190 @@ ResolvedProvider resolve_provider(const std::string& project_id) {
     case K::Managed:
       rp.bridge_kind = SOUXMAR_BRIDGE_PROVIDER_MANAGED;
       break;
+    case K::OpenAICompatible:
+      rp.bridge_kind = SOUXMAR_BRIDGE_PROVIDER_OPENAI_COMPATIBLE;
+      rp.provider_id = cfg.provider_id;
+      rp.base_url = cfg.base_url;
+      rp.api_key_env = cfg.api_key_env;
+      break;
     default:
       rp.bridge_kind = SOUXMAR_BRIDGE_PROVIDER_STUB;
       break;
   }
   return rp;
+}
+
+}  // namespace
+
+namespace {
+
+// ---- Agent session ----------------------------------------------------
+//
+// A chat turn can pause on a confirmation, and the answer arrives in a
+// later call from the UI thread. Everything the loop needs to carry on
+// therefore has to outlive the call: the message history, and — more
+// importantly — the ToolContext, which holds the mesh and field handles
+// earlier tools produced. Rebuilding that per call would silently lose
+// the session's work between "mesh it" and "now solve it".
+//
+// Keyed by project id. One session per project; starting a new turn
+// replaces any suspended one, which is the same thing the user sees in
+// the panel.
+struct AgentSession {
+  souxmar::plugin::Registry plugin_registry;
+  std::vector<souxmar::plugin::LoadedPlugin> plugins;
+  std::unique_ptr<souxmar::pipeline::RegistryDispatcher> dispatcher;
+  souxmar::pipeline::Cache cache;
+  souxmar::pipeline::Value session_state = souxmar::pipeline::Value::map({});
+  souxmar::ai::ToolContext ctx;
+  souxmar::ai::ConfirmationPolicy policy;
+  souxmar::ai::ToolRegistry tools = souxmar::ai::default_v1_tools();
+
+  std::vector<souxmar::ai::ChatMessage> history;
+  souxmar::ai::PendingConfirmation pending;
+  std::uint32_t steps_used = 0;
+  bool suspended = false;
+
+  AgentSession() {
+    // Load every discoverable plugin so mesh / solve have a populated
+    // registry. A failure to load one is not fatal to the session; the
+    // tool that needed it reports the missing capability by name.
+    souxmar::plugin::PluginLoader loader(plugin_registry,
+                                         std::string{souxmar::version_string()});
+    const auto report = souxmar::plugin::discover_plugins(souxmar::plugin::DiscoveryOptions{});
+    for (const auto& d : report.loaded) {
+      auto loaded = loader.load(d);
+      if (std::holds_alternative<souxmar::plugin::LoadedPlugin>(loaded)) {
+        plugins.push_back(std::move(std::get<souxmar::plugin::LoadedPlugin>(loaded)));
+      }
+    }
+    dispatcher = std::make_unique<souxmar::pipeline::RegistryDispatcher>(plugin_registry);
+    ctx.registry = &plugin_registry;
+    ctx.dispatcher = dispatcher.get();
+    ctx.cache = &cache;
+    ctx.session_state = &session_state;
+  }
+};
+
+std::mutex& sessions_mutex() {
+  static std::mutex m;
+  return m;
+}
+
+std::map<std::string, std::unique_ptr<AgentSession>>& sessions() {
+  static std::map<std::string, std::unique_ptr<AgentSession>> map;
+  return map;
+}
+
+// Build the Provider named by the resolved config. Returns nullptr and
+// fills `error` when the configuration cannot produce one.
+std::unique_ptr<souxmar::ai::Provider> provider_for(const ResolvedProvider& resolved,
+                                                    std::string& error) {
+  namespace ai = souxmar::ai;
+  if (resolved.bridge_kind == SOUXMAR_BRIDGE_PROVIDER_OLLAMA) {
+    ai::OllamaProviderOptions opts;
+    if (!resolved.endpoint.empty())
+      opts.endpoint = resolved.endpoint;
+    return std::make_unique<ai::OllamaProvider>(std::move(opts));
+  }
+  if (resolved.bridge_kind == SOUXMAR_BRIDGE_PROVIDER_OPENAI_COMPATIBLE) {
+    ai::OpenAICompatibleOptions opts;
+    opts.provider_id = resolved.provider_id;
+    opts.base_url = resolved.base_url;
+    if (!resolved.api_key_env.empty()) {
+      if (const char* key = std::getenv(resolved.api_key_env.c_str()); key && *key) {
+        opts.api_key = key;
+      }
+    }
+    const bool local = resolved.base_url.rfind("http://localhost", 0) == 0
+                       || resolved.base_url.rfind("http://127.0.0.1", 0) == 0;
+    if (opts.api_key.empty() && !resolved.api_key_env.empty() && !local) {
+      error = "no API key for provider '" + resolved.provider_id + "': set $"
+              + resolved.api_key_env + " in the environment souxmar runs in.";
+      return nullptr;
+    }
+    return std::make_unique<ai::OpenAICompatibleProvider>(std::move(opts));
+  }
+  if (resolved.bridge_kind == SOUXMAR_BRIDGE_PROVIDER_ANTHROPIC) {
+    ai::AnthropicProviderOptions opts;
+    if (!resolved.base_url.empty())
+      opts.base_url = resolved.base_url;
+    const std::string env_name =
+        resolved.api_key_env.empty() ? "ANTHROPIC_API_KEY" : resolved.api_key_env;
+    if (const char* key = std::getenv(env_name.c_str()); key && *key) {
+      opts.api_key = key;
+    }
+    if (opts.api_key.empty()) {
+      error = "no API key for Anthropic: set $" + env_name
+              + " in the environment souxmar runs in. The desktop app reads the key you "
+                "saved during setup out of the OS keychain and sets this for you — if you "
+                "are seeing this, re-run setup from Settings.";
+      return nullptr;
+    }
+    return std::make_unique<ai::AnthropicProvider>(std::move(opts));
+  }
+  if (resolved.bridge_kind == SOUXMAR_BRIDGE_PROVIDER_OPENAI
+      || resolved.bridge_kind == SOUXMAR_BRIDGE_PROVIDER_MANAGED) {
+    error = fmt_provider_not_yet_wired(resolved.bridge_kind);
+    return nullptr;
+  }
+
+  // Stub. Programmed with one honest catch-all so the panel exercises
+  // the full path before a real provider is configured.
+  auto stub = std::make_unique<ai::StubProvider>();
+  ai::ChatResponse canned;
+  canned.text =
+      "souxmar stub provider — no real model is configured for this project, "
+      "so this reply is generated locally and the request never left your "
+      "machine. Set `provider` in project.ai.toml to talk to a real model.";
+  stub->program_reply(resolved.model.empty() ? "stub-model" : resolved.model, "", canned);
+  return stub;
+}
+
+// Copy a finished or suspended outcome onto the C response handle.
+void fill_response(souxmar_bridge_chat_response_t* out,
+                   const souxmar::ai::AgentOutcome& outcome) {
+  namespace ai = souxmar::ai;
+  for (const auto& step : outcome.steps) {
+    for (const auto& call : step.tool_calls) {
+      souxmar_bridge_chat_tool_call_t c;
+      c.name = call.name;
+      c.summary = call.result_summary;
+      c.ok = call.ok;
+      c.refused = call.refused;
+      out->tool_calls.push_back(std::move(c));
+    }
+  }
+  out->tokens_in = static_cast<int64_t>(outcome.input_tokens);
+  out->tokens_out = static_cast<int64_t>(outcome.output_tokens);
+
+  switch (outcome.stop_reason) {
+    case ai::AgentStopReason::FinalAnswer:
+      out->error_kind = SOUXMAR_BRIDGE_PE_OK;
+      out->reply_text = outcome.final_text;
+      break;
+    case ai::AgentStopReason::AwaitingConfirmation:
+      out->error_kind = SOUXMAR_BRIDGE_PE_AWAITING_CONFIRMATION;
+      out->pending_tool = outcome.pending.tool_name;
+      out->pending_arguments = outcome.pending.arguments_json;
+      out->reply_text = outcome.final_text;
+      break;
+    case ai::AgentStopReason::MaxStepsReached:
+      out->error_kind = SOUXMAR_BRIDGE_PE_OK;
+      out->reply_text =
+          outcome.final_text
+          + (outcome.final_text.empty() ? "" : "\n\n")
+          + "(stopped after the step limit with work still in progress — "
+            "this answer is incomplete.)";
+      break;
+    case ai::AgentStopReason::ProviderFailed:
+    case ai::AgentStopReason::Aborted:
+      // Preserve the distinction the provider drew — a rate limit and a
+      // missing key need different words in the panel.
+      out->error_kind = bridge_error_kind_for(outcome.error_kind);
+      out->error_text = outcome.error;
+      break;
+  }
 }
 
 }  // namespace
@@ -252,60 +463,152 @@ extern "C" souxmar_bridge_chat_response_t* souxmar_bridge_chat_send(const char* 
     return out;
   }
 
-  // Pick the provider. Today only Stub + Ollama are implementable
-  // entirely engine-side; Anthropic + OpenAI + Managed need
-  // out-of-process resources Sprint 15 push 3 / Sprint 17 wire.
-  souxmar::ai::ChatResult result;
-  if (resolved.bridge_kind == SOUXMAR_BRIDGE_PROVIDER_OLLAMA) {
-    souxmar::ai::OllamaProviderOptions opts;
-    if (!resolved.endpoint.empty())
-      opts.endpoint = resolved.endpoint;
-    souxmar::ai::OllamaProvider ollama(opts);
-    result = ollama.chat_completion(req);
-  } else if (resolved.bridge_kind == SOUXMAR_BRIDGE_PROVIDER_ANTHROPIC
-             || resolved.bridge_kind == SOUXMAR_BRIDGE_PROVIDER_OPENAI
-             || resolved.bridge_kind == SOUXMAR_BRIDGE_PROVIDER_MANAGED) {
-    // Not yet wired — return NotConfigured with an honest
-    // explanation. Sprint 15 push 3 lands the Anthropic
-    // forwarder; Sprint 17 wires Managed. Until then, the
-    // chat panel surfaces this through its typed error path.
+  // Run a full agent turn: the model gets the tool catalogue, its calls
+  // are dispatched against this project's engine session, and results go
+  // back until it answers or asks for something needing approval.
+  std::string provider_error;
+  auto provider = provider_for(resolved, provider_error);
+  if (!provider) {
     out->error_kind = SOUXMAR_BRIDGE_PE_NOT_CONFIGURED;
-    out->error_text = fmt_provider_not_yet_wired(resolved.bridge_kind);
+    out->error_text = provider_error;
     return out;
-  } else {
-    souxmar::ai::StubProvider stub;
-    // A bare StubProvider has an empty reply table, and an unmatched request
-    // is a ProtocolMismatch — deliberate, and pinned by
-    // StubProvider.UnmatchedTriggerReturnsProtocolMismatch. That is the right
-    // behaviour for the eval harness, which programs the replies it expects,
-    // but it made this branch answer every chat message with an error, which
-    // defeats the reason the stub is wired here at all: letting the desktop
-    // Chat panel exercise the full path before a real provider is configured.
-    //
-    // So program one catch-all reply (empty trigger matches any message, and
-    // the model has to match exactly, hence req.model). The text says plainly
-    // what it is, so nobody mistakes it for a model talking.
-    souxmar::ai::ChatResponse canned;
-    canned.text =
-        "souxmar stub provider — no real model is configured for this project, "
-        "so this reply is generated locally and the request never left your "
-        "machine. Set `provider` in project.ai.toml (or configure a key in "
-        "Settings) to talk to a real model.";
-    stub.program_reply(req.model, /*trigger_substring=*/"", std::move(canned));
-    result = stub.chat_completion(req);
   }
 
-  if (auto* resp = std::get_if<souxmar::ai::ChatResponse>(&result)) {
-    out->error_kind = SOUXMAR_BRIDGE_PE_OK;
-    out->reply_text = resp->text;
-    out->tokens_in = static_cast<int64_t>(resp->input_tokens);
-    out->tokens_out = static_cast<int64_t>(resp->output_tokens);
+  std::lock_guard<std::mutex> lock(sessions_mutex());
+  auto& slot = sessions()[project_id];
+  // A new turn discards any half-finished one — the panel shows the same.
+  slot = std::make_unique<AgentSession>();
+  AgentSession& session = *slot;
+
+  souxmar::ai::AgentOptions options;
+  options.model = req.model;
+  options.max_steps = 8;
+  // The desktop cannot answer a blocking prompt from inside this call,
+  // so the loop suspends and the panel asks.
+  options.suspend_on_confirmation = true;
+
+  const auto outcome = souxmar::ai::run_agent_turn(
+      *provider, session.tools, session.ctx, session.policy, req.messages, options);
+
+  fill_response(out, outcome);
+  if (outcome.stop_reason == souxmar::ai::AgentStopReason::AwaitingConfirmation) {
+    session.history = outcome.history;
+    session.pending = outcome.pending;
+    session.steps_used = outcome.steps_used;
+    session.suspended = true;
   } else {
-    const auto& err = std::get<souxmar::ai::ProviderError>(result);
-    out->error_kind = bridge_error_kind_for(err.kind);
-    out->error_text = err.message;
+    sessions().erase(project_id);
   }
   return out;
+}
+
+extern "C" souxmar_bridge_chat_response_t* souxmar_bridge_chat_confirm(const char* project_id_c,
+                                                                      int32_t allow,
+                                                                      char** out_err) {
+  if (out_err)
+    *out_err = nullptr;
+  const std::string project_id = project_id_c ? std::string(project_id_c) : std::string{};
+
+  std::lock_guard<std::mutex> lock(sessions_mutex());
+  auto it = sessions().find(project_id);
+  if (it == sessions().end() || !it->second || !it->second->suspended) {
+    if (out_err) {
+      const char* msg = "no suspended agent turn for this project";
+      *out_err = static_cast<char*>(std::malloc(std::strlen(msg) + 1));
+      if (*out_err)
+        std::memcpy(*out_err, msg, std::strlen(msg) + 1);
+    }
+    return nullptr;
+  }
+  AgentSession& session = *it->second;
+
+  const auto resolved = resolve_provider(project_id);
+  std::string provider_error;
+  auto provider = provider_for(resolved, provider_error);
+
+  auto* out = new (std::nothrow) souxmar_bridge_chat_response_t;
+  if (out == nullptr) {
+    if (out_err) {
+      const char* msg = "bridge: out of memory";
+      *out_err = static_cast<char*>(std::malloc(std::strlen(msg) + 1));
+      if (*out_err)
+        std::memcpy(*out_err, msg, std::strlen(msg) + 1);
+    }
+    return nullptr;
+  }
+  out->provider = resolved.bridge_kind;
+  if (!provider) {
+    out->error_kind = SOUXMAR_BRIDGE_PE_NOT_CONFIGURED;
+    out->error_text = provider_error;
+    sessions().erase(project_id);
+    return out;
+  }
+
+  souxmar::ai::AgentOptions options;
+  options.model = resolved.model.empty() ? "stub-model" : resolved.model;
+  options.max_steps = 8;
+  options.suspend_on_confirmation = true;
+  options.steps_already_used = session.steps_used;
+
+  const auto outcome = souxmar::ai::resume_agent_turn(*provider,
+                                                      session.tools,
+                                                      session.ctx,
+                                                      session.policy,
+                                                      session.history,
+                                                      session.pending,
+                                                      allow != 0,
+                                                      options);
+  fill_response(out, outcome);
+  if (outcome.stop_reason == souxmar::ai::AgentStopReason::AwaitingConfirmation) {
+    session.history = outcome.history;
+    session.pending = outcome.pending;
+    session.steps_used = outcome.steps_used;
+    session.suspended = true;
+  } else {
+    sessions().erase(project_id);
+  }
+  return out;
+}
+
+extern "C" int32_t souxmar_bridge_chat_tool_call_count(const souxmar_bridge_chat_response_t* r) {
+  return r ? static_cast<int32_t>(r->tool_calls.size()) : 0;
+}
+
+extern "C" const char* souxmar_bridge_chat_tool_call_name(const souxmar_bridge_chat_response_t* r,
+                                                          int32_t index) {
+  if (r == nullptr || index < 0 || static_cast<std::size_t>(index) >= r->tool_calls.size())
+    return "";
+  return r->tool_calls[static_cast<std::size_t>(index)].name.c_str();
+}
+
+extern "C" const char* souxmar_bridge_chat_tool_call_summary(
+    const souxmar_bridge_chat_response_t* r, int32_t index) {
+  if (r == nullptr || index < 0 || static_cast<std::size_t>(index) >= r->tool_calls.size())
+    return "";
+  return r->tool_calls[static_cast<std::size_t>(index)].summary.c_str();
+}
+
+extern "C" int32_t souxmar_bridge_chat_tool_call_ok(const souxmar_bridge_chat_response_t* r,
+                                                    int32_t index) {
+  if (r == nullptr || index < 0 || static_cast<std::size_t>(index) >= r->tool_calls.size())
+    return 0;
+  return r->tool_calls[static_cast<std::size_t>(index)].ok ? 1 : 0;
+}
+
+extern "C" int32_t souxmar_bridge_chat_tool_call_refused(const souxmar_bridge_chat_response_t* r,
+                                                         int32_t index) {
+  if (r == nullptr || index < 0 || static_cast<std::size_t>(index) >= r->tool_calls.size())
+    return 0;
+  return r->tool_calls[static_cast<std::size_t>(index)].refused ? 1 : 0;
+}
+
+extern "C" const char* souxmar_bridge_chat_pending_tool(const souxmar_bridge_chat_response_t* r) {
+  return r ? r->pending_tool.c_str() : "";
+}
+
+extern "C" const char* souxmar_bridge_chat_pending_arguments(
+    const souxmar_bridge_chat_response_t* r) {
+  return r ? r->pending_arguments.c_str() : "";
 }
 
 extern "C" int32_t souxmar_bridge_chat_error_kind(const souxmar_bridge_chat_response_t* r) {
