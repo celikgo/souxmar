@@ -55,7 +55,13 @@ std::string shell_quote(const fs::path& p) {
 
 int run_cli(const std::string& full_cmd) {
   std::fflush(nullptr);
+  // The extra quote pair is for cmd.exe; see the comment in
+  // test_cli_smoke.cpp's run_cli for what it prevents.
+#if defined(_WIN32)
+  const int rc = std::system(("\"" + full_cmd + "\"").c_str());
+#else
   const int rc = std::system(full_cmd.c_str());
+#endif
   // std::system's return convention varies. On POSIX, WEXITSTATUS()
   // would normalise but pulling sys/wait.h into a test file is heavy.
   // The exit codes we assert against are small positive ints; the

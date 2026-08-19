@@ -45,7 +45,22 @@ std::string shell_quote(const fs::path& p) {
 // land in the gtest output for debugging.
 int run_cli(const std::string& full_cmd) {
   std::fflush(nullptr);
+  // cmd.exe eats the outer quotes. std::system runs `cmd /c <string>`, and
+  // when that string starts with a double quote cmd strips the first and
+  // last one before parsing — so a command built as
+  //     "C:\path\souxmar.exe" plugin list --plugin-path "C:\..." > "C:\..."
+  // arrives as
+  //     C:\path\souxmar.exe" plugin list --plugin-path "C:\..." > "C:\...
+  // and fails with "The filename, directory name, or volume label syntax is
+  // incorrect." Wrapping the whole command in one more pair of quotes gives
+  // cmd the pair it intends to remove and leaves the real ones intact. This
+  // is why every CLI integration test failed on Windows while the same
+  // commands worked by hand.
+#if defined(_WIN32)
+  return std::system(("\"" + full_cmd + "\"").c_str());
+#else
   return std::system(full_cmd.c_str());
+#endif
 }
 
 fs::path tmp_dir(std::string_view tag) {
