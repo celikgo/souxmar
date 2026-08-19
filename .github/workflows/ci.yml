@@ -490,12 +490,14 @@ jobs:
             --check-only
 
   # ---------------------------------------------------------------------
-  # The version is stated in five places. They must agree.
+  # VERSION is the single source of truth. Everything that restates it must
+  # agree, and the gate discovers version-bearing manifests rather than
+  # holding a hand-maintained list, so a new package cannot drift in unseen.
   #
   # This gate exists because the README once announced a stable v1.0.0 that
-  # had no tag, no release, and a VERSION file reading 0.9.0. Cheap, fast,
-  # and it cannot be skipped by the changes filter — a version can be made
-  # inconsistent by editing any one of the five files.
+  # had no tag, no release, and a VERSION file reading 0.9.0 — while the
+  # desktop app said 0.9.0-beta3 and the Python bindings said 0.0.1. Cheap,
+  # fast, and it cannot be skipped by the changes filter.
   # ---------------------------------------------------------------------
   version-consistency:
     name: version-consistency
@@ -509,7 +511,7 @@ jobs:
       - uses: actions/setup-python@v7
         with: { python-version: '3.12' }
 
-      - name: VERSION, vcpkg.json, package.json, README and CHANGELOG agree
+      - name: Every manifest, the README, the CHANGELOG and the tag state VERSION
         run: python3 scripts/check-version-consistency.py
 
       # The CLI reads its version from the VERSION file through CMake, so it
@@ -547,6 +549,15 @@ jobs:
 
       - name: No dead hostnames, no broken relative links
         run: python3 scripts/check-doc-links.py
+
+      # The offline check above cannot tell that pysouxmar is not on PyPI or
+      # that a Pages deploy failed. This one resolves every documented install
+      # command against its registry and every promised site over the network.
+      # A definite 404 fails; a flaky runner network warns and skips.
+      - name: Documented installs resolve, docs site is up
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/check-live-references.py
 
   determinism:
     name: Cross-platform determinism

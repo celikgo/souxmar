@@ -21,7 +21,41 @@ catalogue stands at **24 tools**, most recently
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **`VERSION` is now literally the single source of truth.** The desktop app
+  (`0.9.0-beta3`), its Tauri config, the `souxmar-bridge` crate (`0.9.1-dev`)
+  and the Python bindings (`0.0.1`) each stated a different version from the
+  `0.9.0` in `VERSION`; all now state `VERSION`, lockfiles included.
+  `scripts/check-version-consistency.py` was widened to cover them and no
+  longer holds a hand-maintained list: it discovers every version-bearing
+  manifest tracked by git and **fails on one it has not been told about**, so
+  a new package must be declared either as shipping with souxmar (and carry
+  `VERSION`) or as independently versioned (with the reason). `release.yml`
+  now runs the same gate instead of its own narrower inline tag check.
+
+### Added
+
+- **`scripts/check-live-references.py`**, wired into `ci.yml`. The existing
+  `check-doc-links.py` is offline and cannot see two defects this repository
+  has shipped: an install command for a package that is not on the registry,
+  and a documentation site that stopped deploying. This one resolves every
+  documented `pip`/`npm`/`cargo install` of a first-party package against its
+  registry, and every promised URL over the network. An unpublished package
+  may still be *named* — saying `pip install pysouxmar` does not work is the
+  honest thing to write — but only in prose that says so, or behind an
+  explicit `<!-- unpublished-ok: NAME -->` marker; inside a fenced code block
+  it is always an error. It also asserts that the README links the docs site
+  and that the repository `homepage` field points at it. A definite 404 fails
+  the build; an unreachable network warns and skips (`--strict` to fail).
+
+### Fixed
+
+- `docs/RELEASE_NOTES_TEMPLATE.md` no longer carries a copyable
+  `pip install pysouxmar==<version>` line, which 404s — it relied on a comment
+  asking the release manager to delete it. The gate now enforces this.
+- The README now links <https://celikgo.github.io/souxmar/>; the docs site was
+  live but unreachable from the repository's front page.
 
 ## [0.9.0] - 2026-08-19
 

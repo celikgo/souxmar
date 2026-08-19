@@ -43,7 +43,10 @@ jobs:
           ref: ${{ github.event.inputs.tag || github.ref }}
           fetch-depth: 0
 
-      - name: Tag, VERSION and CHANGELOG agree
+      - uses: actions/setup-python@v7
+        with: { python-version: '3.12' }
+
+      - name: Tag, VERSION and every shipped manifest agree
         id: v
         run: |
           # A release whose VERSION file disagrees with its tag produces
@@ -57,10 +60,12 @@ jobs:
             echo "::error::tag v$version disagrees with VERSION ($in_file)"
             exit 1
           fi
-          if ! grep -q "$version" CHANGELOG.md; then
-            echo "::error::CHANGELOG.md has no entry for $version"
-            exit 1
-          fi
+          # The same gate CI runs on every push, so a release cannot ship a
+          # desktop app, a wheel or a vcpkg port stating a different version
+          # from the tag. It also fails on a version-bearing manifest the
+          # gate has not been told about, so a new package cannot drift in
+          # between releases.
+          python3 scripts/check-version-consistency.py
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "releasing $version"
 

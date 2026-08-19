@@ -57,7 +57,9 @@ Definition of done: `souxmar run examples/cantilever-beam/cantilever.souxmar.yam
 - Python-plugin shim: `@sx.plugin.mesher` decorator (see `PLUGIN_SDK.md`).
 - Plugin conformance suite shipped as `souxmar-conformance` and runnable by external authors.
 
-Definition of done: a researcher can `pip install pysouxmar`, write a 20-line script that imports a STEP file and runs an FEM analysis or a Blender model and runs a CFD analysis via OpenFOAM, and see results in ParaView.
+Definition of done — **not true today; pysouxmar is not on PyPI**
+<!-- unpublished-ok: pysouxmar -->: a researcher can `pip install pysouxmar`,
+write a 20-line script that imports a STEP file and runs an FEM analysis or a Blender model and runs a CFD analysis via OpenFOAM, and see results in ParaView.
 
 ## Phase 4 — Desktop application + AI integration
 

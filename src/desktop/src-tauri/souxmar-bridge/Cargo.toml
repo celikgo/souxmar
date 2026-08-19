@@ -1,6 +1,6 @@
 [package]
 name        = "souxmar-bridge"
-version     = "0.9.1-dev"
+version     = "0.9.0"
 description = "Rust ⇄ C++ FFI bridge between the souxmar desktop shell and libsouxmar-*"
 edition     = "2021"
 license     = "Apache-2.0"
