@@ -30,8 +30,18 @@ at the tag, not a diff against a predecessor — there is no predecessor.
 
 **Tag:** `v0.9.0`. **Plugin C ABI:** v1 major frozen, minor v1.9. **Agent tool
 contract:** v1 frozen, 24 tools. **Licence:** Apache-2.0. **CI:** the `CI`,
-`Security` and `Visual regression` workflows were green on `master` at the
-commit this tag points at.
+`Security` and `Docs site` workflows were green on `master` at the commit this
+tag points at.
+
+**What the download gives you.** Unsigned CLI tarballs for linux-x64,
+macos-arm64 and windows-x64, containing `souxmar` and the static libraries.
+They contain **no plugins** and not the plugin SDK headers, and every
+capability souxmar has lives in a plugin — so a downloaded build can print its
+version and its help but cannot run a pipeline. Build from source for anything
+real. Nothing is signed: verify the SHA-256 against the `SHA256SUMS-*.txt`
+beside each artefact and the release's build-provenance attestation, which
+establish which workflow run produced the bytes, not that the project signed
+them.
 
 ### What is in it
 

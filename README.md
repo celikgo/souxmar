@@ -120,7 +120,10 @@ first — it is explicit about what that pipeline does and does not model.
 - **Desktop app** (macOS / Windows / Linux) — chat panel, pipeline editor,
   inspector, and a viewport panel whose renderer is not built yet.
 - **CLI** (`souxmar`) — for CI, batch runs, scripting. This is the surface
-  that works today.
+  that works today. `v0.9.0` publishes **unsigned** CLI tarballs for
+  linux-x64, macos-arm64 and windows-x64, but they ship **no plugins** and no
+  plugin SDK headers — and every capability lives in a plugin, so a
+  downloaded build cannot run a pipeline. Build from source.
 - **Python** (`pysouxmar`) — **not on PyPI.** `pip install pysouxmar` does not
   work and never has. Build the bindings from source with the `dev-python`
   preset:
