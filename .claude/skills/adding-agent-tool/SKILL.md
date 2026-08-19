@@ -17,7 +17,7 @@ The souxmar agent's tool surface is a typed, versioned contract that lives in `s
 
 - Adding a new plugin: use `developing-souxmar-plugin`.
 - Adding a CLI flag: that is a separate surface; CLI flags are not agent tools.
-- "Improving" the agent prompt: prompt changes are operational, not tool changes; they happen in `src/ai/prompts/`.
+- "Improving" the agent prompt: prompt changes are operational, not tool changes; they happen in `default_agent_system_prompt()` in `src/ai/agent.cpp`, not in `src/ai/prompts/`.
 
 ## Workflow
 
@@ -44,7 +44,11 @@ If a tool sends data outside the user's machine, it MUST be `confirm-always` and
 
 ### 2. Write the schema
 
-Tool schemas live in `src/ai/tools/schema/<tool_name>.json`. JSON Schema for inputs and outputs:
+Tool inputs are documented in prose, on the tool itself: set `t.input_schema_doc` (and
+`t.output_schema_doc`) in `src/ai/tools/<tool_name>.cpp`. There is no JSON Schema file — the v1
+tool contract predates one, and `build_tool_definitions()` appends this prose to the description
+the model receives. A machine-readable schema needs a field on `Tool`, which is a ratcheted
+change to a frozen header (ADR-0011). The shape to document:
 
 ```json
 {
@@ -144,7 +148,7 @@ The dispatcher framework writes this automatically; no per-tool code needed unle
 
 ### 6. Add to the eval suite
 
-Every new tool gets at least one test in `tests/agent-eval/canonical.yaml`:
+Every new tool gets at least one eval task — a YAML file in `evals/v1/`, one task per file:
 
 ```yaml
 - name: "Set a Dirichlet BC on the clamped face"
@@ -179,5 +183,6 @@ Add the tool to:
 
 - `docs/AI_INTEGRATION.md` — agent architecture and current tool catalogue.
 - `docs/adr/0003-byok-as-ai-default.md` — the trust model the tool surface lives inside.
-- `src/ai/tools/schema/` — existing schemas as worked examples.
-- `tests/agent-eval/canonical.yaml` — eval test format.
+- `src/ai/tools/` — the existing tools as worked examples; each one carries its own
+  `input_schema_doc`.
+- `evals/v1/` — the eval task format, one YAML file per task.

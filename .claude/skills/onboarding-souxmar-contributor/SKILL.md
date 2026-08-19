@@ -37,7 +37,7 @@ Total time: 60–90 min.
 1. `README.md` — what souxmar is, surfaces, status.
 2. `docs/VISION.md` — purpose, target users, non-goals.
 3. `docs/ARCHITECTURE.md` — the layered system. **Required for any backend contributor.**
-4. `docs/CONTRIBUTING.md` — workflow, DCO, PR template.
+4. `CONTRIBUTING.md` — workflow, DCO, PR template.
 5. `docs/GOVERNANCE.md` — merge tiers, RFC process, your role's authority.
 6. `docs/ENGINEERING_PRACTICES.md` — quality bar, performance budgets, definition of done.
 7. The doc most relevant to your team:
@@ -159,7 +159,7 @@ External contributors: pace is yours. Maintainers will respond on your timeline.
 
 ## Reference
 
-- `docs/CONTRIBUTING.md` — full contributing guide.
+- `CONTRIBUTING.md` — full contributing guide.
 - `docs/GOVERNANCE.md` — merge tiers, roles.
 - `docs/ENGINEERING_PRACTICES.md` — Definition of Done.
 - `docs/SPRINT_PLAN.md` — current sprint context.

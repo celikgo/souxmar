@@ -27,7 +27,7 @@ button enforces.
 ## When NOT to use this skill
 
 - Micro-optimising code that is not on a hot path. Profile first; if it is not measurably hot, do not optimise.
-- Benchmarking against an unreleased baseline. Use the released baseline pinned in `benchmarks/baseline.json`.
+- Benchmarking against an unreleased baseline. Use the released baseline pinned in `benchmarks/baselines/`.
 
 ## Reference machine
 
@@ -70,7 +70,8 @@ souxmar agent bench --provider anthropic --tasks tests/agent-eval/canonical.yaml
 ## Comparing to baseline
 
 ```bash
-tools/bench-compare.sh results.json benchmarks/baseline.json
+python3 tools/perf-compare/compare.py \
+  --baseline-dir benchmarks/baselines --current-dir bench-out
 ```
 
 Output is per-benchmark delta as % change. Anything > 5 % regression on a tracked benchmark is worth
@@ -94,7 +95,7 @@ the gate to stop the merge.
 | `Agent.FirstToken.Managed`                   | < 1200 ms p95   | AI (post-S14)        |
 | `Agent.PromptCacheHitRate`                   | > 70 %          | AI                   |
 
-The full set lives in `benchmarks/registry.json`.
+The full set lives in `benchmarks/baselines/`.
 
 ## Triaging a regression
 
@@ -117,7 +118,7 @@ When adding a feature on a hot path:
 1. Add a benchmark to `benchmarks/<area>/`.
 2. Use `google-benchmark` for C++; `vitest --bench` for TypeScript.
 3. Choose a budget conservatively — start at 1.5× the measured value on the reference machine, tighten over time as the implementation matures.
-4. Add the benchmark to `benchmarks/registry.json` with its budget.
+4. Add the benchmark to `benchmarks/baselines/` with its budget.
 5. Submit the new baseline via PR; the Platform team approves.
 
 ## Common mistakes
@@ -132,6 +133,6 @@ When adding a feature on a hot path:
 ## Reference
 
 - `docs/ENGINEERING_PRACTICES.md` — performance budget table.
-- `benchmarks/registry.json` — full tracked set.
-- `benchmarks/baseline.json` — current baseline (per release).
-- `tools/bench-compare.sh` — comparison harness.
+- `benchmarks/baselines/` — full tracked set.
+- `benchmarks/baselines/` — current baseline (per release).
+- `tools/perf-compare/compare.py` — comparison harness.

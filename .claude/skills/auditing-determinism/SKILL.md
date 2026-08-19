@@ -126,7 +126,10 @@ When adding a new solver, mesher, or transformation:
 
 1. **Identify nondeterminism sources.** Parallel reductions, hash-map iteration, RNGs, third-party tool calls.
 2. **Pin them.** Stable iteration, canonical sorts, seeded RNGs, stable backend modes.
-3. **Add a determinism test** in `tests/determinism/`:
+3. **Add the pipeline to the determinism gate.** There is no `tests/determinism/` directory: the
+   gate runs every pipeline under `examples/` through
+   `scripts/ci/determinism-fingerprint.sh`, so a new example is picked up automatically. What a
+   regression test looks like:
    ```yaml
    - pipeline: tests/determinism/<name>.souxmar.yaml
      expected_hash:
@@ -154,5 +157,6 @@ When adding a new solver, mesher, or transformation:
 
 - `docs/ENGINEERING_PRACTICES.md` — determinism gate definition.
 - `docs/SPRINT_PLAN.md` — when the gate became enforcing (Sprint 5).
-- `tests/determinism/` — existing determinism tests.
-- `tools/determinism-check.sh` — the comparison harness.
+- `scripts/ci/determinism-fingerprint.sh` — the gate itself, and `examples/` for the pipelines
+  it covers. (`tests/determinism/` does not exist; the gate walks `examples/`.)
+- `scripts/ci/determinism-fingerprint.sh` — the comparison harness.

@@ -57,7 +57,7 @@ us nothing. The Pro tier adds managed AI + cloud sync; see
   key whose rotation procedure is documented in
   [ADR-0014](https://github.com/souxmar/souxmar/blob/master/docs/adr/0014-release-signing-key-rotation.md);
   the embedded trust store + the `souxmar update` flow are
-  documented in [the updates guide](/guide/updates).
+  documented in [the updates guide](https://github.com/celikgo/souxmar/blob/master/docs/SECURITY.md#updates).
 
 ## Status
 

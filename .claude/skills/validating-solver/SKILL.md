@@ -38,7 +38,9 @@ The solver must reproduce the closed-form solution for at least one canonical pr
 
 For new solver categories without an obvious canonical case, propose one in the validation RFC.
 
-Tests live in `tests/validation/<solver>/`. They run on every PR.
+**`tests/validation/` does not exist yet.** Solver tests currently live alongside the rest in
+`tests/unit/` and `tests/integration/`, and run on every PR through the engine matrix. The
+per-solver layout below is the intended structure, not the current one.
 
 ### Level 2 — Patch tests
 
@@ -125,6 +127,7 @@ Per the determinism gate (`auditing-determinism` skill), solver output must be b
 ## Reference
 
 - `docs/ENGINEERING_PRACTICES.md` — quality bar, perf budgets.
-- `tests/validation/` — existing validation tests as worked examples.
+- `tests/unit/` and `tests/integration/` — the solver tests that exist today.
+  (`tests/validation/` is the intended home and has not been created yet.)
 - `examples/cantilever-beam/` — the canonical Level-1 case for elasticity.
 - Comparable-project precedent: NASA's MSC Nastran benchmark suite, NAFEMS benchmarks.

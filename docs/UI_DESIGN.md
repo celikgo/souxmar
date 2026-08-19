@@ -2,7 +2,7 @@
 
 souxmar's desktop app uses a dense, dark, calm visual language inspired by Twitter's "dim" theme. This document is the design contract: design tokens, component patterns, accessibility rules, and the reasoning behind them.
 
-The system is implemented in Tailwind CSS via design tokens in `src/desktop/ui/tokens.css`, consumed by Radix-based primitives in `src/desktop/ui/`.
+The system is implemented in Tailwind CSS via design tokens in `src/desktop/src/ui/tokens.css`, consumed by Radix-based primitives in `src/desktop/ui/`.
 
 ## Principles
 

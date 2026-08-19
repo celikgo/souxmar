@@ -12,7 +12,7 @@ plus a Python library on PyPI and a source tarball.
 | Linux (x86_64)        | Download the `.tar.gz` from the [latest release](https://github.com/souxmar/souxmar/releases/latest); GPG-detached signature alongside |
 | Python (any OS)       | `pip install pysouxmar` (Sprint 4+ landed; current version matches the release) |
 
-All installers are signed; see the [updates guide](/guide/updates)
+All installers are signed; see the [updates guide](https://github.com/celikgo/souxmar/blob/master/docs/SECURITY.md#updates)
 for the trust chain.
 
 ## System requirements
@@ -69,7 +69,7 @@ souxmar looks for plugins under:
 
 Drop a plugin directory there; the next `souxmar plugin list` /
 desktop-app restart sees it. See [the plugins
-guide](/plugins/first-plugin) for authoring.
+guide](https://github.com/celikgo/souxmar/blob/master/docs/PLUGIN_SDK.md) for authoring.
 
 ## Building from source
 

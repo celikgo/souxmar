@@ -125,7 +125,7 @@ Every directory in the repo has a single owning team. CODEOWNERS enforces the te
 | `src/desktop/`                    | Desktop             |
 | `cmake/`, `.github/`, `vcpkg.json`| Platform            |
 | `docs/`, `examples/`, `README.md` | DX                  |
-| `tests/plugin-conformance/`       | Plugin Host         |
+| `tools/conformance/`       | Plugin Host         |
 | `benchmarks/`                     | Platform (joint with team owning benchmarked code) |
 | `.claude/skills/`                 | DX                  |
 

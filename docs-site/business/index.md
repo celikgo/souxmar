@@ -19,7 +19,7 @@ via a CI cross-check.
 | **Team**           | $35 / month / user, billed yearly | Pro + SSO (SAML / OIDC) + shared project library + per-team audit log. |
 | **Enterprise**     | Custom                          | Team + on-prem AI proxy + dedicated support + SLA.                       |
 
-See [the tiers page](/business/tiers) for the full feature matrix.
+See [the tiers page](https://github.com/celikgo/souxmar/blob/master/docs/BUSINESS_MODEL.md) for the full feature matrix.
 
 ## What's open and what's hosted
 

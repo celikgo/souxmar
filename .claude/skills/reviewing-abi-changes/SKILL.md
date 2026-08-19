@@ -5,12 +5,12 @@ description: Use when reviewing or proposing any change to include/souxmar-c/ (t
 
 # Reviewing ABI changes
 
-The C plugin ABI in `include/souxmar-c/` and the agent tool contract in `src/ai/tools/schema/` are both **frozen contracts** post-Sprint 7. Every change must be evaluated for whether it breaks existing plugins or agent integrations.
+The C plugin ABI in `include/souxmar-c/` and the agent tool contract in `include/souxmar/ai/tool.h` are both **frozen contracts** post-Sprint 7. Every change must be evaluated for whether it breaks existing plugins or agent integrations.
 
 ## When to use this skill
 
 - Reviewing a PR that touches `include/souxmar-c/` or `src/plugin-host/`.
-- Reviewing a PR that touches `src/ai/tools/schema/` or adds an agent tool.
+- Reviewing a PR that touches `include/souxmar/ai/tool.h` or adds an agent tool.
 - Drafting a Tier-3 RFC for an ABI change.
 - Auditing a release candidate for ABI compliance.
 
@@ -48,7 +48,7 @@ For every PR touching the ABI:
 
 ## Agent tool contract
 
-The agent tool contract is treated with the same discipline as the C ABI. The schema files in `src/ai/tools/schema/` define the shape of every tool the agent can call.
+The agent tool contract is treated with the same discipline as the C ABI. `include/souxmar/ai/tool.h` defines the `Tool` type every agent-callable tool registers as, and `default_v1_tools()` in `src/ai/tools/default_registry.cpp` is the catalogue itself. There is no per-tool schema file — inputs are documented in prose on each tool's `input_schema_doc`.
 
 For changes there:
 
@@ -82,4 +82,5 @@ The RFC must include:
 - `docs/PLUGIN_SDK.md` — ABI specification.
 - `docs/GOVERNANCE.md` — Tier-3 RFC process.
 - `docs/adr/0001-c-abi-for-plugins.md` — why we chose C ABI; what the freeze commits us to.
-- `tools/abi-check.sh` — the abidiff harness.
+- `scripts/check-frozen-headers.sh` — the gate that actually blocks ABI changes today.
+  (`tools/abi-check.sh`, the abidiff harness, has not been written.)

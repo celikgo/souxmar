@@ -7,7 +7,7 @@ description: Use when publishing a souxmar plugin to either the open plugin inde
 
 souxmar maintains two distribution channels for plugins:
 
-1. **Open plugin index** — free, OSI-licensed plugins. Listed in `docs/plugin-index.md`. Source links only; we do not host binaries.
+1. **Open plugin index** — free, OSI-licensed plugins. Listed in `docs/plugin-index.toml`. Source links only; we do not host binaries.
 2. **Paid marketplace** — commercial plugins. We host binaries, handle Stripe billing, issue licenses, run conformance in CI. Author keeps 90 % of revenue. Detailed in `docs/BUSINESS_MODEL.md`.
 
 This skill covers both channels.
@@ -131,4 +131,4 @@ The paid marketplace is launched at Sprint 16 per `docs/SPRINT_PLAN.md`. Pre-lau
 - `docs/PLUGIN_SDK.md` — plugin contract.
 - `docs/BUSINESS_MODEL.md` — marketplace economics, revenue split, what we will and won't do.
 - `docs/GOVERNANCE.md` — plugin index governance.
-- `docs/plugin-index.md` (when present) — current listings.
+- `docs/plugin-index.toml` (when present) — current listings.

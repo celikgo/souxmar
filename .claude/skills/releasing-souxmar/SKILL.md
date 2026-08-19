@@ -23,7 +23,7 @@ souxmar releases follow an 8-week cadence (per `docs/SPRINT_PLAN.md` and `docs/G
 
 1. **CI green for 3 consecutive nights** including determinism, sanitizers, perf gates, agent eval suite.
 2. **All P0 / P1 bugs closed** (P2/P3 may roll forward).
-3. **Changelog drafted** in `CHANGELOG.md` — author bullets per area; copy-edit in `docs/release-notes/`.
+3. **Changelog drafted** in `CHANGELOG.md` — author bullets per area; copy-edit against `docs/RELEASE_NOTES_TEMPLATE.md`.
 4. **Migration notes written** if any deprecation lapses or any user-visible default changes.
 5. **Plugin conformance suite re-run** on all in-tree plugins to confirm ABI stability.
 6. **License scan clean** in `THIRD_PARTY_LICENSES.md`.
@@ -32,7 +32,10 @@ souxmar releases follow an 8-week cadence (per `docs/SPRINT_PLAN.md` and `docs/G
 
 ## Cutting the release
 
-1. **Bump version** in `CMakeLists.txt`, `pyproject.toml`, `package.json` (desktop), `src-tauri/tauri.conf.json`. Use `tools/bump-version.sh <version>`.
+1. **Bump version** in `VERSION`, `CMakeLists.txt`, `bindings/python/pyproject.toml`,
+   `src/desktop/package.json`, `src/desktop/src-tauri/tauri.conf.json`. There is no
+   `bump-version.sh` — this is a manual edit, and `release.yml`'s `verify` job fails the release
+   if the tag and `VERSION` disagree.
 2. **Tag the release** on `main`:
    ```bash
    git tag -s v1.0.0 -m "Release v1.0.0"
@@ -129,4 +132,5 @@ For severe security issues (CVSS > 7):
 - `docs/GOVERNANCE.md` — release policy.
 - `docs/ENGINEERING_PRACTICES.md` — incident response process.
 - `.github/workflows/release.yml` — the release pipeline.
-- `tools/bump-version.sh` — version-bump helper.
+- `VERSION` — the single source of truth the release workflow checks the tag against.
+  (There is no `tools/bump-version.sh`; the bump is a manual edit.)

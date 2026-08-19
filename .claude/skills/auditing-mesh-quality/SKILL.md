@@ -21,7 +21,7 @@ A correct solver on a bad mesh produces wrong answers. Before any non-trivial an
 
 ## Quality metrics souxmar computes
 
-The mesh-quality module (`src/core/mesh/quality.cpp`) computes per-cell:
+The mesh-quality module (`src/core/mesh_quality.cpp`) computes per-cell:
 
 | Metric          | Definition                                                                  | Good range (FEM)         |
 | --------------- | --------------------------------------------------------------------------- | ------------------------ |
@@ -95,7 +95,8 @@ The agent can call the `audit_mesh_quality` tool (read-only). It reports a struc
 
 ## Quality profiles
 
-Different solver kinds need different thresholds. Profiles live in `src/core/mesh/profiles/`:
+Different solver kinds need different thresholds. Profiles are not yet a separate file — `src/core/mesh_quality.cpp` carries the thresholds inline.
+The per-solver split below is the intended shape:
 
 - `fem-elasticity-linear` — strict on Jacobian, lenient on aspect ratio.
 - `fem-elasticity-nonlinear` — strict on everything; nonlinear solvers diverge on bad cells.
@@ -134,6 +135,7 @@ When the audit fails:
 
 - `docs/ARCHITECTURE.md` — mesh data model.
 - `docs/PLUGIN_SDK.md` — mesher capability contract (tag inheritance, etc.).
-- `src/core/mesh/quality.cpp` — implementation.
-- `src/core/mesh/profiles/` — quality profiles.
+- `src/core/mesh_quality.cpp` — implementation.
+- `src/core/mesh_quality.cpp` — the metrics and their thresholds, inline.
+  (`src/core/mesh/profiles/` is the intended split and does not exist yet.)
 - NAFEMS R0094 — mesh quality reference (industry baseline).
