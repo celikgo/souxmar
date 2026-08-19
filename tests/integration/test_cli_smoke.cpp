@@ -40,6 +40,22 @@ std::string shell_quote(const fs::path& p) {
 #endif
 }
 
+// `cd` into a directory, portably.
+//
+// On Windows, `cd C:\path` does not change the *drive* — it sets the current
+// directory of C: and leaves the process wherever it was. These tests put
+// their workdir under the temp directory, which on a GitHub runner is on C:
+// while the checkout is on D:, so the CLI then ran from the wrong drive,
+// could not find pipeline.yaml, and exited 64 with its log written somewhere
+// nobody looked. `/d` changes drive and directory together.
+std::string cd_to(const fs::path& dir) {
+#if defined(_WIN32)
+  return "cd /d " + shell_quote(dir);
+#else
+  return "cd " + shell_quote(dir);
+#endif
+}
+
 // Run a CLI command and capture exit code. We let stdout/stderr flow
 // through to the test runner — if a test fails, the CLI's diagnostics
 // land in the gtest output for debugging.
@@ -128,7 +144,7 @@ TEST_F(CliSmokeTest, RunCantileverExampleProducesVtuOutput) {
   fs::copy_file(pipeline_src, pipeline_local);
 
   std::ostringstream cmd;
-  cmd << "cd " << shell_quote(workdir_) << " && " << shell_quote(SOUXMAR_TEST_CLI_BINARY)
+  cmd << cd_to(workdir_) << " && " << shell_quote(SOUXMAR_TEST_CLI_BINARY)
       << " run pipeline.yaml"
       << " --plugin-path " << shell_quote(plugins_root()) << " --cache-dir "
       << shell_quote(cachedir_) << " > run1.log 2>&1";
@@ -161,7 +177,7 @@ TEST_F(CliSmokeTest, ReRunHitsDiskCacheForWriterStage) {
   const auto pipeline_local = workdir_ / "pipeline.yaml";
   fs::copy_file(pipeline_src, pipeline_local);
 
-  const std::string base = "cd " + shell_quote(workdir_) + " && "
+  const std::string base = cd_to(workdir_) + " && "
                            + shell_quote(SOUXMAR_TEST_CLI_BINARY) + " run pipeline.yaml"
                            + " --plugin-path " + shell_quote(plugins_root()) + " --cache-dir "
                            + shell_quote(cachedir_);
