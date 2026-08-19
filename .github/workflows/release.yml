@@ -139,7 +139,27 @@ jobs:
           }
           if ! have_creds; then
             echo "::warning::no signing credentials for ${{ matrix.target }} — this artifact is UNSIGNED."
-            touch "${{ steps.pkg.outputs.artifact }}.UNSIGNED"
+            # The marker ships next to the artifact, so someone who downloads
+            # the tarball and nothing else can still find out that it carries
+            # no signature. It must not be empty: the release API rejects a
+            # zero-byte asset ("size must be greater than or equal to 1"),
+            # which is what made every previous tag fail at the publish step
+            # while all three build legs went green.
+            # printf, not a heredoc: the terminator would have to sit at
+            # column 0 and that ends the YAML block scalar early.
+            {
+              echo "This artifact is UNSIGNED."
+              echo
+              echo "souxmar's release pipeline signs with Apple notarisation (macOS),"
+              echo "EV Authenticode (Windows) and a detached GPG signature (Linux)."
+              echo "None of those credentials was configured for this build, so no"
+              echo "signature exists for this file and none can be verified."
+              echo
+              echo "Check the SHA-256 against the SHA256SUMS-*.txt published beside"
+              echo "it, and the build provenance attestation on the release. That"
+              echo "establishes which workflow run produced these bytes; it does not"
+              echo "establish that the project signed them."
+            } > "${{ steps.pkg.outputs.artifact }}.UNSIGNED"
             exit 0
           fi
           if [ "${{ matrix.target }}" = "linux" ] && [ -n "${GPG_PRIVATE_KEY:-}" ]; then
@@ -208,4 +228,8 @@ jobs:
           tag_name: v${{ needs.verify.outputs.version }}
           name: souxmar v${{ needs.verify.outputs.version }}
           generate_release_notes: true
-          files: dist/*
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS-*.txt
+            dist/*.UNSIGNED
