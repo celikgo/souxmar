@@ -1,11 +1,35 @@
-# Install souxmar
+::: warning Read this before downloading
+`v0.9.0` publishes **unsigned** CLI tarballs for linux-x64, macos-arm64 and
+windows-x64. They contain `souxmar` and the static libraries — **they do not
+contain any plugins**, and every capability souxmar has lives in a plugin. A
+downloaded build can print its version and its help; it cannot run a
+pipeline. The plugin SDK headers (`include/souxmar-c/`) are not in the
+package either, so you cannot build a plugin against it.
 
-::: warning No binary distribution yet
-`v0.9.0` is souxmar's first tagged release and it ships **source only**.
-There are no signed installers, no `.dmg`, no `.zip`, no `.tar.gz`, and
-**`pysouxmar` is not on PyPI** — `pip install pysouxmar` does not work.
-Build from source; it is the only path that works today.
+**Building from source is the working path today.** The download is useful
+for checking the CLI surface, and not much else yet.
+
+There is also no `.dmg`, no installer, no signature, and **no PyPI package** —
+`pip install pysouxmar` does not work.
 :::
+
+## Download (limited)
+
+| Platform | Artefact |
+| --- | --- |
+| Linux x86_64 | [`souxmar-0.9.0-linux-x64.tar.gz`](https://github.com/celikgo/souxmar/releases/tag/v0.9.0) |
+| macOS arm64 | [`souxmar-0.9.0-macos-arm64.tar.gz`](https://github.com/celikgo/souxmar/releases/tag/v0.9.0) |
+| Windows x86_64 | [`souxmar-0.9.0-windows-x64.zip`](https://github.com/celikgo/souxmar/releases/tag/v0.9.0) |
+
+Check the SHA-256 against the `SHA256SUMS-*.txt` published beside each one:
+
+```sh
+shasum -a 256 -c SHA256SUMS-macos-arm64.txt
+```
+
+That, plus the build provenance attestation on the release, tells you which
+workflow run produced the bytes. It does not tell you the project signed
+them — nothing here is signed.
 
 ## Build from source
 
