@@ -23,6 +23,7 @@ import pathlib
 import sys
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -392,7 +393,9 @@ def fig_social_card():
     T = np.clip(rosenthal(Wg, Yg, 0.0), None, 2900)
     ax.contourf(Wg * 1e6, Yg * 1e6, T, levels=np.linspace(T_BASE, 2900, 60), cmap="inferno")
     ax.contour(Wg * 1e6, Yg * 1e6, T, levels=[T_MELT], colors=[GOOD], linewidths=2.2)
-    ax.set_xticks([]); ax.set_yticks([]); ax.grid(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.grid(False)
     for s in ax.spines.values():
         s.set_visible(False)
     ax.text(0.5, 0.045, "LPBF melt pool  ·  Rosenthal (1946)  ·  316L, 200 W, 0.8 m/s",

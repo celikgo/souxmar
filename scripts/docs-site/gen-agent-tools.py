@@ -30,7 +30,6 @@ import sys
 import textwrap
 from pathlib import Path
 
-
 HEADER = textwrap.dedent("""\
     <!--
       This file is **generated** by scripts/docs-site/gen-agent-tools.py.
@@ -95,7 +94,7 @@ def fetch_tool_catalogue(engine: Path) -> dict:
         raise SystemExit(
             f"agent list --json output is not valid JSON: {exc}\n"
             f"  first 400 bytes: {proc.stdout[:400]!r}"
-        )
+        ) from exc
     if catalogue.get("schema") != 1:
         raise SystemExit(
             f"unexpected schema in agent list output: "
