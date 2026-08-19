@@ -18,10 +18,9 @@
 
 from __future__ import annotations
 
+import pathlib
 import re
 import sys
-import pathlib
-
 
 # Order matters: longer/specific patterns first to avoid masking.
 NORMALISERS: list[tuple[re.Pattern[str], str]] = [
