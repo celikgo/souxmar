@@ -10,10 +10,23 @@ stages:
     input:
       path: cube.stl
 
+  # postproc.* is field-in / field-out by definition, so the dispatcher
+  # requires a `field:` on every postproc stage. postproc.mesh_quality then
+  # ignores it — it reads the mesh — but something has to produce one, which
+  # is what this stage is for. solver.heat.linear is a closed-form
+  # demonstration stub (see docs/CAPABILITIES.md); nothing here is a heat
+  # analysis, it is the cheapest field producer in the tree.
+  - id: seed
+    plugin: solver.heat.linear
+    input:
+      mesh: { from: read }
+      num_time_steps: 1
+
   - id: quality
     plugin: postproc.mesh_quality
     input:
-      mesh: { from: read }
+      mesh:  { from: read }
+      field: { from: seed }
 
   - id: write
     plugin: writer.vtu

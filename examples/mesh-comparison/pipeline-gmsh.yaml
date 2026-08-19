@@ -16,10 +16,20 @@ stages:
       target_size: 0.20
       element_order: 1
 
+  # The dispatcher requires a `field:` on every postproc stage;
+  # postproc.mesh_quality ignores it and reads the mesh. solver.heat.linear
+  # is the cheapest field producer in the tree — this is not a heat analysis.
+  - id: seed
+    plugin: solver.heat.linear
+    input:
+      mesh: { from: mesh }
+      num_time_steps: 1
+
   - id: quality
     plugin: postproc.mesh_quality
     input:
-      mesh: { from: mesh }
+      mesh:  { from: mesh }
+      field: { from: seed }
 
   - id: write
     plugin: writer.vtu

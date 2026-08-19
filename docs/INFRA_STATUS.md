@@ -67,9 +67,10 @@ When a maintainer is ready to land the first real data:
    #   directory. The artefact's layout mirrors the directory
    #   structure under tests/visual/test-results/.
 
-   # Docs-site agent tools:
+   # Docs-site agent tools — DONE, the page is generated from the
+   # binary and the CI gate now blocks. Re-run after any tool change:
    scripts/docs-site/gen-agent-tools.py \
-     --engine build/dev/tools/souxmar/souxmar \
+     --engine build/dev/src/cli/souxmar \
      --out    docs-site/agents/tools.md
    ```
 
@@ -78,8 +79,9 @@ When a maintainer is ready to land the first real data:
      no unexpected output drift.
    - VR baselines render the dim-theme palette correctly on
      each platform.
-   - The generated agent tool docs match the 18-tool catalogue
-     ADR-0011 names.
+   - The generated agent tool docs match the catalogue the binary
+     reports — 24 tools, ADR-0011's frozen 18 plus the six additive
+     ratchets through ADR-0045.
 5. Commit all in one PR titled
    `infra: bootstrap corpora + baselines after v0.9.2 (Sprint X push N)`.
 6. The same PR flips `continue-on-error: true` to `false` in

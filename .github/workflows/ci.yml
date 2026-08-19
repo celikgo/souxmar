@@ -460,12 +460,10 @@ jobs:
     needs: [changes, engine]
     if: needs.changes.outputs.agent == 'true' || needs.changes.outputs.engine == 'true'
     runs-on: ubuntu-22.04
-    # ADR-0017 non-blocking-on-first-run. docs-site/agents/tools.md is
-    # still the committed placeholder that points at its own regeneration
-    # command, so this gate is red until the bootstrap PR replaces it —
-    # see docs/INFRA_STATUS.md. Blocking on a known-red gate teaches
-    # people to ignore red gates.
-    continue-on-error: true
+    # This was advisory while docs-site/agents/tools.md was a committed
+    # placeholder claiming an 18-tool catalogue against a 24-tool binary —
+    # a gate that can never go green teaches people to ignore red gates.
+    # The page is now generated from the binary, so the gate blocks.
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -768,6 +766,7 @@ jobs:
       - format
       - version-consistency
       - docs-truth
+      - docs-generated
       - engine
       - conformance
       - agent-evals

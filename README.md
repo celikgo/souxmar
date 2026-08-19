@@ -169,6 +169,11 @@ Prerequisites: CMake ≥ 3.25, Ninja, a C++20 compiler (GCC 13 / Clang 17 /
 AppleClang / MSVC 19.36+), and [vcpkg](https://github.com/microsoft/vcpkg)
 cloned with `VCPKG_ROOT` exported.
 
+On macOS, vcpkg builds `libsodium` through autotools, so you also need
+`brew install autoconf autoconf-archive automake libtool`. Without them the
+first `cmake --preset dev` fails inside the vcpkg port build rather than in
+souxmar's own configure, which makes the cause easy to misread.
+
 ```bash
 cmake --preset dev
 cmake --build --preset dev
