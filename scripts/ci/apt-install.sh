@@ -27,19 +27,31 @@ fi
 ATTEMPTS="${APT_INSTALL_ATTEMPTS:-3}"
 TIMEOUT_SECS="${APT_INSTALL_TIMEOUT:-300}"
 
-# `timeout` is coreutils; present on every GitHub Ubuntu image.
+# SIGTERM first, SIGKILL only if it will not go. A killed apt-get leaves
+# /var/lib/apt/lists/lock held, so the next attempt dies instantly with
+# "Could not get lock" — the retry then manufactures the failure it exists
+# to survive. TERM lets apt release the lock on its way out.
 run_with_deadline() {
-  timeout --signal=KILL "$TIMEOUT_SECS" "$@"
+  timeout --signal=TERM --kill-after=30 "$TIMEOUT_SECS" "$@"
 }
+
+# And in case something else on the image is mid-apt: let apt wait for the
+# lock rather than erroring on it. This is apt's own supported knob and is
+# more reliable than sleeping and hoping.
+APT_OPTS=(-o "DPkg::Lock::Timeout=${APT_LOCK_TIMEOUT:-180}")
 
 for attempt in $(seq 1 "$ATTEMPTS"); do
   echo "apt-install: attempt $attempt/$ATTEMPTS — $*"
 
-  if ! run_with_deadline sudo apt-get update -qq; then
-    echo "apt-install: 'apt-get update' failed or timed out" >&2
+  if ! run_with_deadline sudo apt-get "${APT_OPTS[@]}" update -qq; then
+    # Not fatal on its own: the package lists on the image are usually
+    # recent enough to install from. It only matters when the package is
+    # genuinely absent, which the install below reports properly.
+    echo "apt-install: 'apt-get update' failed or timed out; continuing" >&2
   fi
 
-  if run_with_deadline sudo apt-get install -y --no-install-recommends "$@"; then
+  if run_with_deadline sudo apt-get "${APT_OPTS[@]}" install -y \
+       --no-install-recommends "$@"; then
     echo "apt-install: installed $*"
     exit 0
   fi
@@ -50,7 +62,11 @@ for attempt in $(seq 1 "$ATTEMPTS"); do
   fi
 done
 
-echo "::error::apt-install: could not install after $ATTEMPTS attempts: $*" >&2
+# Plain message, not ::error::. Callers legitimately recover from this —
+# setup-cpp tries gcc-13 from the archive and falls back to the toolchain
+# PPA when it is absent — and a red annotation for a handled failure sends
+# people looking at the wrong step.
+echo "apt-install: could not install after $ATTEMPTS attempts: $*" >&2
 echo "Each attempt was capped at ${TIMEOUT_SECS}s. A stall here is usually the" >&2
 echo "runner's package mirror rather than anything in this repository." >&2
 exit 1
