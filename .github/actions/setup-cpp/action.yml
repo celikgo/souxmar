@@ -28,14 +28,18 @@ runs:
       if: runner.os == 'Linux'
       shell: bash
       run: |
-        sudo apt-get update
         # ninja + pkg-config for the build; the rest are vcpkg's build
         # dependencies for the ports in vcpkg.json.
+        #
+        # Every apt call here goes through apt-install.sh: the runners'
+        # package mirrors stall rather than fail, and an unbounded apt-get
+        # has hung this job past an hour before now.
         # autoconf/automake/libtool are here because libsodium builds with
         # autotools. Without them vcpkg provisions its own from
         # ftpmirror.gnu.org, which round-robins to a random GNU mirror and
         # returned 502 on the first cold run.
-        sudo apt-get install -y --no-install-recommends \
+        apt_install="$GITHUB_WORKSPACE/scripts/ci/apt-install.sh"
+        "$apt_install" \
           ninja-build pkg-config curl zip unzip tar bison flex \
           autoconf automake autoconf-archive libtool m4
         # gcc-13 unconditionally, not just for the ci-linux-gcc preset.
@@ -44,20 +48,19 @@ runs:
         # how the Python-bindings leg ended up being the only one built
         # with a compiler nothing else in CI uses, and the only one whose
         # -Wuseless-cast diagnostics differed.
-        sudo apt-get install -y --no-install-recommends gcc-13 g++-13 || {
+        "$apt_install" gcc-13 g++-13 || {
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc-13 g++-13
+          "$apt_install" gcc-13 g++-13
         }
         if [ "${{ inputs.preset }}" = "ci-linux-clang" ]; then
-          sudo apt-get install -y --no-install-recommends clang-17 || {
+          "$apt_install" clang-17 || {
             # The GitHub image does not always carry clang-17; fall back
             # to the LLVM apt channel rather than silently using a
             # different compiler than the preset names.
             wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
               | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
             sudo add-apt-repository -y "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-17 main"
-            sudo apt-get update && sudo apt-get install -y clang-17
+            "$apt_install" clang-17
           }
         fi
 
