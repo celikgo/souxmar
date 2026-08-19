@@ -17,8 +17,11 @@
 //   65 input data error (parse / validate failure)
 //   70 internal error (plugin load / dispatch failure)
 
+#include "souxmar/ai/agent.h"
 #include "souxmar/ai/audit_log.h"
 #include "souxmar/ai/budget_config.h"  // Sprint 6 push 6
+#include "souxmar/ai/provider.h"
+#include "souxmar/ai/provider_config.h"
 #include "souxmar/ai/tool.h"
 #include "souxmar/pipeline/cache.h"
 #include "souxmar/pipeline/parser.h"
@@ -37,6 +40,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <iostream>  // agent chat confirmation prompt
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -85,6 +89,11 @@ void print_usage() {
       "  souxmar plugin validate-index [--index <path>]\n"
       "  souxmar plugin install <id> [--license <sxm_lic_...>] [--yes] [--json]\n"
       "  souxmar agent list [--json]\n"
+      "  souxmar agent providers\n"
+      "  souxmar agent chat <prompt> [--provider <id>] [--model <id>]\n"
+      "                              [--base-url <url>] [--project <dir>]\n"
+      "                              [--max-steps <n>] [--yes]\n"
+      "                              [--audit-log <path>] [--plugin-path <dir>]...\n"
       "  souxmar agent invoke <tool> [--input <yaml>] [--input-file <path>] [--yes]\n"
       "                              [--audit-log <path>] [--budget-config <path>]\n"
       "                              [--plugin-path <dir>]...\n"
@@ -657,6 +666,290 @@ int cmd_agent_list(bool json_output) {
       fmt::print("    {}\n", t->description);
     }
     fmt::print("\n");
+  }
+  return kExitOk;
+}
+
+// Build a Provider from an explicit provider id (or the project's
+// project.ai.toml when none is given). Returns nullptr and prints the
+// reason when the configuration is unusable.
+std::unique_ptr<souxmar::ai::Provider> make_provider(const std::string& provider_flag,
+                                                     const std::string& base_url_flag,
+                                                     const fs::path& project_dir,
+                                                     std::string& model_inout,
+                                                     std::string& chosen_name) {
+  namespace ai = souxmar::ai;
+
+  std::string provider_id = provider_flag;
+  std::string base_url = base_url_flag;
+  std::string key_env;
+
+  // No --provider: read the project's config, which is the normal path.
+  if (provider_id.empty()) {
+    auto r = ai::load_provider_config(project_dir);
+    if (auto* err = std::get_if<ai::ProviderConfigError>(&r)) {
+      if (err->kind != ai::ProviderConfigErrorKind::NotFound) {
+        fmt::print(stderr, "error: {}\n", err->message);
+        return nullptr;
+      }
+      fmt::print(stderr,
+                 "error: no provider configured. Either write a project.ai.toml in '{}' "
+                 "or pass --provider <id> --model <model>.\n"
+                 "       Run `souxmar agent providers` to list what is available.\n",
+                 project_dir.string());
+      return nullptr;
+    }
+    const auto& cfg = std::get<ai::ProviderConfig>(r);
+    if (model_inout.empty())
+      model_inout = cfg.model;
+    if (cfg.provider == ai::ProviderKind::Ollama) {
+      ai::OllamaProviderOptions opts;
+      if (!cfg.endpoint.empty())
+        opts.endpoint = cfg.endpoint;
+      chosen_name = "ollama";
+      return std::make_unique<ai::OllamaProvider>(std::move(opts));
+    }
+    if (cfg.provider == ai::ProviderKind::BYOKAnthropic) {
+      ai::AnthropicProviderOptions opts;
+      if (!cfg.base_url.empty())
+        opts.base_url = cfg.base_url;
+      const std::string env_name = cfg.api_key_env.empty() ? "ANTHROPIC_API_KEY" : cfg.api_key_env;
+      if (const char* key = std::getenv(env_name.c_str()); key != nullptr && *key != '\0') {
+        opts.api_key = key;
+      }
+      if (opts.api_key.empty()) {
+        fmt::print(
+            stderr, "error: no API key for 'anthropic'. Export ${} and try again.\n", env_name);
+        return nullptr;
+      }
+      chosen_name = "anthropic";
+      return std::make_unique<ai::AnthropicProvider>(std::move(opts));
+    }
+    if (cfg.provider != ai::ProviderKind::OpenAICompatible) {
+      fmt::print(stderr,
+                 "error: provider '{}' in {} cannot run an agent turn yet. "
+                 "Use an OpenAI-compatible provider or ollama.\n",
+                 ai::to_string(cfg.provider),
+                 cfg.source.string());
+      return nullptr;
+    }
+    provider_id = cfg.provider_id;
+    if (base_url.empty())
+      base_url = cfg.base_url;
+    key_env = cfg.api_key_env;
+  }
+
+  if (provider_id == "ollama") {
+    ai::OllamaProviderOptions opts;
+    if (!base_url.empty())
+      opts.endpoint = base_url;
+    chosen_name = "ollama";
+    return std::make_unique<ai::OllamaProvider>(std::move(opts));
+  }
+
+  if (provider_id == "anthropic" || provider_id == "claude") {
+    ai::AnthropicProviderOptions opts;
+    if (!base_url.empty())
+      opts.base_url = base_url;
+    const std::string env_name = key_env.empty() ? "ANTHROPIC_API_KEY" : key_env;
+    if (const char* key = std::getenv(env_name.c_str()); key != nullptr && *key != '\0') {
+      opts.api_key = key;
+    }
+    if (opts.api_key.empty()) {
+      fmt::print(
+          stderr, "error: no API key for 'anthropic'. Export ${} and try again.\n", env_name);
+      return nullptr;
+    }
+    chosen_name = "anthropic";
+    return std::make_unique<ai::AnthropicProvider>(std::move(opts));
+  }
+
+  // Resolve a preset when the caller named one on the command line.
+  if (key_env.empty() || base_url.empty()) {
+    if (const auto* preset = ai::find_openai_compatible_preset(provider_id); preset != nullptr) {
+      if (base_url.empty())
+        base_url = std::string(preset->base_url);
+      if (key_env.empty())
+        key_env = std::string(preset->key_env);
+    }
+  }
+  if (base_url.empty()) {
+    fmt::print(stderr,
+               "error: provider '{}' has no endpoint. Pass --base-url, or use one of: ",
+               provider_id);
+    for (const auto& preset : ai::openai_compatible_presets()) {
+      if (!preset.base_url.empty())
+        fmt::print(stderr, "{} ", preset.id);
+    }
+    fmt::print(stderr, "ollama\n");
+    return nullptr;
+  }
+
+  ai::OpenAICompatibleOptions opts;
+  opts.provider_id = provider_id;
+  opts.base_url = base_url;
+  if (!key_env.empty()) {
+    if (const char* key = std::getenv(key_env.c_str()); key != nullptr && *key != '\0') {
+      opts.api_key = key;
+    }
+  }
+  const bool local =
+      base_url.rfind("http://localhost", 0) == 0 || base_url.rfind("http://127.0.0.1", 0) == 0;
+  if (opts.api_key.empty() && !local) {
+    fmt::print(stderr,
+               "error: no API key for '{}'. Export ${} and try again.\n",
+               provider_id,
+               key_env.empty() ? "SOUXMAR_AI_API_KEY" : key_env);
+    return nullptr;
+  }
+  chosen_name = provider_id;
+  return std::make_unique<ai::OpenAICompatibleProvider>(std::move(opts));
+}
+
+// List every provider the CLI can construct, so `--provider` is
+// discoverable without reading the docs.
+int cmd_agent_providers() {
+  fmt::print("{:<20} {:<34} {}\n", "PROVIDER", "ENDPOINT", "API KEY FROM");
+  fmt::print(
+      "{:<20} {:<34} {}\n", "anthropic", "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY");
+  fmt::print("{:<20} {:<34} {}\n", "ollama", "http://localhost:11434", "(none — local)");
+  for (const auto& preset : souxmar::ai::openai_compatible_presets()) {
+    fmt::print("{:<20} {:<34} {}\n",
+               preset.id,
+               preset.base_url.empty() ? "(pass --base-url)" : preset.base_url,
+               preset.key_env);
+  }
+  fmt::print(
+      "\nAny server speaking the OpenAI /chat/completions shape works:\n"
+      "  souxmar agent chat \"...\" --provider openai-compatible \\\n"
+      "      --base-url http://localhost:1234/v1 --model <id>\n");
+  return kExitOk;
+}
+
+int cmd_agent_chat(const std::string& prompt,
+                   const std::string& provider_flag,
+                   const std::string& model_flag,
+                   const std::string& base_url_flag,
+                   const fs::path& project_dir,
+                   std::uint32_t max_steps,
+                   bool auto_yes,
+                   const fs::path& audit_log_path,
+                   const std::vector<fs::path>& extra_paths) {
+  namespace ai = souxmar::ai;
+
+  if (prompt.empty()) {
+    fmt::print(stderr, "error: `souxmar agent chat` requires a prompt\n");
+    return kExitUsage;
+  }
+
+  std::string model = model_flag;
+  std::string provider_name;
+  auto provider = make_provider(provider_flag, base_url_flag, project_dir, model, provider_name);
+  if (!provider)
+    return kExitInputData;
+  if (model.empty()) {
+    fmt::print(stderr, "error: no model. Pass --model, or set `model` in project.ai.toml.\n");
+    return kExitInputData;
+  }
+
+  // Plugins: the tools that touch the engine need a populated registry.
+  souxmar::plugin::Registry plugin_registry;
+  souxmar::plugin::PluginLoader loader(plugin_registry, std::string{souxmar::version_string()});
+  std::vector<souxmar::plugin::LoadedPlugin> live_plugins;
+  const auto report = discover_with_overrides(extra_paths);
+  live_plugins.reserve(report.loaded.size());
+  for (const auto& d : report.loaded) {
+    auto load_result = loader.load(d);
+    if (std::holds_alternative<souxmar::plugin::LoadedPlugin>(load_result)) {
+      live_plugins.push_back(std::move(std::get<souxmar::plugin::LoadedPlugin>(load_result)));
+    }
+  }
+
+  souxmar::pipeline::RegistryDispatcher dispatcher(plugin_registry);
+  souxmar::pipeline::Cache cache;
+  souxmar::pipeline::Value session_state = souxmar::pipeline::Value::map({});
+
+  ai::ToolContext ctx;
+  ctx.registry = &plugin_registry;
+  ctx.dispatcher = &dispatcher;
+  ctx.cache = &cache;
+  ctx.session_state = &session_state;
+
+  std::unique_ptr<ai::AuditLog> audit;
+  if (!audit_log_path.empty()) {
+    audit = std::make_unique<ai::AuditLog>(ai::AuditLog::default_path(audit_log_path));
+    ctx.audit_log = audit.get();
+  }
+
+  const auto tools = ai::default_v1_tools();
+
+  // Confirmation. --yes overrides everything to Auto; otherwise prompt
+  // on the terminal. A tool that needs a decision gets one from the
+  // user, not from the model.
+  ai::ConfirmationPolicy policy;
+  if (auto_yes) {
+    for (const auto& name : tools.list())
+      policy.overrides[name] = ai::Confirmation::Auto;
+  } else {
+    policy.prompter = [](const ai::Tool& tool, const souxmar::pipeline::Value& inputs) {
+      fmt::print(stderr, "\n  the agent wants to run `{}`\n", tool.name);
+      if (inputs.kind() != souxmar::pipeline::Value::Kind::Null) {
+        fmt::print(stderr, "  with: {}\n", souxmar::pipeline::emit_value_yaml(inputs));
+      }
+      fmt::print(stderr, "  allow? [y/N] ");
+      std::string answer;
+      if (!std::getline(std::cin, answer))
+        return false;
+      return answer == "y" || answer == "Y" || answer == "yes";
+    };
+  }
+
+  fmt::print(stderr,
+             "agent: {} · model {} · {} tools · max {} steps\n",
+             provider_name,
+             model,
+             tools.size(),
+             max_steps);
+
+  ai::AgentOptions options;
+  options.model = model;
+  options.max_steps = max_steps;
+
+  const auto outcome = ai::run_agent_turn(
+      *provider, tools, ctx, policy, {{ai::ChatMessage::Role::User, prompt, {}, {}}}, options);
+
+  // Transcript: every tool the agent ran, so the user can see what
+  // happened to their project rather than only the closing prose.
+  for (std::size_t i = 0; i < outcome.steps.size(); ++i) {
+    const auto& step = outcome.steps[i];
+    if (!step.assistant_text.empty() && !step.tool_calls.empty()) {
+      fmt::print("{}\n", step.assistant_text);
+    }
+    for (const auto& call : step.tool_calls) {
+      fmt::print(stderr,
+                 "  [{}] {} → {}\n",
+                 call.ok ? "ok" : (call.refused ? "refused" : "error"),
+                 call.name,
+                 call.result_summary);
+    }
+  }
+
+  if (outcome.stop_reason == ai::AgentStopReason::ProviderFailed) {
+    fmt::print(stderr, "error: {}\n", outcome.error);
+    return kExitInternal;
+  }
+  if (!outcome.final_text.empty()) {
+    fmt::print("\n{}\n", outcome.final_text);
+  }
+  if (outcome.stop_reason == ai::AgentStopReason::MaxStepsReached) {
+    fmt::print(stderr,
+               "\nwarning: stopped after {} steps with the agent still working — "
+               "the answer above is incomplete. Raise --max-steps to continue.\n",
+               max_steps);
+    return kExitInputData;
+  }
+  if (outcome.input_tokens || outcome.output_tokens) {
+    fmt::print(stderr, "tokens: {} in / {} out\n", outcome.input_tokens, outcome.output_tokens);
   }
   return kExitOk;
 }
@@ -1373,6 +1666,12 @@ int main(int argc, char** argv) {
   bool use_cache = true;
   bool auto_yes = false;
   std::string input_yaml;
+  // `agent chat` flags.
+  std::string agent_provider;
+  std::string agent_model;
+  std::string agent_base_url;
+  fs::path agent_project_dir;
+  std::uint32_t agent_max_steps = 8;
   std::vector<std::string> positionals;
   // Sprint 10 push 6 — `souxmar update` flags. Hoisted into the shared
   // parse loop so the order of flags doesn't depend on the position
@@ -1392,6 +1691,40 @@ int main(int argc, char** argv) {
       if (!v)
         return kExitUsage;
       cache_dir_override = *v;
+    } else if (args[i] == "--provider") {
+      auto v = pop_value(args, i, "--provider");
+      if (!v)
+        return kExitUsage;
+      agent_provider = *v;
+    } else if (args[i] == "--model") {
+      auto v = pop_value(args, i, "--model");
+      if (!v)
+        return kExitUsage;
+      agent_model = *v;
+    } else if (args[i] == "--base-url") {
+      auto v = pop_value(args, i, "--base-url");
+      if (!v)
+        return kExitUsage;
+      agent_base_url = *v;
+    } else if (args[i] == "--project") {
+      auto v = pop_value(args, i, "--project");
+      if (!v)
+        return kExitUsage;
+      agent_project_dir = *v;
+    } else if (args[i] == "--max-steps") {
+      auto v = pop_value(args, i, "--max-steps");
+      if (!v)
+        return kExitUsage;
+      try {
+        agent_max_steps = static_cast<std::uint32_t>(std::stoul(*v));
+      } catch (const std::exception&) {
+        fmt::print(stderr, "error: --max-steps must be a positive integer\n");
+        return kExitUsage;
+      }
+      if (agent_max_steps == 0) {
+        fmt::print(stderr, "error: --max-steps must be at least 1\n");
+        return kExitUsage;
+      }
     } else if (args[i] == "--input") {
       auto v = pop_value(args, i, "--input");
       if (!v)
@@ -1622,6 +1955,24 @@ int main(int argc, char** argv) {
                               audit_log_path,
                               budget_config_path,
                               extra_paths);
+    }
+    if (positionals[0] == "providers") {
+      return cmd_agent_providers();
+    }
+    if (positionals[0] == "chat") {
+      if (positionals.size() < 2) {
+        fmt::print(stderr, "error: `souxmar agent chat` requires a prompt\n");
+        return kExitUsage;
+      }
+      return cmd_agent_chat(positionals[1],
+                            agent_provider,
+                            agent_model,
+                            agent_base_url,
+                            agent_project_dir.empty() ? fs::current_path() : agent_project_dir,
+                            agent_max_steps,
+                            auto_yes,
+                            audit_log_path,
+                            extra_paths);
     }
     fmt::print(stderr, "error: unknown agent action '{}'\n", positionals[0]);
     return kExitUsage;

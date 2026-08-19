@@ -39,9 +39,14 @@ pub fn byok_store_key(provider: String, key: String) -> Result<(), String> {
     // to Keychain Services on macOS, Credential Manager on Windows,
     // libsecret on Linux. Errors surface to the React side which
     // shows them under the input field.
-    let entry = keyring::Entry::new("dev.souxmar.desktop", &format!("byok-{}", provider))
+    if key.trim().is_empty() {
+        return Err("the API key is empty".into());
+    }
+    let entry = keyring::Entry::new(KEYRING_SERVICE, &format!("byok-{}", provider))
         .map_err(|e| format!("keyring: {}", e))?;
-    entry.set_password(&key).map_err(|e| format!("keyring: {}", e))
+    entry
+        .set_password(key.trim())
+        .map_err(|e| format!("keyring: {}", e))
 }
 
 #[tauri::command]
@@ -55,6 +60,154 @@ pub fn byok_test_connection(provider: String) -> Result<bool, String> {
     // the user's account).
     let _ = provider;
     Ok(false)
+}
+
+// ---------------------------------------------------------------------------
+// BYOK credential plumbing.
+//
+// Storing the key was only ever half of it. The engine reads credentials
+// from environment variables named by `project.ai.toml`, so a key sitting
+// in the keychain that nothing ever reads back leaves the user on the
+// stub provider with a green checkmark telling them they are connected.
+// These functions close that loop: read the key back out, put it where
+// the engine looks, and make sure the project names the provider it was
+// saved for.
+// ---------------------------------------------------------------------------
+
+const KEYRING_SERVICE: &str = "dev.souxmar.desktop";
+
+/// The environment variable each provider's key is passed through. These
+/// match the conventional names the engine's preset table already uses,
+/// so a key saved in the app and a key exported in a shell are the same
+/// key as far as souxmar is concerned.
+fn key_env_for(provider: &str) -> &'static str {
+    match provider {
+        "anthropic" | "claude" | "byok-anthropic" => "ANTHROPIC_API_KEY",
+        "openai" | "byok-openai" => "OPENAI_API_KEY",
+        "grok" | "xai" => "XAI_API_KEY",
+        "deepseek" => "DEEPSEEK_API_KEY",
+        "groq" => "GROQ_API_KEY",
+        "mistral" => "MISTRAL_API_KEY",
+        "openrouter" => "OPENROUTER_API_KEY",
+        "together" => "TOGETHER_API_KEY",
+        _ => "SOUXMAR_AI_API_KEY",
+    }
+}
+
+/// Providers that run locally and need no credential.
+fn is_keyless(provider: &str) -> bool {
+    provider == "ollama"
+}
+
+fn read_key(provider: &str) -> Option<String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, &format!("byok-{}", provider)).ok()?;
+    entry.get_password().ok().filter(|k| !k.trim().is_empty())
+}
+
+/// Whether a key is on file, so the UI can say "connected" truthfully
+/// instead of assuming the save worked.
+#[tauri::command]
+pub fn byok_has_key(provider: String) -> Result<bool, String> {
+    Ok(is_keyless(&provider) || read_key(&provider).is_some())
+}
+
+/// Forget a stored key. Needed for "disconnect" and for rotating a key
+/// that has been revoked upstream.
+#[tauri::command]
+pub fn byok_clear_key(provider: String) -> Result<(), String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, &format!("byok-{}", provider))
+        .map_err(|e| format!("keyring: {}", e))?;
+    match entry.delete_credential() {
+        Ok(()) => Ok(()),
+        // Already absent is the state the caller asked for.
+        Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(format!("keyring: {}", e)),
+    }
+}
+
+/// Record which provider and model the app should use.
+#[tauri::command]
+pub fn byok_set_active(provider: String, model: String) -> Result<(), String> {
+    let path = settings_path();
+    let mut s = Settings::load(&path).unwrap_or_default();
+    s.ai_provider = Some(provider);
+    s.ai_model = if model.trim().is_empty() { None } else { Some(model.trim().to_string()) };
+    s.save(&path).map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Serialize)]
+pub struct ActiveProvider {
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub has_key: bool,
+}
+
+#[tauri::command]
+pub fn byok_active() -> Result<ActiveProvider, String> {
+    let s = Settings::load(&settings_path()).unwrap_or_default();
+    let has_key = match s.ai_provider.as_deref() {
+        Some(p) => is_keyless(p) || read_key(p).is_some(),
+        None => false,
+    };
+    Ok(ActiveProvider { provider: s.ai_provider, model: s.ai_model, has_key })
+}
+
+/// Put the saved credential where the engine will find it, and make sure
+/// the project names a provider.
+///
+/// Called before every bridge chat call. Two things have to be true for a
+/// turn to reach a real model:
+///
+///   1. `<project>/project.ai.toml` names the provider. Written from the
+///      saved preference when absent — never overwritten, because a user
+///      who hand-edited it means it.
+///   2. The key is in the process environment under the variable that
+///      config names. The engine deliberately refuses to read secrets out
+///      of the config file, so this is the channel.
+///
+/// A missing key is not an error here: the engine produces the specific,
+/// actionable message, and duplicating that logic in two languages is how
+/// the two drift apart.
+fn prepare_provider_env(project_id: &str) {
+    let settings = Settings::load(&settings_path()).unwrap_or_default();
+    let Some(provider) = settings.ai_provider.as_deref() else {
+        return;  // never completed setup; engine falls back to stub and says so
+    };
+
+    if let Some(key) = read_key(provider) {
+        // SAFETY: Tauri commands run on the main thread pool and this
+        // writes a fixed set of names; no other thread reads these except
+        // the engine, synchronously, below.
+        unsafe {
+            std::env::set_var(key_env_for(provider), key);
+        }
+    }
+
+    let dir = Path::new(project_id);
+    if !dir.is_dir() {
+        return;
+    }
+    let config = dir.join("project.ai.toml");
+    if config.exists() {
+        return;
+    }
+    let model = settings.ai_model.as_deref().unwrap_or("");
+    if model.is_empty() && !is_keyless(provider) {
+        return;  // a hosted provider without a model would not load anyway
+    }
+    let body = format!(
+        "# Written by the souxmar desktop app from your setup choice.\n\
+         # Edit freely — this file is never overwritten once it exists.\n\
+         # The API key is NOT stored here; it lives in your OS keychain\n\
+         # and is passed to the engine through ${}.\n\
+         schema   = 1\n\
+         provider = \"{}\"\n\
+         model    = \"{}\"\n",
+        key_env_for(provider),
+        provider,
+        model
+    );
+    let _ = fs::write(&config, body);
 }
 
 #[tauri::command]
@@ -159,6 +312,11 @@ pub fn chat_send(
         return Err("empty message".into());
     }
 
+    // Hand the engine the key the user saved during setup. Without this
+    // the keychain entry is write-only and every turn silently lands on
+    // the stub provider.
+    prepare_provider_env(&project_id);
+
     // Render the one-message request to the proxy's openapi.yaml
     // ChatRequest shape. The bridge's regex-based extractor reads
     // model + messages; sampling knobs default. Sprint 15 push 1
@@ -171,6 +329,24 @@ pub fn chat_send(
 
     souxmar_bridge::Bridge::new()
         .chat_send(&request_json, &project_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Answer the agent's pending confirmation and let the turn continue.
+///
+/// The suspended session lives in the C bridge keyed by project, so the
+/// mesh and field handles the turn already produced survive the pause —
+/// which is why this is a second command rather than a fresh turn.
+#[tauri::command]
+pub fn chat_confirm(
+    project_id: String,
+    allow:      bool,
+) -> Result<souxmar_bridge::ChatSummary, String> {
+    // The resumed turn builds a fresh provider, so it needs the
+    // credential just as much as the first leg did.
+    prepare_provider_env(&project_id);
+    souxmar_bridge::Bridge::new()
+        .chat_confirm(&project_id, allow)
         .map_err(|e| e.to_string())
 }
 
@@ -434,7 +610,7 @@ pub struct SolverCapability {
 /// List solver-capability ids discovered in souxmar-plugin.toml files
 /// under, in order of preference:
 ///   1. `<project>/plugins/*/souxmar-plugin.toml`        (project-local)
-///   2. paths listed in `SOUXMAR_PLUGINS_PATH`            (env, ':'-separated)
+///   2. paths listed in `SOUXMAR_PLUGIN_PATH`             (env, platform-separated)
 ///   3. `<repo>/examples/plugins/*/souxmar-plugin.toml`   (in-tree, dev)
 ///
 /// The repo root is the parent of `src/desktop/src-tauri/` walked up by
@@ -455,6 +631,14 @@ pub fn list_mesher_capabilities(project_path: String) -> Result<Vec<SolverCapabi
     list_capabilities_with_prefix(&project_path, "mesher.")
 }
 
+/// Every discovered capability, whatever its namespace — readers,
+/// writers, postprocs and solvers alike. The Problems panel uses this to
+/// tell whether a stage's `plugin:` id is provided by anything at all.
+#[tauri::command]
+pub fn list_capabilities(project_path: String) -> Result<Vec<SolverCapability>, String> {
+    list_capabilities_with_prefix(&project_path, "")
+}
+
 fn list_capabilities_with_prefix(project_path: &str, prefix: &str) -> Result<Vec<SolverCapability>, String> {
     let mut out: Vec<SolverCapability> = Vec::new();
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -464,12 +648,10 @@ fn list_capabilities_with_prefix(project_path: &str, prefix: &str) -> Result<Vec
         scan_plugin_dir(&project.join("plugins"), false, prefix, &mut seen, &mut out);
     }
 
-    if let Ok(env) = std::env::var("SOUXMAR_PLUGINS_PATH") {
-        for raw in env.split(':') {
-            let p = PathBuf::from(raw.trim());
-            if p.is_dir() {
-                scan_plugin_dir(&p, false, prefix, &mut seen, &mut out);
-            }
+    for raw in plugin_path_env_dirs() {
+        let p = PathBuf::from(raw.trim());
+        if p.is_dir() {
+            scan_plugin_dir(&p, false, prefix, &mut seen, &mut out);
         }
     }
 
@@ -480,16 +662,48 @@ fn list_capabilities_with_prefix(project_path: &str, prefix: &str) -> Result<Vec
     Ok(out)
 }
 
-fn in_tree_examples_plugins() -> Option<PathBuf> {
-    // CARGO_MANIFEST_DIR is .../src/desktop/src-tauri; the repo root is
-    // four parents up (src-tauri → desktop → src → repo). Only present
-    // under cargo-built dev binaries.
+/// Directories listed in the plugin-path environment variable, split on
+/// the platform separator (':' on POSIX, ';' on Windows) exactly as
+/// `souxmar::plugin::discovery` and the CLI do.
+///
+/// The canonical name is `SOUXMAR_PLUGIN_PATH` — the same one the engine,
+/// the CLI, ARCHITECTURE.md and PLUGIN_SDK.md use. This shell used to read
+/// `SOUXMAR_PLUGINS_PATH` (plural), which nothing else in the product sets,
+/// so a user who followed the docs got empty Solvers/Meshers panels. The
+/// plural spelling is still honoured as a deprecated fallback so anyone who
+/// worked around the old behaviour is not broken by the fix.
+fn plugin_path_env_dirs() -> Vec<String> {
+    const SEP: char = if cfg!(windows) { ';' } else { ':' };
+    ["SOUXMAR_PLUGIN_PATH", "SOUXMAR_PLUGINS_PATH"]
+        .iter()
+        .filter_map(|name| std::env::var(name).ok())
+        .flat_map(|value| {
+            value
+                .split(SEP)
+                .map(str::to_owned)
+                .filter(|s| !s.trim().is_empty())
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// The souxmar checkout this binary was built from, or `None` when that
+/// path no longer exists (any machine other than the build machine).
+///
+/// CARGO_MANIFEST_DIR is .../src/desktop/src-tauri; the repo root is three
+/// parents up (src-tauri → desktop → src → repo). Baked at compile time,
+/// so this only resolves for cargo-built dev binaries.
+fn repo_root() -> Option<PathBuf> {
     let manifest = env!("CARGO_MANIFEST_DIR");
     let repo = Path::new(manifest)
         .parent()? // desktop
         .parent()? // src
         .parent()?; // repo root
-    let candidate = repo.join("examples/plugins");
+    if repo.is_dir() { Some(repo.to_path_buf()) } else { None }
+}
+
+fn in_tree_examples_plugins() -> Option<PathBuf> {
+    let candidate = repo_root()?.join("examples/plugins");
     if candidate.is_dir() { Some(candidate) } else { None }
 }
 
@@ -933,6 +1147,206 @@ pub fn list_project_files(project_path: String) -> Result<FileEntry, String> {
     })
 }
 
+// ---------------------------------------------------------------------------
+// Pipeline execution.
+//
+// ADR-0022's MVC-via-subprocess pattern: the workbench READS through the
+// bridge and APPLIES by shelling out to the `souxmar` CLI, so there is
+// exactly one implementation of the run loop and the desktop cannot
+// drift from what `souxmar run` does on the command line.
+//
+// This replaces the placeholder that printed a hard-coded "pipeline ok
+// (3 stages)" log for a fixed example path regardless of the open
+// project. Everything the Terminal panel shows now comes from the child
+// process; if the CLI cannot be found or the run fails, that is what the
+// user sees.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+pub struct RunOutcome {
+    /// The command line as dispatched, for the log header.
+    pub command:   String,
+    /// Working directory of the child — relative output paths in the
+    /// pipeline (e.g. `path: cantilever.vtu`) land here.
+    pub cwd:       String,
+    /// Child exit code; -1 when the process was killed by a signal.
+    pub exit_code: i32,
+    /// True iff the child exited 0.
+    pub ok:        bool,
+    /// Merged stdout + stderr, split into lines, in that order.
+    pub lines:     Vec<String>,
+}
+
+/// The *built* in-tree example plugins that belong to a given CLI binary.
+///
+/// `in_tree_examples_plugins()` points at the source tree, whose manifests
+/// declare `libfoo.so` next to a manifest that has no binary beside it —
+/// fine for listing capability ids, useless as a `--plugin-path`, because
+/// the loader rejects every one of them. The loadable artefacts live under
+/// the CMake preset that also produced the CLI:
+///
+///   <repo>/build/<preset>/src/cli/souxmar
+///   <repo>/build/<preset>/examples/plugins/<name>/libfoo.dylib
+///
+/// Deriving the directory from the CLI path rather than guessing a preset
+/// keeps the plugins ABI-matched to the engine that will load them.
+fn built_plugins_for_cli(cli: &Path) -> Option<PathBuf> {
+    let preset_root = cli
+        .parent()?  // .../src/cli
+        .parent()?  // .../src
+        .parent()?; // <repo>/build/<preset>
+    let candidate = preset_root.join("examples").join("plugins");
+    if candidate.is_dir() { Some(candidate) } else { None }
+}
+
+/// Plugin search roots for a run, in priority order:
+///   1. `<project>/plugins`                        (project-local)
+///   2. `$SOUXMAR_PLUGIN_PATH`                     (user-installed)
+///   3. the built in-tree examples for this CLI    (dev)
+///
+/// Unlike the capability panels, this list only ever contains directories
+/// whose plugins can actually be *loaded* — a manifest with no binary
+/// beside it is a listing, not a plugin.
+fn plugin_search_dirs(project: &Path, cli: &Path) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    let push = |p: PathBuf, dirs: &mut Vec<PathBuf>| {
+        if p.is_dir() && !dirs.contains(&p) {
+            dirs.push(p);
+        }
+    };
+    push(project.join("plugins"), &mut dirs);
+    for raw in plugin_path_env_dirs() {
+        push(PathBuf::from(raw.trim()), &mut dirs);
+    }
+    if let Some(built) = built_plugins_for_cli(cli) {
+        push(built, &mut dirs);
+    }
+    dirs
+}
+
+/// Locate the `souxmar` CLI, in order of precedence:
+///   1. `$SOUXMAR_CLI`                     (explicit override)
+///   2. next to this executable            (bundled release layout)
+///   3. `<repo>/build/*/src/cli/souxmar`   (any configured CMake preset, dev)
+///   4. bare `souxmar`, resolved on `$PATH`
+fn souxmar_cli_path() -> PathBuf {
+    let exe_name = if cfg!(windows) { "souxmar.exe" } else { "souxmar" };
+
+    if let Ok(explicit) = std::env::var("SOUXMAR_CLI") {
+        let p = PathBuf::from(explicit.trim());
+        if p.is_file() {
+            return p;
+        }
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let sibling = dir.join(exe_name);
+            if sibling.is_file() {
+                return sibling;
+            }
+        }
+    }
+
+    // Dev builds: walk `<repo>/build/<preset>/src/cli/`. Preset names vary
+    // (dev, dev-test, ci-macos, ...), so enumerate rather than guess —
+    // sorted, because `read_dir` order is filesystem-dependent and a
+    // developer with several configured presets should not get a
+    // different engine from one launch to the next.
+    if let Some(repo) = repo_root() {
+        if let Ok(entries) = fs::read_dir(repo.join("build")) {
+            let mut presets: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
+            presets.sort();
+            for preset in presets {
+                let candidate = preset.join("src").join("cli").join(exe_name);
+                if candidate.is_file() {
+                    return candidate;
+                }
+            }
+        }
+    }
+
+    PathBuf::from(exe_name)
+}
+
+/// Run a project's pipeline through the `souxmar` CLI and return
+/// everything the child printed.
+///
+/// `rel_path` defaults to `pipeline.yaml` and is constrained the same way
+/// as `read_geometry_bytes`: no `..`, no absolute paths, must resolve to a
+/// file inside the project.
+#[tauri::command]
+pub fn run_pipeline(
+    project_path: String,
+    rel_path:     Option<String>,
+) -> Result<RunOutcome, String> {
+    let project = PathBuf::from(project_path.trim());
+    if !project.is_dir() {
+        return Err(format!("project {} is not a directory", project.to_string_lossy()));
+    }
+
+    let rel_raw = rel_path.unwrap_or_else(|| "pipeline.yaml".to_string());
+    let rel = PathBuf::from(rel_raw.trim());
+    for c in rel.components() {
+        if matches!(c, std::path::Component::ParentDir | std::path::Component::RootDir) {
+            return Err("rel_path must be inside the project".into());
+        }
+    }
+    let pipeline = project.join(&rel);
+    if !pipeline.is_file() {
+        return Err(format!(
+            "{} not found — a project needs a pipeline.yaml to run",
+            pipeline.to_string_lossy()
+        ));
+    }
+
+    let cli = souxmar_cli_path();
+    let search_dirs = plugin_search_dirs(&project, &cli);
+
+    let mut cmd = std::process::Command::new(&cli);
+    cmd.current_dir(&project);
+    cmd.arg("run").arg(&rel);
+    for dir in &search_dirs {
+        cmd.arg("--plugin-path").arg(dir);
+    }
+
+    // Render the command line before spawning so the log header is
+    // reproducible by hand in a terminal.
+    let rendered = {
+        let mut parts: Vec<String> =
+            vec![cli.to_string_lossy().into_owned(), "run".into(), rel.to_string_lossy().into_owned()];
+        for dir in &search_dirs {
+            parts.push("--plugin-path".into());
+            parts.push(dir.to_string_lossy().into_owned());
+        }
+        parts.join(" ")
+    };
+
+    let output = cmd.output().map_err(|e| {
+        format!(
+            "could not run {}: {}. Set $SOUXMAR_CLI to the souxmar binary, \
+             or build it with `cmake --build build/dev --target souxmar`.",
+            cli.to_string_lossy(),
+            e
+        )
+    })?;
+
+    let mut lines: Vec<String> = Vec::new();
+    for stream in [&output.stdout, &output.stderr] {
+        for line in String::from_utf8_lossy(stream).lines() {
+            lines.push(line.to_string());
+        }
+    }
+
+    Ok(RunOutcome {
+        command:   rendered,
+        cwd:       project.to_string_lossy().into_owned(),
+        exit_code: output.status.code().unwrap_or(-1),
+        ok:        output.status.success(),
+        lines,
+    })
+}
+
 fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> std::io::Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
@@ -946,4 +1360,132 @@ fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> std::io::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A throwaway project directory under the OS temp dir. Named by pid +
+    /// a caller-supplied tag so parallel test threads don't collide.
+    fn temp_project(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir()
+            .join(format!("souxmar-run-test-{}-{}", std::process::id(), tag));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("create temp project");
+        dir
+    }
+
+    /// The two-stage cantilever pipeline, trimmed to what the in-tree
+    /// hello-mesher and vtu-writer plugins need.
+    const PIPELINE: &str = "\
+version: 1
+
+stages:
+  - id: mesh
+    plugin: mesher.tetra.hello
+    input:
+      target_size: 0.05
+      element_order: 1
+
+  - id: write
+    plugin: writer.vtu
+    input:
+      mesh: { from: mesh }
+      path: out.vtu
+";
+
+    /// The tests below need both the CLI and the in-tree example plugins
+    /// to have been built. Skip rather than fail on a source-only checkout.
+    fn dev_build_available() -> bool {
+        let cli = souxmar_cli_path();
+        cli.is_file() && built_plugins_for_cli(&cli).is_some()
+    }
+
+    #[test]
+    fn run_pipeline_executes_and_writes_output() {
+        if !dev_build_available() {
+            eprintln!("skipping: no built souxmar CLI / in-tree plugins");
+            return;
+        }
+        let project = temp_project("ok");
+        fs::write(project.join("pipeline.yaml"), PIPELINE).unwrap();
+
+        let outcome = run_pipeline(project.to_string_lossy().into_owned(), None)
+            .expect("run_pipeline should dispatch");
+
+        // The transcript must come from the child, not from us.
+        assert!(outcome.ok, "expected exit 0, got {}: {:?}", outcome.exit_code, outcome.lines);
+        assert_eq!(outcome.exit_code, 0);
+        assert!(
+            outcome.lines.iter().any(|l| l.contains("pipeline ok")),
+            "child output missing the engine's success line: {:?}",
+            outcome.lines
+        );
+        // …and the run must have actually produced the artefact, in the
+        // project directory rather than the app's cwd.
+        assert!(project.join("out.vtu").is_file(), "writer stage produced no out.vtu");
+
+        let _ = fs::remove_dir_all(&project);
+    }
+
+    #[test]
+    fn run_pipeline_reports_engine_failure_honestly() {
+        if !dev_build_available() {
+            eprintln!("skipping: no built souxmar CLI / in-tree plugins");
+            return;
+        }
+        let project = temp_project("bad");
+        // `version` is mandatory; the parser rejects the file outright.
+        fs::write(project.join("pipeline.yaml"), "stages: []\n").unwrap();
+
+        let outcome = run_pipeline(project.to_string_lossy().into_owned(), None)
+            .expect("a failing pipeline is still a successful dispatch");
+
+        assert!(!outcome.ok, "a rejected pipeline must not report ok");
+        assert_ne!(outcome.exit_code, 0);
+
+        let _ = fs::remove_dir_all(&project);
+    }
+
+    #[test]
+    fn run_pipeline_rejects_missing_pipeline() {
+        let project = temp_project("empty");
+        let err = run_pipeline(project.to_string_lossy().into_owned(), None)
+            .expect_err("no pipeline.yaml must be an error, not a fake success");
+        assert!(err.contains("pipeline.yaml"), "unhelpful error: {}", err);
+        let _ = fs::remove_dir_all(&project);
+    }
+
+    #[test]
+    fn run_pipeline_rejects_traversal() {
+        let project = temp_project("traversal");
+        for rel in ["../../etc/passwd", "/etc/passwd"] {
+            let err = run_pipeline(project.to_string_lossy().into_owned(), Some(rel.into()))
+                .expect_err("path escape must be refused");
+            assert!(err.contains("inside the project"), "wrong rejection for {}: {}", rel, err);
+        }
+        let _ = fs::remove_dir_all(&project);
+    }
+
+    #[test]
+    fn run_pipeline_rejects_non_directory_project() {
+        let err = run_pipeline("/definitely/not/a/directory".into(), None)
+            .expect_err("bad project root must be an error");
+        assert!(err.contains("not a directory"), "unhelpful error: {}", err);
+    }
+
+    #[test]
+    fn plugin_path_env_uses_the_documented_variable() {
+        // Regression: the shell used to read SOUXMAR_PLUGINS_PATH (plural),
+        // which nothing else in the product sets, so a user who followed
+        // the docs got empty Solvers/Meshers panels.
+        let sep = if cfg!(windows) { ";" } else { ":" };
+        std::env::set_var("SOUXMAR_PLUGIN_PATH", format!("/tmp/alpha{}/tmp/beta", sep));
+        let dirs = plugin_path_env_dirs();
+        std::env::remove_var("SOUXMAR_PLUGIN_PATH");
+
+        assert!(dirs.iter().any(|d| d == "/tmp/alpha"), "got {:?}", dirs);
+        assert!(dirs.iter().any(|d| d == "/tmp/beta"), "got {:?}", dirs);
+    }
 }

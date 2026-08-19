@@ -130,8 +130,15 @@ TEST(EndToEnd, MesherToWriterPipeline) {
 
   // The writer wrote our 1-tet mesh summary to disk.
   ASSERT_TRUE(fs::exists(output)) << "writer did not produce output at " << output;
-  std::ifstream in(output);
-  std::string contents((std::istreambuf_iterator<char>(in)), {});
+  std::string contents;
+  {
+    // Scoped so the stream is closed before the remove below. POSIX is
+    // happy to unlink a file someone still has open; Windows refuses with
+    // "The process cannot access the file because it is being used by
+    // another process", and the reader here was the other process.
+    std::ifstream in(output);
+    contents.assign((std::istreambuf_iterator<char>(in)), {});
+  }
   EXPECT_NE(contents.find("num_nodes=4"), std::string::npos) << contents;
   EXPECT_NE(contents.find("num_cells=1"), std::string::npos) << contents;
 

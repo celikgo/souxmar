@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Desktop visual-regression matrix.
+#
+# Per-platform baselines, because font rasterisation and window
+# decoration differ enough between OSes that one set of reference PNGs
+# would produce permanent false positives. tests/visual/BASELINES.md is
+# the authority on how baselines are captured and reviewed.
+#
+# The artifact names below are load-bearing: docs/INFRA_STATUS.md §
+# "The bootstrap PR" tells a maintainer to download
+# `visual-regression-{ubuntu-22.04,macos-14,windows-2022}` by name.
+
+name: Visual regression
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'src/desktop/**'
+      - 'tests/visual/**'
+      - '.github/workflows/visual-regression.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'src/desktop/**'
+      - 'tests/visual/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  visual:
+    name: Visual regression (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    # ADR-0017 non-blocking-on-first-run. There are zero reference PNGs
+    # in the tree today, so every spec would report "no baseline" and the
+    # job would be red on arrival. docs/INFRA_STATUS.md tracks the
+    # bootstrap; this line comes out in the same PR that adds the PNGs.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-14, windows-2022]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # vite 8 requires ^20.19.0 || >=22.12.0.
+          node-version: '22'
+
+      - name: Install the desktop frontend
+        working-directory: src/desktop
+        run: npm install --no-audit --no-fund
+
+      - name: Build the frontend
+        working-directory: src/desktop
+        run: npm run build
+
+      - name: Install the visual harness
+        working-directory: tests/visual
+        run: npm install --no-audit --no-fund
+
+      - name: Install Playwright browsers
+        working-directory: tests/visual
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the specs
+        working-directory: tests/visual
+        run: npm test
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          # Named exactly as docs/INFRA_STATUS.md instructs a maintainer
+          # to download them. Renaming these breaks that runbook.
+          name: visual-regression-${{ matrix.os }}
+          path: |
+            tests/visual/test-results/
+            tests/visual/playwright-report/
+          retention-days: 14
+          if-no-files-found: warn

@@ -1,0 +1,40 @@
+# Ruff configuration for the repository's Python: scripts/, tools/, and
+# bindings/python/.
+#
+# This file exists because the CI lint had none, which meant the rule set
+# was "whatever the installed ruff version defaults to". Ruff adds rules
+# and moves them out of preview between releases, so an unconfigured gate
+# fails on a day nobody changed any code — and the first instinct then is
+# to weaken the gate rather than read it. An explicit select is the
+# project deciding, once, what it lints for.
+
+line-length = 100
+target-version = "py310"
+
+exclude = [
+    "build",
+    "**/node_modules",
+    "**/__pycache__",
+    "src/desktop",
+]
+
+[lint]
+# Defects, not taste. Each group earns its place:
+#   E4/E7/E9  syntax and statement errors worth stopping for
+#   F         pyflakes: undefined names, unused imports, f-string bugs
+#   I         import ordering, so diffs stay small
+#   B         bugbear: mutable default args, loop-variable capture
+#   UP        idioms that are wrong on the project's minimum Python
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+
+# Deliberately not selected:
+#   RUF022  wants __all__ sorted alphabetically. pysouxmar/__init__.py
+#           groups it by subsystem — parser, discovery, registry, cache,
+#           runner — which is more useful to a reader than the alphabet.
+#   E501    line length is advisory here; the formatter is not enforced
+#           (see docs/CI.md), so a hard column limit would be arbitrary.
+
+[lint.per-file-ignores]
+# Test modules import fixtures for their side effects and shadow names
+# freely; neither is a defect there.
+"**/tests/**" = ["F811"]

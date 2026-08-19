@@ -1,0 +1,735 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Pre-merge gate. ENGINEERING_PRACTICES.md § "Definition of Done" is the
+# specification for this file; every numbered item there that can be
+# machine-checked is a job below, and docs/CI.md maps them one-to-one.
+#
+# Wall-time target is < 25 min on a typical PR (ENGINEERING_PRACTICES
+# § "Test pyramid"). Two things buy that: the `changes` job skips whole
+# branches of the graph when a PR cannot have affected them, and the
+# engine is built once per platform and shipped to the downstream jobs
+# as an artifact rather than rebuilt five times.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+  merge_group:
+
+# A force-push should not leave the previous run burning runners.
+# Never cancel on the default branch: those runs feed the nightly
+# baselines and the release provenance.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # Ports are pinned by vcpkg.json; this only silences the survey prompt.
+  VCPKG_DISABLE_METRICS: "1"
+
+jobs:
+  # ---------------------------------------------------------------------
+  # What did this PR actually touch? Everything downstream reads these
+  # outputs so a docs-only change does not spend 20 minutes compiling.
+  # ---------------------------------------------------------------------
+  changes:
+    name: Detect changed areas
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      engine:    ${{ steps.filter.outputs.engine }}
+      python:    ${{ steps.filter.outputs.python }}
+      rust:      ${{ steps.filter.outputs.rust }}
+      frontend:  ${{ steps.filter.outputs.frontend }}
+      plugins:   ${{ steps.filter.outputs.plugins }}
+      agent:     ${{ steps.filter.outputs.agent }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            engine:
+              - 'src/**'
+              - 'include/**'
+              - 'tests/**'
+              - 'examples/**'
+              - 'tools/**'
+              - 'benchmarks/**'
+              - 'cmake/**'
+              - 'CMakeLists.txt'
+              - 'CMakePresets.json'
+              - 'vcpkg.json'
+              - '.github/**'
+            python:
+              - 'bindings/python/**'
+              - 'src/**'
+              - 'include/**'
+            rust:
+              - 'services/**'
+              - 'src/desktop/src-tauri/**'
+            frontend:
+              - 'src/desktop/**'
+            plugins:
+              - 'examples/plugins/**'
+              - 'src/plugin-host/**'
+              - 'include/souxmar-c/**'
+              - 'tools/conformance/**'
+            agent:
+              - 'src/ai/**'
+              - 'include/souxmar/ai/**'
+              - 'evals/**'
+              - 'tools/eval/**'
+              - 'tools/eval-llm/**'
+
+  # ---------------------------------------------------------------------
+  # Cheap gates. These run on every PR regardless of what changed, and
+  # they finish in under a minute — a PR that fails one should hear about
+  # it before the compilers have finished warming up.
+  # ---------------------------------------------------------------------
+  governance:
+    name: Governance gates
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The frozen-header and tool-contract gates diff against the
+          # base ref and read commit messages for ratchet markers, so
+          # the shallow default clone is not enough.
+          fetch-depth: 0
+
+      - name: Resolve the PR range
+        id: range
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "base=origin/${{ github.base_ref }}" >> "$GITHUB_OUTPUT"
+            echo "head=HEAD" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=HEAD~1" >> "$GITHUB_OUTPUT"
+            echo "head=HEAD" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Frozen v1 ABI surface (ADR-0008)
+        run: scripts/check-frozen-headers.sh "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}"
+
+      - name: Frozen v1 agent tool contract (ADR-0011)
+        run: scripts/check-tool-contract.sh "${{ steps.range.outputs.base }}" "${{ steps.range.outputs.head }}"
+
+      - name: Secret scan
+        run: scripts/check-secrets.sh
+
+      - name: Windows plugin shim is current
+        # The shim is generated from include/souxmar-c/** and committed. If a
+        # header gains a function and nobody regenerates, Windows plugins fail
+        # to link on that symbol alone — a failure that shows up only on the
+        # platform least likely to be built locally. Cheap to check here.
+        run: |
+          python3 scripts/gen-windows-plugin-shim.py \
+            --out src/plugin-shim/shim_win32.c --check-only
+
+      - name: DCO sign-off
+        if: github.event_name == 'pull_request'
+        run: |
+          # ENGINEERING_PRACTICES.md § Definition of Done item 10.
+          #
+          # --no-merges matters: actions/checkout builds refs/pull/N/merge,
+          # so HEAD is a synthetic merge commit GitHub authored. It has no
+          # sign-off and never will, and failing the PR for it would make
+          # this gate impossible to satisfy.
+          missing=0
+          while IFS= read -r sha; do
+            [ -n "$sha" ] || continue
+            author="$(git log -1 --format='%an <%ae>' "$sha")"
+            if ! git log -1 --format='%B' "$sha" | grep -qiE '^Signed-off-by: .+ <.+@.+>'; then
+              echo "::error::commit $sha ($author) has no Signed-off-by line"
+              missing=$((missing + 1))
+            fi
+          done < <(git rev-list --no-merges "${{ steps.range.outputs.base }}..HEAD")
+          if [ "$missing" -gt 0 ]; then
+            echo "Sign your commits: git commit -s (or git rebase --signoff to fix a series)."
+            exit 1
+          fi
+          echo "DCO: every commit is signed off."
+
+  format:
+    name: Format and lint
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install tools
+        run: |
+          scripts/ci/apt-install.sh clang-format-17 shellcheck
+          sudo update-alternatives --install /usr/bin/clang-format clang-format \
+            /usr/bin/clang-format-17 100
+          pipx install ruff
+
+      - name: Files changed by this PR
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="origin/${{ github.base_ref }}"
+          else
+            base="HEAD~1"
+          fi
+          git diff --name-only --diff-filter=ACMR "$base"...HEAD > changed.txt || git diff --name-only --diff-filter=ACMR "$base" HEAD > changed.txt
+          echo "changed files:"; cat changed.txt
+
+      - name: clang-format (changed lines only)
+        run: |
+          # A ratchet on *lines*, not files. 54 of the 251 C++ files
+          # predate .clang-format; a whole-file check would mean that
+          # touching one line of a legacy file forces reformatting the
+          # whole thing, which is how a formatting gate turns every small
+          # fix into an unreviewable diff. clang-format-diff restricts the
+          # check to the hunks the PR actually introduces.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="origin/${{ github.base_ref }}"
+          else
+            base="HEAD~1"
+          fi
+          git diff -U0 --no-color "$base"...HEAD -- '*.cpp' '*.h' '*.hpp' '*.cc' \
+            | clang-format-diff-17 -p1 > fmt.patch || true
+          if [ -s fmt.patch ]; then
+            echo "::error::changed lines are not clang-format clean. Patch:"
+            cat fmt.patch
+            echo ""
+            echo "Apply it with: git diff -U0 HEAD~1 | clang-format-diff-17 -p1 | git apply -p0"
+            exit 1
+          fi
+          echo "clang-format: changed lines are clean."
+
+      - name: shellcheck (changed files only)
+        run: |
+          files="$(grep -E '\.sh$' changed.txt || true)"
+          if [ -z "$files" ]; then echo "no shell scripts changed"; exit 0; fi
+          # SC2086 is deliberate in the gate scripts, which build argument
+          # lists as strings on purpose.
+          printf '%s\n' "$files" | xargs shellcheck --severity=warning --exclude=SC2086
+
+      - name: ruff (changed files only)
+        run: |
+          # `ruff check` only — lint, not formatting. This codebase aligns
+          # consecutive assignments on the `=`, in Python and in Rust:
+          #
+          #     loader   = sx.PluginLoader(...)
+          #     report   = sx.discover_plugins(...)
+          #
+          # ruff format collapses that, the same way rustfmt does, and for
+          # the same reason there is no rustfmt gate here: adopting a
+          # formatter that overrides a deliberate house style is a project
+          # decision, not something a CI change should impose. The lint
+          # rules still catch unused imports, undefined names and import
+          # ordering, which are defects rather than taste.
+          files="$(grep -E '\.py$' changed.txt || true)"
+          if [ -z "$files" ]; then echo "no Python files changed"; exit 0; fi
+          printf '%s\n' "$files" | xargs ruff check
+
+  format-debt:
+    name: Format debt (advisory)
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    # Reports how much of the tree is not yet clang-format clean, so the
+    # ratchet above has a visible finish line instead of quietly never
+    # completing. Never blocking.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install clang-format
+        run: |
+          scripts/ci/apt-install.sh clang-format-17
+          sudo update-alternatives --install /usr/bin/clang-format clang-format \
+            /usr/bin/clang-format-17 100
+      - name: Count unformatted files
+        run: |
+          total="$(git ls-files '*.cpp' '*.h' '*.hpp' '*.cc' | wc -l)"
+          dirty="$(git ls-files '*.cpp' '*.h' '*.hpp' '*.cc' \
+            | xargs clang-format --dry-run 2>&1 \
+            | grep -E 'warning: code should be clang-formatted' \
+            | sed -E 's/:[0-9]+:[0-9]+:.*//' | sort -u | wc -l)"
+          echo "### Format debt" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "$dirty of $total C++ files are not clang-format clean." >> "$GITHUB_STEP_SUMMARY"
+          echo "$dirty / $total files need reformatting"
+
+  # ---------------------------------------------------------------------
+  # The engine. One build per platform; the binaries are handed to every
+  # downstream job so nothing compiles the same tree twice.
+  # ---------------------------------------------------------------------
+  engine:
+    name: Engine (${{ matrix.name }})
+    needs: [changes]
+    if: needs.changes.outputs.engine == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-gcc,   os: ubuntu-22.04, preset: ci-linux-gcc }
+          - { name: linux-clang, os: ubuntu-22.04, preset: ci-linux-clang }
+          - { name: macos,       os: macos-14,     preset: ci-macos }
+          - { name: windows,     os: windows-2022, preset: ci-windows }
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-cpp
+        with:
+          preset: ${{ matrix.preset }}
+
+      - name: Configure
+        shell: bash
+        run: |
+          # Retried, because the first cold run died on a 502 from
+          # ftpmirror.gnu.org while vcpkg fetched a build tool. Source
+          # tarballs come from mirrors nobody here controls, and failing a
+          # PR for someone else's flaky CDN trains people to re-run
+          # everything — which then hides the real failures. Three
+          # attempts, and it still fails loudly if the cause is ours.
+          for attempt in 1 2 3; do
+            if cmake --preset ${{ matrix.preset }}; then
+              exit 0
+            fi
+            echo "::warning::configure attempt $attempt failed"
+            [ "$attempt" -lt 3 ] && sleep $((attempt * 20))
+          done
+          echo "::error::configure failed after 3 attempts"
+          exit 1
+
+      - name: Surface the vcpkg log when configure fails
+        # Without this, a failed `vcpkg install` reports only "see logs
+        # for more information" and points at a path inside a runner that
+        # no longer exists — which makes the one failure most likely to
+        # happen on a cold cache the one that cannot be diagnosed.
+        if: failure()
+        shell: bash
+        run: |
+          for f in build/${{ matrix.preset }}/vcpkg-manifest-install.log \
+                   build/${{ matrix.preset }}/vcpkg_installed/vcpkg/issue_body.md; do
+            [ -f "$f" ] || continue
+            echo "::group::$f"; cat "$f"; echo "::endgroup::"
+          done
+          find build/${{ matrix.preset }} -name '*.log' -path '*buildtrees*' 2>/dev/null \
+            | head -20 | while read -r log; do
+                echo "::group::$log"; tail -60 "$log"; echo "::endgroup::"
+              done
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Host exports the C ABI (Windows)
+        # The Windows plugin shim resolves through
+        # GetProcAddress(GetModuleHandle(NULL), ...), so a host that exports
+        # nothing turns every plugin into one that loads and registers
+        # nothing. That surfaced once as 91 unexplained integration failures;
+        # this says it in one line instead.
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          # Every executable that can load a plugin, not just the CLI: the
+          # test runners are hosts too, and they are where the plugin
+          # integration tests actually run.
+          status=0
+          found=0
+          while IFS= read -r exe; do
+            found=1
+            if dumpbin //exports "$exe" | grep -q "souxmar_registry_add_mesher"; then
+              echo "  OK   $exe"
+            else
+              echo "::error::$exe exports no souxmar_registry_add_mesher"
+              status=1
+            fi
+          done < <(find "build/${{ matrix.preset }}" -name '*.exe' \
+                     -not -path '*/vcpkg_installed/*' -not -path '*/CMakeFiles/*')
+          if [ "$found" = "0" ]; then
+            echo "::error::no host executables found to check"; exit 1
+          fi
+          if [ "$status" != "0" ]; then
+            echo "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS is not reaching those targets, so"
+            echo "the plugin shim's GetProcAddress lookups return NULL there and every"
+            echo "plugin loads without registering anything."
+          fi
+          exit $status
+
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }} --output-on-failure
+
+      - name: Fingerprint pipeline output for the determinism gate
+        shell: bash
+        run: |
+          # Produced here, on this platform's own runner, and compared in
+          # the `determinism` job. Windows ships the binary with .exe.
+          engine="build/${{ matrix.preset }}/src/cli/souxmar"
+          [ -x "$engine" ] || engine="$engine.exe"
+          scripts/ci/determinism-fingerprint.sh \
+            --engine "$engine" \
+            --plugin-path "$PWD/build/${{ matrix.preset }}/examples/plugins" \
+            --out "build/${{ matrix.preset }}/determinism.txt"
+          cat "build/${{ matrix.preset }}/determinism.txt"
+
+      - name: Upload the built tree
+        # Only the platforms the downstream jobs consume: the determinism
+        # gate needs all three OSes, everything else uses linux-gcc.
+        if: matrix.name != 'linux-clang'
+        uses: actions/upload-artifact@v7
+        with:
+          name: engine-${{ matrix.name }}
+          path: |
+            build/${{ matrix.preset }}/src/cli/
+            build/${{ matrix.preset }}/tools/
+            build/${{ matrix.preset }}/examples/plugins/
+            build/${{ matrix.preset }}/determinism.txt
+          retention-days: 7
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------
+  # Suites that need a built engine but not a second compile.
+  # ---------------------------------------------------------------------
+  conformance:
+    name: Plugin conformance
+    timeout-minutes: 15
+    needs: [changes, engine]
+    if: needs.changes.outputs.plugins == 'true' || needs.changes.outputs.engine == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with: { name: engine-linux-gcc, path: engine }
+      - run: chmod -R +x engine/
+      - name: Match the runtime to the toolchain that built the artifact
+        # The artifact is built with gcc-13 from the toolchain PPA, so it
+        # needs GLIBCXX_3.4.31 — newer than the libstdc++ a stock
+        # ubuntu-22.04 runner ships. Without this the binary exits before
+        # main() with a version-not-found error that looks nothing like
+        # the test failure it gets mistaken for.
+        run: |
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          scripts/ci/apt-install.sh --only-upgrade libstdc++6
+      - name: Run the v1 conformance suite
+        run: engine/tools/conformance/souxmar-conformance engine/examples/plugins
+
+  agent-evals:
+    name: Agent eval suite
+    timeout-minutes: 20
+    needs: [changes, engine]
+    if: needs.changes.outputs.agent == 'true' || needs.changes.outputs.engine == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with: { name: engine-linux-gcc, path: engine }
+      - run: chmod -R +x engine/
+      - name: Match the runtime to the toolchain that built the artifact
+        # The artifact is built with gcc-13 from the toolchain PPA, so it
+        # needs GLIBCXX_3.4.31 — newer than the libstdc++ a stock
+        # ubuntu-22.04 runner ships. Without this the binary exits before
+        # main() with a version-not-found error that looks nothing like
+        # the test failure it gets mistaken for.
+        run: |
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          scripts/ci/apt-install.sh --only-upgrade libstdc++6
+      - name: Scripted evals
+        # The pass-rate gate is the one ENGINEERING_PRACTICES names; the
+        # p95 gate catches dispatcher regressions the pass rate cannot.
+        run: |
+          engine/tools/eval/souxmar-eval evals/v1 \
+            --plugin-path engine/examples/plugins \
+            --min-pass-rate 1.0 \
+            --latency-output eval-latency.json \
+            --max-p95-ms 250
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: eval-latency
+          path: eval-latency.json
+          if-no-files-found: warn
+
+  docs-generated:
+    name: Generated docs are current
+    timeout-minutes: 15
+    needs: [changes, engine]
+    if: needs.changes.outputs.agent == 'true' || needs.changes.outputs.engine == 'true'
+    runs-on: ubuntu-22.04
+    # ADR-0017 non-blocking-on-first-run. docs-site/agents/tools.md is
+    # still the committed placeholder that points at its own regeneration
+    # command, so this gate is red until the bootstrap PR replaces it —
+    # see docs/INFRA_STATUS.md. Blocking on a known-red gate teaches
+    # people to ignore red gates.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version: '3.12' }
+      - uses: actions/download-artifact@v8
+        with: { name: engine-linux-gcc, path: engine }
+      - run: chmod -R +x engine/
+      - name: Match the runtime to the toolchain that built the artifact
+        # The artifact is built with gcc-13 from the toolchain PPA, so it
+        # needs GLIBCXX_3.4.31 — newer than the libstdc++ a stock
+        # ubuntu-22.04 runner ships. Without this the binary exits before
+        # main() with a version-not-found error that looks nothing like
+        # the test failure it gets mistaken for.
+        run: |
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          scripts/ci/apt-install.sh --only-upgrade libstdc++6
+      - name: Agent tool reference matches the binary
+        # Fails when someone adds a tool and forgets to regenerate the
+        # page. The fix it prints is one command.
+        run: |
+          python3 scripts/docs-site/gen-agent-tools.py \
+            --engine engine/src/cli/souxmar \
+            --out docs-site/agents/tools.md \
+            --check-only
+
+  determinism:
+    name: Cross-platform determinism
+    timeout-minutes: 15
+    needs: [changes, engine]
+    if: needs.changes.outputs.engine == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version: '3.12' }
+
+      - uses: actions/download-artifact@v8
+        with: { pattern: engine-*, path: artifacts }
+
+      - name: Compare fingerprints across platforms
+        # Each platform's manifest was produced by
+        # scripts/ci/determinism-fingerprint.sh in the engine job's own
+        # runner. They are each other's reference — there is no golden
+        # file, so nothing can silently drift.
+        run: |
+          ls artifacts/
+          shopt -s nullglob
+          manifests=($(find artifacts -name determinism.txt | LC_ALL=C sort))
+          if [ "${#manifests[@]}" -lt 2 ]; then
+            echo "::error::need at least two platform manifests, found ${#manifests[@]}"
+            exit 1
+          fi
+          reference="${manifests[0]}"
+          status=0
+          for m in "${manifests[@]:1}"; do
+            if ! diff -u "$reference" "$m"; then
+              echo "::error::determinism: $m differs from $reference"
+              status=1
+            fi
+          done
+          if [ "$status" -ne 0 ]; then
+            echo ""
+            echo "The same pipeline produced different output on different platforms."
+            echo "That is a correctness bug, not a CI flake. Usual causes: unordered"
+            echo "container iteration, locale-dependent formatting, uninitialised"
+            echo "padding in a hashed struct, float contraction differences."
+            exit 1
+          fi
+          echo "determinism: ${#manifests[@]} platforms agree on every pipeline."
+
+  # ---------------------------------------------------------------------
+  # Non-C++ surfaces.
+  # ---------------------------------------------------------------------
+  python-bindings:
+    name: Python bindings
+    needs: [changes]
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version: '3.12' }
+      - uses: ./.github/actions/setup-cpp
+        with:
+          preset: dev-python
+          vcpkg-features: tests;python
+      - name: Configure and build
+        shell: bash
+        env:
+          # dev-python is a local development preset and names no
+          # compiler, so CI was building it with whatever the image
+          # defaults to. Pinning it to the same gcc-13 the engine legs use
+          # is what stops this job from being the only one that disagrees
+          # about warnings.
+          CC: gcc-13
+          CXX: g++-13
+        run: |
+          # Same retry as the engine job: vcpkg pulls source tarballs from
+          # mirrors nobody here controls.
+          for attempt in 1 2 3; do
+            cmake --preset dev-python && break
+            echo "::warning::configure attempt $attempt failed"
+            [ "$attempt" -lt 3 ] && sleep $((attempt * 20)) || exit 1
+          done
+          cmake --build --preset dev-python
+      - name: pytest
+        run: |
+          python -m pip install --upgrade pip pytest
+          # Bounded, and aborted with SIGABRT rather than SIGTERM: with
+          # faulthandler enabled that makes Python dump every thread's
+          # stack on the way out, so a hang names the line it hung on.
+          # Letting the job's own 45-minute timeout catch it instead
+          # produces a cancelled job and no information at all.
+          PYTHONPATH="$PWD/build/dev-python/bindings/python:$PYTHONPATH" \
+            timeout --signal=ABRT 600 \
+            python -X faulthandler -m pytest bindings/python/tests -v
+
+  rust:
+    name: Rust services and bridge
+    timeout-minutes: 45
+    needs: [changes]
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: clippy }
+      - uses: Swatinem/rust-cache@v2
+      - name: System dependencies for the Tauri shell
+        run: |
+          scripts/ci/apt-install.sh \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v7
+        with:
+          # vite 8 requires ^20.19.0 || >=22.12.0.
+          node-version: '22'
+      - name: Build the frontend the Tauri shell embeds
+        # tauri::generate_context! reads tauri.conf.json at compile time
+        # and fails if frontendDist ("../dist") is absent, so the desktop
+        # crate cannot even be type-checked without the frontend built
+        # first. This is what a developer does locally; CI was skipping it.
+        working-directory: src/desktop
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Clippy and tests, every crate
+        run: |
+          # Each service is its own workspace; iterate rather than
+          # assuming a virtual manifest at the root. Unlike fmt, these
+          # are clean today and therefore blocking.
+          status=0
+          for manifest in $(git ls-files '*/Cargo.toml' | grep -v '/target/'); do
+            dir="$(dirname "$manifest")"
+            echo "::group::$dir"
+            ( cd "$dir" \
+              && cargo clippy --all-targets -- -D warnings \
+              && cargo test --all ) || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
+  frontend:
+    name: Desktop frontend
+    timeout-minutes: 20
+    needs: [changes]
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: src/desktop
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # vite 8 requires ^20.19.0 || >=22.12.0.
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/desktop/package.json
+      # `npm install`, not `npm ci`: .gitignore deliberately keeps
+      # package-lock.json out of the tree, and npm ci requires one.
+      - run: npm install --no-audit --no-fund
+      - name: Type-check
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+
+  # ---------------------------------------------------------------------
+  # Advisory. Reported on every PR, blocking on none of them — see
+  # docs/CI.md § "Why the performance gate is advisory".
+  # ---------------------------------------------------------------------
+  benchmarks:
+    name: Benchmarks (advisory)
+    timeout-minutes: 45
+    needs: [changes, engine]
+    if: needs.changes.outputs.engine == 'true'
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version: '3.12' }
+      - uses: ./.github/actions/setup-cpp
+        with: { preset: ci-linux-gcc }
+      - name: Build benchmarks
+        run: |
+          cmake --preset ci-linux-gcc -DSOUXMAR_BUILD_BENCHMARKS=ON
+          cmake --build --preset ci-linux-gcc
+      - name: Run and compare
+        run: |
+          mkdir -p bench-out
+          for b in build/ci-linux-gcc/benchmarks/bench_*; do
+            [ -x "$b" ] || continue
+            name="$(basename "$b")"
+            "$b" --benchmark_format=json --benchmark_out="bench-out/$name.json" \
+                 --benchmark_min_time=0.1s
+          done
+          python3 tools/perf-compare/compare.py \
+            --baseline-dir benchmarks/baselines \
+            --current-dir bench-out \
+            --threshold 0.05
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with: { name: benchmark-results, path: bench-out/ }
+
+  # ---------------------------------------------------------------------
+  # The single required status check. Branch protection points here, so
+  # adding or renaming a job above never means editing branch settings —
+  # and a skipped job can never be mistaken for a passing one.
+  # ---------------------------------------------------------------------
+  ci-ok:
+    name: CI
+    timeout-minutes: 5
+    if: always()
+    needs:
+      - governance
+      - format
+      - engine
+      - conformance
+      - agent-evals
+      - determinism
+      - python-bindings
+      - rust
+      - frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify no required job failed
+        env:
+          # Passed through the environment rather than interpolated into
+          # the script: job names are attacker-influenceable in a fork PR
+          # only in theory, but inlining JSON into shell is how that stops
+          # being theory.
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          # `skipped` is a pass: the `changes` filter legitimately skips
+          # whole areas. `failure` and `cancelled` are not.
+          echo "$NEEDS_JSON"
+          bad="$(printf '%s' "$NEEDS_JSON" | python3 -c 'import json,sys; print(" ".join(k for k,v in json.load(sys.stdin).items() if v["result"] not in ("success","skipped")))')"
+          if [ -n "$bad" ]; then
+            echo "::error::failing jobs: $bad"
+            exit 1
+          fi
+          echo "All required jobs passed or were legitimately skipped."

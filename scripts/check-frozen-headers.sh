@@ -27,13 +27,30 @@
 # Usage:
 #   scripts/check-frozen-headers.sh [<base-ref>] [<head-ref>]
 #
-# Defaults to comparing HEAD against `origin/main`. CI overrides both
-# refs from the workflow.
+# Defaults to comparing HEAD against the remote's default branch,
+# resolved from origin/HEAD (falling back to origin/master). CI
+# overrides both refs from the workflow.
 
 set -euo pipefail
 
-BASE_REF="${1:-origin/main}"
+default_base_ref() {
+  git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null \
+    || echo "origin/master"
+}
+
+BASE_REF="${1:-$(default_base_ref)}"
 HEAD_REF="${2:-HEAD}"
+
+# Fail closed. An unresolvable base ref used to make the `git diff`
+# below print nothing, which read as "no v1 ABI surface touched" and
+# exited 0 — a gate that cannot find its baseline must not pass.
+for ref in "$BASE_REF" "$HEAD_REF"; do
+  if ! git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null; then
+    echo "frozen-headers: ref '${ref}' does not resolve in this repository." >&2
+    echo "  Pass an explicit base: scripts/check-frozen-headers.sh <base-ref> [head-ref]" >&2
+    exit 1
+  fi
+done
 
 # The inventory under freeze. Keep in sync with ADR-0008's table.
 FROZEN_HEADERS=(

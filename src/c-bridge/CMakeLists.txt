@@ -41,6 +41,10 @@ target_link_libraries(souxmar_c_bridge
     # Sprint 15 push 4 — updater.cpp routes through the
     # auto-updater's InstallLayout state machine.
     souxmar::update
+    # The agent loop dispatches tools that reach into the plugin
+    # host (mesh, solve), so the bridge owns a live registry for
+    # the duration of a chat session.
+    souxmar::plugin
     souxmar::warnings
     souxmar::sanitizers
 )

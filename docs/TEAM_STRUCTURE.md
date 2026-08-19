@@ -73,7 +73,8 @@ The frontend half (React) is mostly the mid; the Tauri/Rust half is mostly the s
 
 Owns `src/ai/` — providers, agent, keychain, tools, audit log.
 
-- `IAIProvider` abstraction; Anthropic, OpenAI, Ollama implementations.
+- `souxmar::ai::Provider` abstraction; Anthropic, OpenAI-compatible (OpenAI / Grok / DeepSeek /
+  Groq / Mistral / OpenRouter / Together / self-hosted), Ollama and stub implementations.
 - BYOK key storage in OS keychain (per-OS).
 - Agent loop: prompt construction, tool dispatch, confirmation policy, streaming.
 - Tool surface (currently ~18 tools; v1-frozen at S8).
@@ -124,7 +125,7 @@ Every directory in the repo has a single owning team. CODEOWNERS enforces the te
 | `src/desktop/`                    | Desktop             |
 | `cmake/`, `.github/`, `vcpkg.json`| Platform            |
 | `docs/`, `examples/`, `README.md` | DX                  |
-| `tests/plugin-conformance/`       | Plugin Host         |
+| `tools/conformance/`       | Plugin Host         |
 | `benchmarks/`                     | Platform (joint with team owning benchmarked code) |
 | `.claude/skills/`                 | DX                  |
 

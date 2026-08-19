@@ -68,6 +68,13 @@ target_link_libraries(pysouxmar_ext
     souxmar::core
     souxmar::plugin
     souxmar::pipeline
+    # The module binds souxmar::ai::default_v1_tools, dispatch_tool and
+    # the audit-log types, so it has to link the library that defines
+    # them. Without this the extension builds cleanly and then fails at
+    # import with an undefined symbol — a shared object is allowed to
+    # leave symbols unresolved until load time, so nothing catches it
+    # until something tries `import pysouxmar`.
+    souxmar::ai
     souxmar::warnings
     souxmar::sanitizers
 )

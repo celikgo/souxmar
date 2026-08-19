@@ -7,7 +7,7 @@ description: Use when publishing a souxmar plugin to either the open plugin inde
 
 souxmar maintains two distribution channels for plugins:
 
-1. **Open plugin index** — free, OSI-licensed plugins. Listed in `docs/plugin-index.md`. Source links only; we do not host binaries.
+1. **Open plugin index** — free, OSI-licensed plugins. Listed in `docs/plugin-index.toml`. Source links only; we do not host binaries.
 2. **Paid marketplace** — commercial plugins. We host binaries, handle Stripe billing, issue licenses, run conformance in CI. Author keeps 90 % of revenue. Detailed in `docs/BUSINESS_MODEL.md`.
 
 This skill covers both channels.
@@ -57,7 +57,7 @@ This skill covers both channels.
    paid             = false             # true for paid-marketplace entries (Sprint 16+)
    ```
 
-3. **The `plugin-index` CI workflow** (Sprint 10 push 3, `.github/workflows/plugin-index.yml`) automatically runs `souxmar plugin validate-index` against the modified file. The check surfaces:
+3. **The `plugin-index` CI workflow** (Sprint 10 push 3, `.github/workflows/plugin-index.yml`) — **removed in `c7f6214` and not restored, so this step is currently manual; a maintainer must run it by hand before merging a listing.** It ran `souxmar plugin validate-index` against the modified file. The check surfaces:
    - **Errors** that block the merge: duplicate `id`, malformed `source` / `homepage` URL (must start with `http://` or `https://`), invalid `capabilities` entry (must be dotted reverse-DNS), or any other shape the TOML parser rejects outright.
    - **Warnings** that don't block but reviewers should weigh: empty `license` on a free-channel entry (the open index requires OSI-licensed source per BUSINESS_MODEL.md), missing `souxmar_versions` range, `conformance = "failed"` (listing remains visible but the badge will read "failed" until reattested).
 
@@ -131,4 +131,4 @@ The paid marketplace is launched at Sprint 16 per `docs/SPRINT_PLAN.md`. Pre-lau
 - `docs/PLUGIN_SDK.md` — plugin contract.
 - `docs/BUSINESS_MODEL.md` — marketplace economics, revenue split, what we will and won't do.
 - `docs/GOVERNANCE.md` — plugin index governance.
-- `docs/plugin-index.md` (when present) — current listings.
+- `docs/plugin-index.toml` (when present) — current listings.

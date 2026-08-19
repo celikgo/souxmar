@@ -177,8 +177,9 @@ TaskOutcome run_one(ai::Provider&            provider,
                       "You are the souxmar agent. Use the provided tools to "
                       "satisfy the user request. Call tools by name from the "
                       "souxmar v1 tool catalogue.",
+                      {},
                       {}});
-  messages.push_back({ai::ChatMessage::Role::User, task.llm_prompt, {}});
+  messages.push_back({ai::ChatMessage::Role::User, task.llm_prompt, {}, {}});
 
   std::vector<std::string> tool_names = registry.list();
 
@@ -212,13 +213,13 @@ TaskOutcome run_one(ai::Provider&            provider,
 
     // If no tool calls + non-empty text => final assistant reply.
     if (resp.tool_calls.empty()) {
-      messages.push_back({ai::ChatMessage::Role::Assistant, resp.text, {}});
+      messages.push_back({ai::ChatMessage::Role::Assistant, resp.text, {}, {}});
       break;
     }
 
     // Echo the assistant turn (for chat history) + dispatch each tool
     // call + append tool-result messages.
-    messages.push_back({ai::ChatMessage::Role::Assistant, resp.text, {}});
+    messages.push_back({ai::ChatMessage::Role::Assistant, resp.text, {}, resp.tool_calls});
     for (const auto& tc : resp.tool_calls) {
       tools_actually_called.push_back(tc.name);
       // Parse arguments — minimal: YAML can read JSON, so treat the
@@ -239,9 +240,7 @@ TaskOutcome run_one(ai::Provider&            provider,
       } else {
         tool_text = td.summary;
       }
-      messages.push_back({ai::ChatMessage::Role::Tool,
-                          "tool result: " + tool_text,
-                          tc.id});
+      messages.push_back({ai::ChatMessage::Role::Tool, "tool result: " + tool_text, tc.id, {}});
     }
   }
 

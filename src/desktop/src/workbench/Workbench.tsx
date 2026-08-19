@@ -21,7 +21,7 @@
 // store/layout.ts; the original chat / viewport / inspector
 // components are unchanged — they're slotted into the new shell.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { Chat } from "../chat/Chat";
 import { Viewport } from "./Viewport";
@@ -40,9 +40,10 @@ import { ImportModelDialog } from "./dialogs/ImportModelDialog";
 import { useBridgeFeatures } from "../store/features";
 import { useAppStore } from "../store/app";
 import { useLayoutStore } from "../store/layout";
-import { invokeCommand, type FileEntry, type LoadSpec } from "../tauri/bridge";
+import { invokeCommand, type FileEntry, type LoadSpec, type RunOutcome } from "../tauri/bridge";
 import type { Overlay } from "./ModelViewer";
 import { viewableExtensions } from "./geometryLoaders";
+import { parseStageStatuses } from "./diagnostics";
 
 // Sourced from the loaders module so this stays a single source of truth.
 const VIEWABLE_EXTS = viewableExtensions().map(ext => "." + ext);
@@ -56,6 +57,10 @@ export function Workbench() {
 
   const features = useBridgeFeatures();
   const [activeModel, setActiveModel] = useState<string | null>(null);
+  // Bumped after anything writes into the project on disk (currently a
+  // pipeline run), so the sidebar picks up new outputs without the user
+  // hitting the reload button.
+  const [treeEpoch, setTreeEpoch] = useState(0);
   const [loads, setLoads] = useState<LoadSpec[]>([]);
   const overlays: Overlay[] = loads.map(l =>
     l.kind === "force"
@@ -88,25 +93,61 @@ export function Workbench() {
   const { leftOpen, rightOpen, bottomOpen, toggleLeft, toggleBottom, toggleRight } =
     useLayoutStore();
 
-  // Synthetic terminal log — until a real PTY tauri command exists,
-  // pressing the Run button pushes one line per "stage" so the
-  // placeholder UI is alive when the user clicks around.
+  // Terminal log. Every line below comes from the `souxmar run` child
+  // process dispatched by the run_pipeline command — the log is a
+  // transcript, never a simulation.
   const [log, setLog] = useState<string[]>([]);
-  const handleRun = useCallback(() => {
-    const ts = new Date().toLocaleTimeString();
-    setLog(prev => [
-      ...prev,
-      `[${ts}] souxmar run examples/cantilever-beam/pipeline.yaml`,
-      `[${ts}]   resolving plugins …`,
-      `[${ts}]   stage mesh    [mesher.tetra.hello]   ok`,
-      `[${ts}]   stage solve   [solver.elasticity.linear]   ok`,
-      `[${ts}]   stage write   [writer.vtu]   ok`,
-      `[${ts}] pipeline ok (3 stages)`,
-    ]);
+  const [running, setRunning] = useState(false);
+  // Raw output of the most recent run, kept separate from the timestamped
+  // display log so the Problems panel and the Inspector read the engine's
+  // own text rather than something this component reformatted.
+  const [runLines, setRunLines] = useState<string[]>([]);
+  const stageStatus = useMemo(() => parseStageStatuses(runLines), [runLines]);
+
+  const handleRun = useCallback(async () => {
+    if (running) return;
     if (!useLayoutStore.getState().bottomOpen) {
       toggleBottom();
     }
-  }, [toggleBottom]);
+    const stamp = () => `[${new Date().toLocaleTimeString()}]`;
+
+    if (!projectId) {
+      setLog(prev => [...prev, `${stamp()} no project open — open or create one first`]);
+      return;
+    }
+
+    // Run whichever pipeline YAML the user has open, so editing a second
+    // pipeline in the same project and pressing Run does what it looks
+    // like it does. Falls back to the project's pipeline.yaml.
+    const target = activeModel && isYamlPath(activeModel) ? activeModel : "pipeline.yaml";
+
+    setRunning(true);
+    setLog(prev => [...prev, `${stamp()} souxmar run ${target}`]);
+    try {
+      const outcome = await invokeCommand<RunOutcome>("run_pipeline", {
+        projectPath: projectId,
+        relPath:     target,
+      });
+      const ts = stamp();
+      setRunLines(outcome.lines);
+      setLog(prev => [
+        ...prev,
+        ...outcome.lines.map(line => `${ts}   ${line}`),
+        `${ts} ${outcome.ok
+          ? `pipeline ok (exit ${outcome.exit_code})`
+          : `pipeline failed (exit ${outcome.exit_code})`}`,
+      ]);
+      // A run may have written results — and, when it failed, may have
+      // written nothing. Either way re-read the tree and re-run the
+      // Problems checks against what is now on disk.
+      setTreeEpoch(e => e + 1);
+    } catch (err) {
+      setRunLines([]);
+      setLog(prev => [...prev, `${stamp()} run failed: ${String(err)}`]);
+    } finally {
+      setRunning(false);
+    }
+  }, [projectId, activeModel, running, toggleBottom]);
 
   const handleOpenSample = useCallback(() => {
     invokeCommand<string>("open_sample_project", { which: "cantilever-beam" })
@@ -163,7 +204,8 @@ export function Workbench() {
       <div style={titleRowStyle}>
         <TitleBar
           projectId={projectId}
-          onRun={handleRun}
+          onRun={() => void handleRun()}
+          running={running}
           onNewProject={() => setDialog("new")}
           onOpenProject={() => setDialog("open")}
           onImportModel={() => setDialog("import")}
@@ -174,6 +216,7 @@ export function Workbench() {
       <div style={{ ...sideStyle, display: leftOpen ? "block" : "none" }}>
         <ProjectTree
           projectId={projectId}
+          reloadToken={treeEpoch}
           onSelectFile={rel => {
             // Swap viewer when the user clicks a renderable or markdown
             // file leaf. Unsupported extensions are ignored — the
@@ -207,6 +250,7 @@ export function Workbench() {
                 projectPath={projectId}
                 relPath={activeModel}
                 onOpenResult={setActiveModel}
+                onSaved={() => setTreeEpoch(e => e + 1)}
               />
             ) : (
               <ModelViewer
@@ -238,6 +282,9 @@ export function Workbench() {
                 const ts = new Date().toLocaleTimeString();
                 setLog(prev => [...prev, `[${ts}] ${line}`]);
               }}
+              runLines={runLines}
+              stageStatus={stageStatus}
+              reloadToken={treeEpoch}
             />
           </div>
         )}

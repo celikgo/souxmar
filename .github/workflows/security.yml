@@ -1,0 +1,178 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Supply-chain and static-analysis gates.
+#
+# ENGINEERING_PRACTICES.md § Security promises three things this file
+# delivers: a license scan that fails on an incompatible dependency, SCA
+# on every PR, and static analysis deep enough to catch what -Wall does
+# not. CodeQL runs on a schedule as well as on PRs because a rule update
+# can find a bug in code that has not changed.
+
+name: Security
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+  schedule:
+    - cron: '0 5 * * 1'   # Monday, after the weekend's dependency churn
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ${{ matrix.language == 'c-cpp' && 'ubuntu-22.04' || 'ubuntu-latest' }}
+    timeout-minutes: 90
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [c-cpp, javascript-typescript, python, rust]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          # security-and-quality is noisier than the default but catches
+          # the resource-leak and API-misuse rules that matter for a
+          # plugin host running third-party code in-process.
+          queries: security-and-quality
+
+      - name: Set up the C++ toolchain
+        if: matrix.language == 'c-cpp'
+        uses: ./.github/actions/setup-cpp
+        with:
+          preset: ci-linux-gcc
+
+      - name: Build C++
+        if: matrix.language == 'c-cpp'
+        run: |
+          cmake --preset ci-linux-gcc
+          cmake --build --preset ci-linux-gcc
+
+      - name: Autobuild everything else
+        if: matrix.language != 'c-cpp'
+        uses: github/codeql-action/autobuild@v4
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: moderate
+          # The project is Apache-2.0. Copyleft licences are not
+          # compatible with the plugin ABI's linking model, and a new
+          # dependency needs an ADR regardless — see
+          # ENGINEERING_PRACTICES.md § Security.
+          deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-3.0, SSPL-1.0
+          comment-summary-in-pr: on-failure
+
+  cargo-audit:
+    name: Rust advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit every crate
+        run: |
+          # Iterate manifests, not lockfiles: .gitignore deliberately
+          # keeps Cargo.lock out of the tree ("leave dependency
+          # resolution to the developer's local toolchain"), so globbing
+          # tracked lockfiles would find none and pass vacuously.
+          # cargo-audit needs one, so generate it here.
+          status=0
+          for manifest in $(git ls-files '*/Cargo.toml' | grep -v '/target/'); do
+            dir="$(dirname "$manifest")"
+            echo "::group::$dir"
+            # Vulnerabilities and yanked crates fail. `unmaintained` and
+            # `unsound` are reported but do not, because every one of them
+            # today is in the Tauri -> GTK3 chain (gtk, gdk, glib, atk and
+            # friends, which gtk-rs deprecated in favour of GTK4) and none
+            # is reachable from code this project controls. --deny warnings
+            # would make the job permanently red over someone else's
+            # ecosystem migration, and a gate that is always red is a gate
+            # nobody reads. See docs/CI.md for the current list.
+            ( cd "$dir" \
+              && cargo generate-lockfile --quiet \
+              && cargo audit --deny yanked ) || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
+  npm-audit:
+    name: npm advisories
+    runs-on: ubuntu-latest
+    # Blocking. It was not, for as long as the frontend carried four
+    # advisories that needed a vite 5 -> 8 bump to clear. That bump has
+    # landed and the tree is clean, so the gate does what a gate is for.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # vite 8 requires ^20.19.0 || >=22.12.0.
+          node-version: '22'
+      - name: Audit the desktop frontend
+        working-directory: src/desktop
+        run: |
+          # npm audit reads package-lock.json, which .gitignore keeps out
+          # of the tree, so resolve one here first.
+          npm install --package-lock-only --no-audit --no-fund
+          npm audit --audit-level=high
+
+  license-inventory:
+    name: License inventory is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Every dependency appears in THIRD_PARTY_LICENSES.md
+        run: |
+          # ENGINEERING_PRACTICES.md: "Every dependency's license is in
+          # THIRD_PARTY_LICENSES.md. A new dep with an unknown or
+          # incompatible license fails the build." This checks the vcpkg
+          # manifest against the inventory; the language ecosystems are
+          # covered by dependency-review above.
+          missing=0
+          for dep in $(python3 -c "
+          import json
+          m = json.load(open('vcpkg.json'))
+          names = [d if isinstance(d, str) else d['name'] for d in m.get('dependencies', [])]
+          for feat in m.get('features', {}).values():
+              names += [d if isinstance(d, str) else d['name'] for d in feat.get('dependencies', [])]
+          print('\n'.join(sorted(set(names))))
+          "); do
+            if ! grep -qi -- "$dep" THIRD_PARTY_LICENSES.md; then
+              echo "::error::vcpkg dependency '$dep' is not listed in THIRD_PARTY_LICENSES.md"
+              missing=$((missing + 1))
+            fi
+          done
+          if [ "$missing" -gt 0 ]; then
+            echo "Add the dependency and its licence to THIRD_PARTY_LICENSES.md in this PR."
+            exit 1
+          fi
+          echo "license inventory: every vcpkg dependency is accounted for."

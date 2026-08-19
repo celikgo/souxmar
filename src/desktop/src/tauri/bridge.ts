@@ -14,10 +14,16 @@ export type CommandName =
   | "onboarding_status"
   | "onboarding_complete"
   | "byok_store_key"
+  | "byok_has_key"
+  | "byok_clear_key"
+  | "byok_set_active"
+  | "byok_active"
   | "byok_test_connection"
   | "open_sample_project"
   // Sprint 11 push 4 — workbench chat.
   | "chat_send"
+  // Answer the agent's pending confirmation and resume the turn.
+  | "chat_confirm"
   // Sprint 12 push 2 — FFI bridge feature-set query.
   | "bridge_feature_set"
   // Sprint 13 push 3 — first real FFI: pipeline introspection.
@@ -36,7 +42,10 @@ export type CommandName =
   | "simplify_mesh"
   | "write_text_file"
   | "list_solver_capabilities"
-  | "list_mesher_capabilities";
+  | "list_mesher_capabilities"
+  | "list_capabilities"
+  // Pipeline execution — shells out to the souxmar CLI per ADR-0022.
+  | "run_pipeline";
 
 // Sprint 12 push 2 — BridgeFeatureSet mirror of the Rust struct.
 // Renaming or removing fields here without a matching change to
@@ -98,12 +107,31 @@ export interface ChatErrorSummary {
   text: string;
 }
 
+// A tool the agent ran during a turn, as reported by the engine's
+// dispatcher — not a prediction of what it might do.
+export interface ChatToolCallSummary {
+  name:    string;
+  summary: string;
+  ok:      boolean;
+  /** True when the user or the policy declined it, rather than the tool failing. */
+  refused: boolean;
+}
+
+// Set when the turn paused waiting for the user. The agent cannot
+// proceed until chat_confirm answers.
+export interface PendingToolSummary {
+  tool_name: string;
+  arguments: string;
+}
+
 export interface ChatSummary {
   reply_text: string;
-  provider:   string;   // "stub" | "anthropic" | "openai" | "ollama" | "managed" | "unknown"
+  provider:   string;   // "stub" | "ollama" | "openai_compatible" | … | "unknown"
   tokens_in:  number;
   tokens_out: number;
   error:      ChatErrorSummary | null;
+  tool_calls: ChatToolCallSummary[];
+  pending:    PendingToolSummary | null;
 }
 
 // Sprint 15 push 4 — auto-updater menu status. Mirrors
@@ -154,4 +182,19 @@ export interface SolverCapability {
   plugin_name: string;
   plugin_dir:  string;
   in_tree:     boolean;
+}
+
+// Mirrors the Rust RunOutcome struct returned by run_pipeline. Every
+// field comes from the child `souxmar run` process — nothing here is
+// synthesised on either side of the boundary.
+export interface RunOutcome {
+  /** The command line as dispatched, reproducible by hand in a terminal. */
+  command:   string;
+  /** Working directory of the child; relative output paths land here. */
+  cwd:       string;
+  /** Child exit code; -1 when killed by a signal. */
+  exit_code: number;
+  ok:        boolean;
+  /** Merged stdout + stderr, split into lines, in that order. */
+  lines:     string[];
 }

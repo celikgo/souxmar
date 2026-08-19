@@ -53,7 +53,7 @@ The backend is the same C++ binary the CLI links to. The Tauri shell is a thin R
         ^                                ^                  ^
         |                                |                  |
    AI provider (BYOK)            Local file system     Plugin search paths
-   Anthropic / OpenAI /          (project workspace)   (per OS)
+   Claude / GPT / Grok / …       (project workspace)   (per OS)
    Ollama (local)
 ```
 
@@ -160,18 +160,35 @@ install. It is the only thing between download and a working analysis
 | # | Step          | Purpose                                                                 | Skippable |
 | - | ------------- | ----------------------------------------------------------------------- | --------- |
 | 1 | Welcome       | One-screen "what souxmar is"; sets expectations (BYOK, plugin model).   | No        |
-| 2 | BYOK          | Pick provider (Anthropic / OpenAI / Ollama); paste key; store in OS keychain. | Yes — defers to Settings → AI providers. |
+| 2 | BYOK          | Pick a provider (ten: Anthropic, OpenAI, Grok, DeepSeek, Groq, Mistral, OpenRouter, Together, Ollama, or any OpenAI-compatible endpoint); choose a model; paste key; store in OS keychain. | Yes — defers to Settings → AI providers. |
 | 3 | Sample project | Copy `examples/cantilever-beam` to `~/souxmar-projects/cantilever` and open it. | Yes — user starts blank.   |
 | 4 | Done          | Recap; one button into the workbench shell.                             | No        |
 
 The wizard owns its own state (Zustand store); each step is a
 small focused React component. Tauri commands at each step:
 
-* Step 2 → `byok_store_key(provider, key)`: writes to the platform
-  keychain via the `keyring` Rust crate. For Ollama, also calls
-  `byok_test_connection` which does a no-cost `GET /api/tags`
-  against `localhost:11434`. Anthropic / OpenAI are *not* tested
-  here — a "first launch" 1-token call would bill the user.
+* Step 2 → `byok_store_key(provider, key)` writes to the platform
+  keychain via the `keyring` Rust crate, and `byok_set_active(provider,
+  model)` records the choice in the user settings file. Both are needed:
+  the engine has to know *which* provider to route to as well as hold the
+  credential, and it reads the former from `project.ai.toml`.
+  `byok_has_key` confirms the write landed. For Ollama,
+  `byok_test_connection` does a no-cost `GET /api/tags` against
+  `localhost:11434`; the hosted services are *not* probed, because a
+  "first launch" 1-token call would bill the user.
+
+  The key is read back out at chat time. `chat_send` / `chat_confirm`
+  call an internal `prepare_provider_env`, which loads the credential
+  from the keychain into the environment variable the engine expects
+  (`ANTHROPIC_API_KEY`, `XAI_API_KEY`, …) and writes `project.ai.toml`
+  from the saved choice when the project has none — never overwriting an
+  existing one, because a user who hand-edited it meant it. The key is
+  not written to that file; the file only names the variable.
+
+  A model id is required for every hosted provider and the step prefills
+  one per service. souxmar does not guess a model: services rename and
+  retire them on their own schedule, and a stale built-in default
+  produces a 404 that reads like a broken install.
 * Step 3 → `open_sample_project(which)`: copies the example tree
   to `~/souxmar-projects/<which>` and returns the destination
   path. Missing-source case (the example wasn't bundled with this

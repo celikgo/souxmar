@@ -18,10 +18,9 @@
 
 from __future__ import annotations
 
+import pathlib
 import re
 import sys
-import pathlib
-
 
 # Order matters: longer/specific patterns first to avoid masking.
 NORMALISERS: list[tuple[re.Pattern[str], str]] = [
@@ -117,7 +116,18 @@ def main(argv: list[str]) -> int:
         text = sys.stdin.read()
     else:
         text = pathlib.Path(src).read_text(encoding="utf-8", errors="replace")
-    sys.stdout.write(normalise(text))
+    # Write bytes, not text. On Windows sys.stdout is in text mode and
+    # translates every "\n" back into "\r\n" on the way out — so the CR
+    # stripping above was undone at the last step, and the fingerprint of
+    # identical behaviour differed between Windows and everywhere else.
+    # Every example pipeline diverged in the determinism gate for that
+    # reason alone, which is a normaliser bug wearing a determinism bug's
+    # clothes.
+    #
+    # On Linux and macOS this is byte-for-byte what sys.stdout.write already
+    # produced, so committed golden hashes are unaffected.
+    sys.stdout.buffer.write(normalise(text).encode("utf-8"))
+    sys.stdout.buffer.flush()
     return 0
 
 

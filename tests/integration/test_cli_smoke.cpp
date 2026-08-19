@@ -40,12 +40,43 @@ std::string shell_quote(const fs::path& p) {
 #endif
 }
 
+// `cd` into a directory, portably.
+//
+// On Windows, `cd C:\path` does not change the *drive* — it sets the current
+// directory of C: and leaves the process wherever it was. These tests put
+// their workdir under the temp directory, which on a GitHub runner is on C:
+// while the checkout is on D:, so the CLI then ran from the wrong drive,
+// could not find pipeline.yaml, and exited 64 with its log written somewhere
+// nobody looked. `/d` changes drive and directory together.
+std::string cd_to(const fs::path& dir) {
+#if defined(_WIN32)
+  return "cd /d " + shell_quote(dir);
+#else
+  return "cd " + shell_quote(dir);
+#endif
+}
+
 // Run a CLI command and capture exit code. We let stdout/stderr flow
 // through to the test runner — if a test fails, the CLI's diagnostics
 // land in the gtest output for debugging.
 int run_cli(const std::string& full_cmd) {
   std::fflush(nullptr);
+  // cmd.exe eats the outer quotes. std::system runs `cmd /c <string>`, and
+  // when that string starts with a double quote cmd strips the first and
+  // last one before parsing — so a command built as
+  //     "C:\path\souxmar.exe" plugin list --plugin-path "C:\..." > "C:\..."
+  // arrives as
+  //     C:\path\souxmar.exe" plugin list --plugin-path "C:\..." > "C:\...
+  // and fails with "The filename, directory name, or volume label syntax is
+  // incorrect." Wrapping the whole command in one more pair of quotes gives
+  // cmd the pair it intends to remove and leaves the real ones intact. This
+  // is why every CLI integration test failed on Windows while the same
+  // commands worked by hand.
+#if defined(_WIN32)
+  return std::system(("\"" + full_cmd + "\"").c_str());
+#else
   return std::system(full_cmd.c_str());
+#endif
 }
 
 fs::path tmp_dir(std::string_view tag) {
@@ -113,8 +144,7 @@ TEST_F(CliSmokeTest, RunCantileverExampleProducesVtuOutput) {
   fs::copy_file(pipeline_src, pipeline_local);
 
   std::ostringstream cmd;
-  cmd << "cd " << shell_quote(workdir_) << " && " << shell_quote(SOUXMAR_TEST_CLI_BINARY)
-      << " run pipeline.yaml"
+  cmd << cd_to(workdir_) << " && " << shell_quote(SOUXMAR_TEST_CLI_BINARY) << " run pipeline.yaml"
       << " --plugin-path " << shell_quote(plugins_root()) << " --cache-dir "
       << shell_quote(cachedir_) << " > run1.log 2>&1";
   const int rc1 = run_cli(cmd.str());
@@ -146,10 +176,9 @@ TEST_F(CliSmokeTest, ReRunHitsDiskCacheForWriterStage) {
   const auto pipeline_local = workdir_ / "pipeline.yaml";
   fs::copy_file(pipeline_src, pipeline_local);
 
-  const std::string base = "cd " + shell_quote(workdir_) + " && "
-                           + shell_quote(SOUXMAR_TEST_CLI_BINARY) + " run pipeline.yaml"
-                           + " --plugin-path " + shell_quote(plugins_root()) + " --cache-dir "
-                           + shell_quote(cachedir_);
+  const std::string base = cd_to(workdir_) + " && " + shell_quote(SOUXMAR_TEST_CLI_BINARY)
+                           + " run pipeline.yaml" + " --plugin-path " + shell_quote(plugins_root())
+                           + " --cache-dir " + shell_quote(cachedir_);
 
   ASSERT_EQ(run_cli(base + " > run1.log 2>&1"), 0);
   ASSERT_EQ(run_cli(base + " > run2.log 2>&1"), 0);

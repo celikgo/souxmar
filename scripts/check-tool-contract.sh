@@ -31,14 +31,31 @@
 # Usage:
 #   scripts/check-tool-contract.sh [<base-ref>] [<head-ref>]
 #
-# Defaults to comparing HEAD against `origin/main`. Blocking-by-default;
-# set SOUXMAR_TOOL_CONTRACT_BLOCKING=0 only for local dry-run inspection
-# of an in-progress ratchet PR (the CI job never sets it).
+# Defaults to comparing HEAD against the remote's default branch,
+# resolved from origin/HEAD (falling back to origin/master). Blocking-by-
+# default; set SOUXMAR_TOOL_CONTRACT_BLOCKING=0 only for local dry-run
+# inspection of an in-progress ratchet PR (the CI job never sets it).
 
 set -euo pipefail
 
-BASE_REF="${1:-origin/main}"
+default_base_ref() {
+  git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null \
+    || echo "origin/master"
+}
+
+BASE_REF="${1:-$(default_base_ref)}"
 HEAD_REF="${2:-HEAD}"
+
+# Fail closed. An unresolvable base ref used to make the `git diff`
+# below print nothing, which read as "no contract surface touched" and
+# exited 0 — a gate that cannot find its baseline must not pass.
+for ref in "$BASE_REF" "$HEAD_REF"; do
+  if ! git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null; then
+    echo "tool-contract: ref '${ref}' does not resolve in this repository." >&2
+    echo "  Pass an explicit base: scripts/check-tool-contract.sh <base-ref> [head-ref]" >&2
+    exit 1
+  fi
+done
 BLOCKING="${SOUXMAR_TOOL_CONTRACT_BLOCKING:-1}"
 
 # The contract surface. Keep in sync with ADR-0010's table.

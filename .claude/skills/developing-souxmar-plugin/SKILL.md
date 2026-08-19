@@ -133,7 +133,7 @@ At minimum:
 
 ### 9. Publishing (optional)
 
-To list in the open plugin index, open a PR against `docs/plugin-index.md` in the souxmar repo with the manifest summary and a link to the source. See `docs/GOVERNANCE.md`.
+To list in the open plugin index, open a PR against `docs/plugin-index.toml` in the souxmar repo with the manifest summary and a link to the source. See `docs/GOVERNANCE.md`.
 
 ## Common mistakes to flag in code review
 
@@ -149,5 +149,5 @@ To list in the open plugin index, open a PR against `docs/plugin-index.md` in th
 
 - `docs/PLUGIN_SDK.md` — full ABI specification.
 - `docs/ARCHITECTURE.md` — how plugins fit into the broader system.
-- `tests/plugin-conformance/` — the conformance suite source.
+- `tools/conformance/` — the conformance suite source.
 - `examples/plugins/hello-mesher/` — a minimal reference implementation (when present).

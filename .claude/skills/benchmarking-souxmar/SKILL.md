@@ -5,11 +5,21 @@ description: Use when running performance benchmarks against the souxmar baselin
 
 # Benchmarking souxmar
 
-souxmar enforces hard performance budgets in `docs/ENGINEERING_PRACTICES.md`. CI gates merges on regressions > 5 % against the baseline. This skill walks through running benchmarks locally, interpreting results, and triaging a regression.
+souxmar sets performance budgets in `docs/ENGINEERING_PRACTICES.md`. This skill walks through running benchmarks locally, interpreting results, and triaging a regression.
+
+**CI measures, it does not block.** The `Benchmarks (advisory)` job in `.github/workflows/ci.yml`
+compares against `benchmarks/baselines/` on every PR and uploads the numbers, with
+`continue-on-error: true`. The budgets in ENGINEERING_PRACTICES are reference-machine figures
+(M2 Pro / Ryzen 7 7700X); GitHub-hosted runners are shared and vary by more than the 5 % threshold
+with no code change at all, so a blocking gate there would mostly fire falsely — and the practical
+response to a flaky gate is to re-run until it passes, which is worse than not having one.
+`docs/CI.md` records this. Closing it properly needs a self-hosted runner pinned to the reference
+hardware; until then a regression is something a human reads off the job, not something the merge
+button enforces.
 
 ## When to use this skill
 
-- A PR has been flagged with a perf regression in CI.
+- The advisory benchmark job on a PR shows a regression worth investigating.
 - A change was made to a hot path (assembly, mesh refinement, viewport rendering) and the author needs to confirm the change.
 - Establishing a new benchmark for a feature being added.
 - Investigating a "feels slow" report.
@@ -17,7 +27,7 @@ souxmar enforces hard performance budgets in `docs/ENGINEERING_PRACTICES.md`. CI
 ## When NOT to use this skill
 
 - Micro-optimising code that is not on a hot path. Profile first; if it is not measurably hot, do not optimise.
-- Benchmarking against an unreleased baseline. Use the released baseline pinned in `benchmarks/baseline.json`.
+- Benchmarking against an unreleased baseline. Use the released baseline pinned in `benchmarks/baselines/`.
 
 ## Reference machine
 
@@ -48,7 +58,7 @@ For a specific benchmark suite:
 For desktop perf (cold launch, frame time):
 
 ```bash
-pnpm -C src/desktop bench
+npm --prefix src/desktop run bench
 ```
 
 For agent latency:
@@ -60,10 +70,13 @@ souxmar agent bench --provider anthropic --tasks tests/agent-eval/canonical.yaml
 ## Comparing to baseline
 
 ```bash
-tools/bench-compare.sh results.json benchmarks/baseline.json
+python3 tools/perf-compare/compare.py \
+  --baseline-dir benchmarks/baselines --current-dir bench-out
 ```
 
-Output is per-benchmark delta as % change. Anything > 5 % regression on a tracked benchmark is a CI block.
+Output is per-benchmark delta as % change. Anything > 5 % regression on a tracked benchmark is worth
+triaging — the advisory CI job reports it, and reviewers are expected to look rather than rely on
+the gate to stop the merge.
 
 ## Tracked benchmarks (current set)
 
@@ -82,13 +95,14 @@ Output is per-benchmark delta as % change. Anything > 5 % regression on a tracke
 | `Agent.FirstToken.Managed`                   | < 1200 ms p95   | AI (post-S14)        |
 | `Agent.PromptCacheHitRate`                   | > 70 %          | AI                   |
 
-The full set lives in `benchmarks/registry.json`.
+The full set lives in `benchmarks/baselines/`.
 
 ## Triaging a regression
 
-When CI reports a regression:
+When the advisory job reports a regression:
 
-1. **Identify the benchmark.** The CI report names the specific benchmark and the % delta.
+1. **Identify the benchmark.** Download the `benchmark-results` artifact from the job; it holds one
+   JSON per benchmark binary, and `tools/perf-compare/compare.py` names the delta.
 2. **Reproduce locally.** Build at the PR's HEAD; run the affected benchmark; confirm the regression.
 3. **Bisect.** If the PR has multiple commits, bisect to find which commit introduced the regression.
 4. **Profile.** Linux: `perf record` + `perf report`. macOS: Instruments → Time Profiler. Windows: WPA / xperf.
@@ -104,7 +118,7 @@ When adding a feature on a hot path:
 1. Add a benchmark to `benchmarks/<area>/`.
 2. Use `google-benchmark` for C++; `vitest --bench` for TypeScript.
 3. Choose a budget conservatively — start at 1.5× the measured value on the reference machine, tighten over time as the implementation matures.
-4. Add the benchmark to `benchmarks/registry.json` with its budget.
+4. Add the benchmark to `benchmarks/baselines/` with its budget.
 5. Submit the new baseline via PR; the Platform team approves.
 
 ## Common mistakes
@@ -119,6 +133,6 @@ When adding a feature on a hot path:
 ## Reference
 
 - `docs/ENGINEERING_PRACTICES.md` — performance budget table.
-- `benchmarks/registry.json` — full tracked set.
-- `benchmarks/baseline.json` — current baseline (per release).
-- `tools/bench-compare.sh` — comparison harness.
+- `benchmarks/baselines/` — full tracked set.
+- `benchmarks/baselines/` — current baseline (per release).
+- `tools/perf-compare/compare.py` — comparison harness.

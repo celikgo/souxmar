@@ -92,7 +92,7 @@ Most welcome:
 - **New in-tree plugins** (mesher, solver, element, postproc) following [`docs/PLUGIN_SDK.md`](docs/PLUGIN_SDK.md).
 - **New adapters** wrapping production-quality external tools.
 - **Examples and tutorials** for `examples/`.
-- **Out-of-tree plugins** (your own repo) — list them in [`docs/plugin-index.md`](docs/plugin-index.md).
+- **Out-of-tree plugins** (your own repo) — list them in [`docs/plugin-index.toml`](docs/plugin-index.toml).
 - **Documentation improvements** — typos, clarifications, missing detail.
 - **Performance improvements** with a benchmark proving the win.
 
@@ -125,7 +125,7 @@ For the last three, an RFC is required before code review begins. See [`docs/GOV
 
 ## Bug reports + the public-facing triage SLA
 
-The full public contract — what response time each channel commits to, how P0/P1/P2/P3 are assigned, what to expect from the public-alpha window — lives in [`docs/COMMUNITY.md`](docs/COMMUNITY.md). Maintainers on triage rotation cover the SLA windows; the bot in [`.github/workflows/triage.yml`](.github/workflows/triage.yml) auto-acknowledges each new issue with the matching SLA so reporters know what to expect, and auto-labels by surface (desktop / CLI / Python / plugin / agent / abi / docs / build) so the rotation finds the right thread quickly.
+The full public contract — what response time each channel commits to, how P0/P1/P2/P3 are assigned, what to expect from the public-alpha window — lives in [`docs/COMMUNITY.md`](docs/COMMUNITY.md). Maintainers on triage rotation cover the SLA windows; a triage bot (`.github/workflows/triage.yml`) auto-acknowledged each new issue with the matching SLA and auto-labelled by surface (desktop / CLI / Python / plugin / agent / abi / docs / build). **That workflow was removed in `c7f6214` and has not been restored** — until it is, acknowledgement and labelling are manual. See [`docs/CI.md`](docs/CI.md).
 
 ## What we do not do
 

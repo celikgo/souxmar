@@ -4,6 +4,9 @@
 
 add_subdirectory(core)
 add_subdirectory(plugin-host)
+# Windows-only static shim a plugin links so its host ABI references
+# resolve at load time. Returns early on every other platform.
+add_subdirectory(plugin-shim)
 add_subdirectory(pipeline)
 add_subdirectory(ai)
 # Sprint 11 push 1 — shared crypto primitives (ed25519 verify, sha256,

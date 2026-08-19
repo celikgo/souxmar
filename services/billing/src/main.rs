@@ -15,17 +15,19 @@ use tracing::{info, warn};
 #[derive(Serialize)]
 struct NotYetImplemented {
     status: &'static str,
-    code:   &'static str,
+    code: &'static str,
     detail: &'static str,
 }
 
 fn nyi(d: &'static str) -> impl IntoResponse {
-    (StatusCode::SERVICE_UNAVAILABLE,
-     Json(NotYetImplemented {
-         status: "service_unavailable",
-         code:   "mvp_not_yet_implemented",
-         detail: d,
-     }))
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(NotYetImplemented {
+            status: "service_unavailable",
+            code: "mvp_not_yet_implemented",
+            detail: d,
+        }),
+    )
 }
 
 async fn handle_webhook() -> impl IntoResponse {
@@ -58,7 +60,7 @@ fn parse_mode() -> Mode {
     match std::env::var("SOUXMAR_BILLING_MODE").as_deref() {
         Ok("live") => Mode::Live,
         Ok("test") => Mode::Test,
-        _          => Mode::Disabled,
+        _ => Mode::Disabled,
     }
 }
 
@@ -82,11 +84,39 @@ fn parse_addr(args: &[String]) -> SocketAddr {
     for (i, a) in args.iter().enumerate() {
         if a == "--addr" {
             if let Some(v) = args.get(i + 1) {
-                return v.parse::<SocketAddr>().expect("--addr must be a valid socket address");
+                return v
+                    .parse::<SocketAddr>()
+                    .expect("--addr must be a valid socket address");
             }
         }
     }
     "127.0.0.1:8083".parse().unwrap()
+}
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+        )
+        .init();
+
+    let mode = parse_mode();
+    key_consistency_check(mode);
+    info!(?mode, "billing service starting");
+
+    let args: Vec<String> = std::env::args().collect();
+    let addr = parse_addr(&args);
+
+    let app = Router::new()
+        .route("/healthz", get(handle_health))
+        .route("/v1/webhook/stripe", post(handle_webhook))
+        .route("/internal/quota/refill", post(handle_quota_refill))
+        .route("/internal/license/issue", post(handle_license_issue));
+
+    info!(?addr, "billing MVP scaffold — binding");
+    let listener = tokio::net::TcpListener::bind(addr).await.expect("bind");
+    axum::serve(listener, app).await.expect("serve");
 }
 
 #[cfg(test)]
@@ -124,33 +154,6 @@ mod tests {
     fn test_mode_with_test_key_is_fine() {
         std::env::set_var("SOUXMAR_BILLING_MODE", "test");
         std::env::set_var("SOUXMAR_STRIPE_API_KEY", "sk_test_xyz");
-        key_consistency_check(Mode::Test);  // no panic
+        key_consistency_check(Mode::Test); // no panic
     }
-}
-
-#[tokio::main]
-async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
-        )
-        .init();
-
-    let mode = parse_mode();
-    key_consistency_check(mode);
-    info!(?mode, "billing service starting");
-
-    let args: Vec<String> = std::env::args().collect();
-    let addr = parse_addr(&args);
-
-    let app = Router::new()
-        .route("/healthz",                  get(handle_health))
-        .route("/v1/webhook/stripe",        post(handle_webhook))
-        .route("/internal/quota/refill",    post(handle_quota_refill))
-        .route("/internal/license/issue",   post(handle_license_issue));
-
-    info!(?addr, "billing MVP scaffold — binding");
-    let listener = tokio::net::TcpListener::bind(addr).await.expect("bind");
-    axum::serve(listener, app).await.expect("serve");
 }

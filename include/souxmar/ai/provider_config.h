@@ -30,6 +30,12 @@ enum class ProviderKind : std::uint8_t {
   BYOKOpenAI = 3,
   Ollama = 4,
   Managed = 5,
+  // Any service speaking OpenAI's /chat/completions shape: xAI (Grok),
+  // OpenAI, DeepSeek, Groq, Mistral, OpenRouter, Together, or a local
+  // server. Which one is decided by `base_url`, resolved either from a
+  // named preset (`provider = "grok"`) or given explicitly. This is the
+  // kind that makes adding a service configuration rather than code.
+  OpenAICompatible = 6,
 };
 
 [[nodiscard]] std::string_view to_string(ProviderKind) noexcept;
@@ -38,6 +44,18 @@ struct ProviderConfig {
   ProviderKind provider = ProviderKind::Default;
   std::string model;     // empty when not specified
   std::string endpoint;  // populated for ollama / managed when overridden
+
+  // --- OpenAICompatible only ---
+  // The `provider` string exactly as written, e.g. "grok". Kept so the
+  // UI and log lines can name the service the user chose rather than
+  // the generic kind.
+  std::string provider_id;
+  // API root, no trailing slash. Resolved from the named preset unless
+  // the file set `[openai_compatible] base_url`.
+  std::string base_url;
+  // Name of the environment variable holding the API key. The key
+  // itself is never read from the config file — see the loader.
+  std::string api_key_env;
 
   // Source file that was parsed. Empty when no file was found.
   // Useful for error messages + the chat panel's "via <provider>"
@@ -67,6 +85,11 @@ enum class ProviderConfigErrorKind : std::uint8_t {
   MalformedToml = 4,
   // I/O error reading the file (perms, disk failure, etc.).
   IoError = 5,
+  // The file contained an inline API key. project.ai.toml sits next to
+  // pipeline.yaml in the user's project and is routinely committed, so
+  // the loader refuses the file outright rather than reading a secret
+  // out of it. Use `api_key_env` and an environment variable.
+  SecretInConfig = 6,
 };
 
 [[nodiscard]] std::string_view to_string(ProviderConfigErrorKind) noexcept;

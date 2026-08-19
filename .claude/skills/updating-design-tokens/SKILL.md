@@ -1,11 +1,11 @@
 ---
 name: updating-design-tokens
-description: Use when changing design tokens in src/desktop/ui/tokens.css — colors, spacing, typography, radii, elevation. Tokens are a project-wide contract; changes touch every component. Includes the visual-regression review process. Triggers on "design tokens", "tokens.css", "update palette", "color change", "Twitter dim palette".
+description: Use when changing design tokens in src/desktop/src/ui/tokens.css — colors, spacing, typography, radii, elevation. Tokens are a project-wide contract; changes touch every component. Includes the visual-regression review process. Triggers on "design tokens", "tokens.css", "update palette", "color change", "Twitter dim palette".
 ---
 
 # Updating design tokens
 
-Design tokens in `src/desktop/ui/tokens.css` are the source of truth for the desktop app's visual language. Changing them touches every component, every screen, every screenshot. This skill governs how those changes happen safely.
+Design tokens in `src/desktop/src/ui/tokens.css` are the source of truth for the desktop app's visual language. Changing them touches every component, every screen, every screenshot. This skill governs how those changes happen safely.
 
 ## When to use this skill
 
@@ -49,7 +49,7 @@ Three rules govern token changes:
 1. **Surface the rationale.** Token changes propagate everywhere; the PR description must explain why.
 2. **Run the visual regression suite locally** before pushing:
    ```bash
-   pnpm -C src/desktop test:visual --update-snapshots
+   npm --prefix tests/visual run update-baselines
    ```
 3. **Review the snapshot diff.** Every changed component is in the diff. Look for:
    - Components that broke unexpectedly (regressions).
@@ -99,6 +99,7 @@ Before merging a token change PR:
 
 - `docs/UI_DESIGN.md` — full design system, palette tables, contrast verification.
 - `docs/DESKTOP_APP.md` — performance budgets including UI surfaces.
-- `src/desktop/ui/tokens.css` — token source of truth.
-- `src/desktop/ui-storybook/` — component gallery and visual regression base.
+- `src/desktop/src/ui/tokens.css` — token source of truth.
+- `tests/visual/` — the Playwright visual-regression suite.
+  (`src/desktop/ui-storybook/` is planned and not built.)
 - `docs/SPRINT_PLAN.md` — risk R-007 (palette legal review).

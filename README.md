@@ -61,14 +61,14 @@ Older history — Sprint 15 + earlier:
 - **Anthropic forwarder for the managed-AI proxy** (Sprint 15 push 3). `/v1/chat` is no longer a 503 stub; it POSTs to api.anthropic.com via reqwest, returns the typed ChatResponse. Operator-supplied `SOUXMAR_PROXY_ANTHROPIC_KEY` env var; the user-facing `sxm_pro_*` token never reaches Anthropic.
 - **Cloud-sync MVP scaffold + [ADR-0021](docs/adr/0021-cloud-sync-architecture.md)** (Sprint 15 push 3). Architecture decided: last-write-wins + per-tier encryption (Pro/Team encrypted-at-rest, Enterprise E2E in Sprint 20), separate Rust service. MVP returns honest 503s; Sprint 16 wires the S3 backend.
 - **Third real FFI — `auto_updater_menu`** (Sprint 15 push 4). Bridge ABI bumps 2 → 3. Read-only surface; apply / rollback shell out to the CLI per the MVC-via-subprocess pattern (ADR-0022 queued for Sprint 16).
-- **services-build.yml + INFRA_STATUS.md** (Sprint 15 push 1). Every Rust service under `services/*/` compiles in CI; a cross-cutting status doc names which gates are wired-but-empty.
+- **Rust services build gate + INFRA_STATUS.md** (Sprint 15 push 1; the workflow was removed in `c7f6214` and the check now lives in `ci.yml`'s `rust` job — see [`docs/CI.md`](docs/CI.md)). Every Rust service under `services/*/` compiles in CI; a cross-cutting status doc names which gates are wired-but-empty.
 
 Older history — Sprint 14 + earlier:
 
 - **Managed-AI proxy MVP scaffold + [ADR-0019](docs/adr/0019-managed-ai-proxy-architecture.md)** (Sprint 14 push 3). New `services/managed-ai-proxy/` directory tree — axum + tokio binary scaffold serving `/v1/chat`, `/v1/account`, `/v1/quota` with honest 503s. Architecture: stateless proxy, opaque souxmar tokens (sxm_pro_<32-hex>), pre-charge per token with in-flight holds (catches "out of Pro quota" *before* the upstream API spend), separate Rust binary outside the desktop workspace, mutually exclusive coexistence with BYOK per-project.
 - **Second real FFI — `provider_call`** (Sprint 14 push 4). New `include/souxmar-c-bridge/provider.h` + impl. The desktop Chat panel now calls through `libsouxmar-c-bridge` into the engine's Provider abstraction; `BridgeFeatureSet::provider_call` flips structural when the build is real-ffi. Bridge ABI bumps to v2 — additive surface growth, old clients refuse mismatched calls cleanly via the per-call ABI-byte cross-check. Two of six BridgeFeatureSet flags are now structural.
 - **synth-load `--bootstrap` + per-platform VR matrix** (Sprint 14 push 1). The harness now ships with the mechanism to seed itself in one maintainer-reviewed pass; new `visual-regression.yml` matrix workflow runs the Playwright suite on Linux + macOS + Windows, each producing its own per-platform baselines directory. Sprint 15 commits the initial corpora.
-- **`desktop-ffi.yml` workflow** (Sprint 14 push 2). Validates the C bridge + Rust souxmar-bridge build with `--features real-ffi` on every relevant PR. R-016 closes.
+- **Desktop FFI build gate** (Sprint 14 push 2; the standalone workflow was removed in `c7f6214`, and `ci.yml`'s `rust` job now builds the frontend and then the bridge). Validates the C bridge + Rust souxmar-bridge build on every relevant PR. R-016 closes.
 
 Older history — Sprint 13 + earlier:
 
@@ -79,7 +79,7 @@ Older history — Sprint 13 + earlier:
 
 What changed in Sprint 12 (older history, but still relevant):
 
-- **Public docs site at docs.souxmar.dev** (Sprint 12 push 3). Vitepress 1.5 with landing + install + first-pipeline + agent reference + plugin authoring + business-model pages. CI publishes to GitHub Pages on every master push touching `docs-site/`. DNS CNAME is pending out-of-band setup.
+- **Public docs site at docs.souxmar.dev** (Sprint 12 push 3). Vitepress 1.5 with landing + install + first-pipeline + agent reference + plugin authoring + business-model pages. CI published to GitHub Pages on every master push touching `docs-site/` until `c7f6214` removed that workflow; **it has not been restored**, so the site is not currently being rebuilt. DNS CNAME is also pending out-of-band setup. See [`docs/CI.md`](docs/CI.md).
 - **Bug-triage workflow + COMMUNITY.md** (Sprint 12 push 1). Public response-SLA contract (P0 24h / P1 48h / P2 5bd / P3 2w). Auto-acknowledgement bot replies to every new issue with the matching SLA + auto-labels by surface.
 - **souxmar-bridge FFI skeleton + BridgeFeatureSet** ([ADR-0016](docs/adr/0016-bridge-feature-set-contract.md), Sprint 12 push 2). New Rust crate exposing a 6-field struct that workbench panels query to decide "real vs scaffolding." Sprint 13 flipped the first flag (`pipeline_introspection`); three more follow through Sprint 17.
 
@@ -96,7 +96,7 @@ What changed in Sprint 10 (still the most recent feature-heavy sprint):
 - **Auto-updater XL story closed across pushes 4–8.** ADR-0013 locks the signed-manifest format + ed25519 detached signature scheme; the verifier (push 5, libsodium PRIVATE-linked), the apply-gate state machine (push 6, 9-value `RefusalReason` enum, pure logic + injectable `TimeSource`), the install layout + atomic apply/rollback (push 7, marker-file approach over symlinks for cross-OS uniformity), and the release-signing automation (push 8, notarytool + signtool + GPG + manifest-signing scripts + ADR-0014 yearly key rotation procedure + the embedded `SOUXMAR_RELEASE_PUBKEY_HEX` cache var). The trust path is end-to-end: bytes get hashed against `manifest.artifact.sha256` before staging; the rollback log records the SignatureStatus verbatim so a refused update is queryable.
 - **Perf-baseline rotation closes R-011** (Sprint 10 push 1). The five-binary perf suite from Sprint 9 now gates against real baselines; per-PR runs detect regressions > 5 % cleanly.
 - **Plugin index v0 + `souxmar plugin search`** (Sprint 10 push 2). Static `docs/plugin-index.toml` + the `souxmar::plugin::IndexEntry` data model + a substring/capability-filter CLI search surface.
-- **Plugin-index publication workflow** (Sprint 10 push 3). PR-gated; `.github/workflows/plugin-index.yml` runs `souxmar-conformance` against each new listing's published binary on all four CI platforms; the conformance badge surfaces in `souxmar plugin search`.
+- **Plugin-index publication workflow** (Sprint 10 push 3). PR-gated; `.github/workflows/plugin-index.yml` ran `souxmar-conformance` against each new listing's published binary — **removed in `c7f6214` and not yet restored**; see [`docs/CI.md`](docs/CI.md) on all four CI platforms; the conformance badge surfaces in `souxmar plugin search`.
 - **`souxmar::ai::Provider` abstraction + OllamaProvider** (Sprint 10 push 9). Synchronous `chat_completion()` returning a typed result; `StubProvider` for CI; `OllamaProvider` via curl-as-subprocess (reuses Sprint 8 push 1's harness — no in-process HTTP client dep). New `souxmar-eval-llm` runner separate from the scripted `souxmar-eval`; per-model pass-rate matrix in `docs/ai-providers/ollama-compatibility.md` covers Llama-3.x / Qwen-2.x / Mistral-Nemo.
 - **Desktop onboarding wizard + Tauri 2 scaffold** (Sprint 10 push 10). `src/desktop/` from scratch: Tauri 2 Rust shell + React 18 + TS + Vite frontend; four-step wizard with token-driven dim-theme styling; five `#[tauri::command]` entry points (onboarding bit, BYOK keychain write via the `keyring` crate, sample-project copy). The workbench shell beyond the wizard is still empty — Sprint 11 dogfood week is the next exit criterion.
 - **Mesh-algorithm comparison study** (Sprint 10 push 11). `examples/mesh-comparison/` runs both `mesher.tetra.grid` (always-on) and `mesher.tetra.gmsh` (opt-in) against the same `cube.step`, hand-parses per-cell quality DataArrays out of the resulting VTUs (no vtk-python dep), renders a markdown report with inline-PNG histograms. Sets up the plugin-marketplace "does this mesher actually deliver?" evidence shape.
@@ -143,7 +143,7 @@ Prerequisites:
 - [vcpkg](https://github.com/microsoft/vcpkg) — cloned and `VCPKG_ROOT` exported
 
 ```bash
-git clone https://github.com/souxmar/souxmar.git
+git clone https://github.com/celikgo/souxmar.git
 cd souxmar
 
 export VCPKG_ROOT="$HOME/vcpkg"   # or wherever you cloned vcpkg

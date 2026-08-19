@@ -15,6 +15,8 @@ add_library(souxmar_ai
   provider.cpp
   # Sprint 15 push 2 — per-project provider override (ADR-0020).
   provider_config.cpp
+  # The agent loop: model → tool call → dispatcher → result → model.
+  agent.cpp
   tools/default_registry.cpp
   tools/read_geometry_summary.cpp
   tools/mesh.cpp

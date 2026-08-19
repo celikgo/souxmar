@@ -55,7 +55,7 @@ Categories:
 | `postproc.*`   | per-cell array shape matches the parent mesh's `num_cells`              |
 
 The full suite + the "how to write a conforming X" recipes live
-in [authoring](/plugins/first-plugin).
+in [authoring](https://github.com/celikgo/souxmar/blob/master/docs/PLUGIN_SDK.md).
 
 ## Marketplace
 
@@ -81,4 +81,4 @@ difference is the distribution channel.
 | Payments              | n/a                                 | Stripe; 90/10 split (author/souxmar) |
 | Sig requirement       | optional (free badge)               | required (ed25519 per author key) |
 
-See [the marketplace page](/plugins/marketplace) for details.
+See [the marketplace page](https://github.com/celikgo/souxmar/blob/master/docs/BUSINESS_MODEL.md) for details.

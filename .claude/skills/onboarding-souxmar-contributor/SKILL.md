@@ -37,7 +37,7 @@ Total time: 60–90 min.
 1. `README.md` — what souxmar is, surfaces, status.
 2. `docs/VISION.md` — purpose, target users, non-goals.
 3. `docs/ARCHITECTURE.md` — the layered system. **Required for any backend contributor.**
-4. `docs/CONTRIBUTING.md` — workflow, DCO, PR template.
+4. `CONTRIBUTING.md` — workflow, DCO, PR template.
 5. `docs/GOVERNANCE.md` — merge tiers, RFC process, your role's authority.
 6. `docs/ENGINEERING_PRACTICES.md` — quality bar, performance budgets, definition of done.
 7. The doc most relevant to your team:
@@ -51,17 +51,17 @@ Total time: 60–90 min.
 
 ```bash
 # macOS
-brew install cmake ninja vcpkg pnpm rustup-init
+brew install cmake ninja vcpkg node rustup-init
 rustup-init -y
 xcode-select --install
 
 # Ubuntu
 sudo apt install cmake ninja-build build-essential libssl-dev curl pkg-config
 curl https://sh.rustup.rs -sSf | sh
-curl -fsSL https://get.pnpm.io/install.sh | sh
+# Node 22+ (vite 8 requires ^20.19 || >=22.12); npm ships with it.
 
 # Windows
-# Install: Visual Studio 2022 Build Tools, CMake, Ninja, Rustup, pnpm
+# Install: Visual Studio 2022 Build Tools, CMake, Ninja, Rustup, Node 22+
 # Open "x64 Native Tools Command Prompt"
 ```
 
@@ -78,8 +78,8 @@ First build typically takes 20–30 min (vcpkg builds OCCT, PETSc, VTK from sour
 ### 5. Run the desktop app (if doing desktop work)
 
 ```bash
-pnpm -C src/desktop install
-pnpm -C src/desktop dev
+npm --prefix src/desktop install
+npm --prefix src/desktop run dev
 ```
 
 The app launches with a dev React server with hot module reload. Backend changes still require a rebuild + relaunch.
@@ -159,7 +159,7 @@ External contributors: pace is yours. Maintainers will respond on your timeline.
 
 ## Reference
 
-- `docs/CONTRIBUTING.md` — full contributing guide.
+- `CONTRIBUTING.md` — full contributing guide.
 - `docs/GOVERNANCE.md` — merge tiers, roles.
 - `docs/ENGINEERING_PRACTICES.md` — Definition of Done.
 - `docs/SPRINT_PLAN.md` — current sprint context.

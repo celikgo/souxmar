@@ -12,7 +12,7 @@ aids: they will tell you that an orientation needs three times the support
 area of another, or that a recipe sits in the lack-of-fusion corner of the
 process window. They will not tell you a part's distortion to the micron.
 
-Read [`docs/MANUFACTURING.md`](../../docs/MANUFACTURING.md) for the full
+Read [`docs/MANUFACTURING.md`](../../../docs/MANUFACTURING.md) for the full
 capability table with every input key, unit and default. This skill is the
 operational walkthrough.
 
@@ -33,7 +33,7 @@ operational walkthrough.
 - Machining, casting or forming. Nothing here models subtractive or
   formative processes.
 - Anything that needs a calibrated thermomechanical solve. Read
-  [`docs/rfcs/0012-am-process-simulation.md`](../../docs/rfcs/0012-am-process-simulation.md)
+  [`docs/rfcs/0012-am-process-simulation.md`](../../../docs/rfcs/0012-am-process-simulation.md)
   for that roadmap, and do not present these outputs as its substitute.
 
 ## The five rules that prevent most wrong answers
@@ -42,7 +42,7 @@ operational walkthrough.
    The dispatcher rejects it otherwise. This is why mesh-only analyses
    (`solver.am.overhang`, `solver.am.printability`, `solver.am.buildtime`)
    are `solver.*` capabilities — see
-   [ADR-0044](../../docs/adr/0044-manufacturing-capability-namespaces.md).
+   [ADR-0044](../../../docs/adr/0044-manufacturing-capability-namespaces.md).
 2. **`layer_height` is the *simulation* layer, not the machine layer.**
    A 1 mm simulation layer lumps ~33 machine layers of 30 µm. Anything you
    pass per-layer must be lumped to match — most importantly
@@ -103,7 +103,7 @@ stages:
 
 Then `solver.am.overhang` for support need, `solver.am.buildtime` for time and
 cost, and `writer.am.report` for a Markdown build sheet. A full worked example
-is [`examples/am-lpbf-bracket`](../../examples/am-lpbf-bracket).
+is [`examples/am-lpbf-bracket`](../../../examples/am-lpbf-bracket).
 
 ### Reading the outputs
 
@@ -138,7 +138,7 @@ matters: a hot chamber and a short layer time give near-full healing, a cold
 chamber and a long layer time give poor healing — and poor healing is where
 extruded parts actually fail. `writer.am.gcode` slices and emits G-code;
 `writer.am.cli` emits a Common Layer Interface layer stack for PBF machines.
-Worked example: [`examples/am-polymer-auv-fairing`](../../examples/am-polymer-auv-fairing).
+Worked example: [`examples/am-polymer-auv-fairing`](../../../examples/am-polymer-auv-fairing).
 
 ## Choosing a build orientation
 
@@ -162,7 +162,7 @@ optimised.
 - [ ] `strain_calibration` and `absorptivity` either calibrated or explicitly
       flagged as uncalibrated wherever the numbers are presented.
 - [ ] Material numbers traceable — take them from
-      [`examples/materials/am-marine.toml`](../../examples/materials/am-marine.toml),
+      [`examples/materials/am-marine.toml`](../../../examples/materials/am-marine.toml),
       which carries a source for every value, and remember those are reference
       values for setting up an analysis, not design allowables.
 - [ ] The claim you are making is one the model can carry.

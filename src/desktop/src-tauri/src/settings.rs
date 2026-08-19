@@ -16,11 +16,31 @@ pub struct Settings {
     pub schema: u32,
     #[serde(default)]
     pub onboarding_completed: bool,
+
+    /// Provider id the user picked during setup — "anthropic",
+    /// "openai", "grok", "ollama", and so on. The same vocabulary
+    /// `project.ai.toml` uses, because that is what it is written into.
+    ///
+    /// The key itself is never stored here; it lives in the OS keychain
+    /// and this file is plain JSON in the user's config directory.
+    #[serde(default)]
+    pub ai_provider: Option<String>,
+
+    /// Model id for that provider. Required by every hosted service —
+    /// souxmar does not guess one, because a stale built-in default
+    /// produces a 404 that reads like a broken install.
+    #[serde(default)]
+    pub ai_model: Option<String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { schema: 1, onboarding_completed: false }
+        Settings {
+            schema: 1,
+            onboarding_completed: false,
+            ai_provider: None,
+            ai_model: None,
+        }
     }
 }
 

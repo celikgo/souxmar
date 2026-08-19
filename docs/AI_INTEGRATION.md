@@ -20,13 +20,185 @@ souxmar supports three provider modes, configurable per project or globally:
 
 The user supplies their own API credentials for one of the supported providers:
 
-| Provider              | Models                                          | Notes                                       |
-| --------------------- | ----------------------------------------------- | ------------------------------------------- |
-| Anthropic (Claude)    | Claude Opus 4.x, Sonnet 4.x, Haiku 4.x          | Default; best agentic tool-use behaviour.   |
-| OpenAI                | GPT-5 family, GPT-4.1 family                    | Tool calling supported.                     |
-| Local (Ollama / LM Studio) | Qwen, Llama, Mistral, etc.                | For air-gapped environments. Function calling required; capability degrades on smaller models. |
+| `provider`            | Service                    | Key variable         | Notes                                       |
+| --------------------- | -------------------------- | -------------------- | ------------------------------------------- |
+| `anthropic`           | Anthropic (Claude)         | `ANTHROPIC_API_KEY`  | Messages API. Best agentic tool-use behaviour. |
+| `openai`              | OpenAI (GPT)               | `OPENAI_API_KEY`     | |
+| `grok`                | xAI (Grok)                 | `XAI_API_KEY`        | |
+| `deepseek`            | DeepSeek                   | `DEEPSEEK_API_KEY`   | |
+| `groq`                | Groq                       | `GROQ_API_KEY`       | |
+| `mistral`             | Mistral                    | `MISTRAL_API_KEY`    | |
+| `openrouter`          | OpenRouter                 | `OPENROUTER_API_KEY` | One key, many vendors. Prefix the model id. |
+| `together`            | Together AI                | `TOGETHER_API_KEY`   | |
+| `ollama`              | Ollama (local)             | *none*               | Air-gapped. Function calling required; capability degrades on smaller models. |
+| `openai-compatible`   | Anything else              | `SOUXMAR_AI_API_KEY` | LM Studio, vLLM, llama.cpp. Supply `base_url`. |
+
+Every one of these runs the full agent loop — the model receives the tool catalogue, calls
+tools, and sees real results. `model` is always required; souxmar does not guess one.
 
 API calls go directly from the desktop app to the provider. souxmar's servers are not in the path.
+
+### Running the agent
+
+The agent loop is `souxmar agent chat`. The model receives the tool catalogue, calls tools,
+sees the real results, and keeps going until it answers:
+
+```sh
+souxmar agent chat "how many plugins are installed?" \
+  --provider grok --model <model id> \
+  --plugin-path build/dev/examples/plugins
+```
+
+```
+agent: grok · model <id> · 24 tools · max 8 steps
+  [ok] list_plugins → registry: 30 capabilities total
+
+The engine reported: registry: 30 capabilities total
+```
+
+With no `--provider`, the project's `project.ai.toml` decides — so `souxmar agent chat "..."`
+inside a configured project just works. `souxmar agent providers` lists everything selectable.
+
+**Confirmation is the user's, not the model's.** A tool declared `ConfirmOnce` or
+`ConfirmAlways` prompts on the terminal before it runs:
+
+```
+  the agent wants to run `solve`
+  allow? [y/N]
+```
+
+Answering no returns a `DENIED` error *to the model*, which can then explain what it wanted
+rather than stalling silently. `--yes` overrides every tool to automatic for one run — correct
+for scripting, wrong for anything destructive you have not read.
+
+**Step budget.** `--max-steps` (default 8) bounds provider round-trips. A model that loops
+calling the same tool is a real failure mode and each step costs money, so the loop stops and
+says the answer is incomplete rather than presenting a half-finished turn as a conclusion.
+
+**Open models participate.** Tools are advertised to Ollama and to every OpenAI-compatible
+service alike. This previously did not work at all: `ChatRequest::tool_names` was populated by
+the eval runner and read by no provider, so no model was ever offered a souxmar tool and no
+tool call could be elicited from any of them.
+
+### In the desktop chat panel
+
+The panel runs the same loop. Ask it something, and it calls tools against the open project:
+each tool it ran appears under the reply with what the dispatcher returned, so a turn is never
+silent about having changed something.
+
+Confirmation could not be a terminal `[y/N]` here, so the loop **suspends** instead of blocking:
+when the agent reaches a tool needing approval, the turn pauses, the panel shows a card naming
+the tool and the arguments the model chose, and the composer is disabled until you answer.
+Declining is a real answer rather than a cancel — the model is told, and gets a turn to explain
+what it wanted.
+
+The suspended session lives in the C bridge, keyed by project, so the mesh and field handles
+earlier tools produced survive the pause. That is also what makes multi-turn work possible:
+mesh in one message, solve in the next.
+
+Requires the `real-ffi` build below. Without it the panel says so.
+
+#### Connecting any OpenAI-compatible service
+
+Most services — xAI (Grok), OpenAI, DeepSeek, Groq, Mistral, OpenRouter, Together — and every
+local server that advertises an "OpenAI-compatible endpoint" (LM Studio, vLLM, llama.cpp's
+server) speak the same `POST {base_url}/chat/completions` shape. souxmar implements that shape
+once, so connecting one of them is configuration rather than a code change.
+
+Put a `project.ai.toml` next to your `pipeline.yaml`:
+
+```toml
+schema   = 1
+provider = "grok"                  # a preset id, or "openai-compatible"
+model    = "<the model id your account can reach>"
+```
+
+then export the key in the environment souxmar runs in:
+
+```sh
+export XAI_API_KEY="xai-..."
+```
+
+The preset ids and the environment variable each one looks for:
+
+| `provider`          | Endpoint                        | Key variable         |
+| ------------------- | ------------------------------- | -------------------- |
+| `grok`              | `https://api.x.ai/v1`           | `XAI_API_KEY`        |
+| `openai`            | `https://api.openai.com/v1`     | `OPENAI_API_KEY`     |
+| `deepseek`          | `https://api.deepseek.com/v1`   | `DEEPSEEK_API_KEY`   |
+| `groq`              | `https://api.groq.com/openai/v1`| `GROQ_API_KEY`       |
+| `mistral`           | `https://api.mistral.ai/v1`     | `MISTRAL_API_KEY`    |
+| `openrouter`        | `https://openrouter.ai/api/v1`  | `OPENROUTER_API_KEY` |
+| `together`          | `https://api.together.xyz/v1`   | `TOGETHER_API_KEY`   |
+| `openai-compatible` | *you supply it*                 | `SOUXMAR_AI_API_KEY` |
+
+Both are overridable, which is how you reach a service that has no preset, a self-hosted
+server, or an endpoint that has moved:
+
+```toml
+schema   = 1
+provider = "openai-compatible"
+model    = "my-local-model"
+
+[openai_compatible]
+base_url    = "http://localhost:1234/v1"   # LM Studio, vLLM, llama.cpp, …
+api_key_env = "MY_GATEWAY_TOKEN"           # omit entirely for a server with no auth
+```
+
+**No API key ever goes in this file.** `project.ai.toml` sits beside `pipeline.yaml` and gets
+committed; the loader refuses a config containing `api_key`, `token` or `secret` rather than
+reading one out of it. The key is read from the named environment variable, and is passed to
+`curl` through a configuration on **stdin** rather than as an argument — so it does not appear
+in `ps` output or `/proc/<pid>/cmdline`, and is never written to disk.
+
+Model ids are deliberately not defaulted. Every service names and retires models on its own
+schedule, and a stale built-in default produces a 404 that reads like a broken install, so
+`model` is required and the error says so.
+
+**Anthropic is reached separately.** Its Messages API is a different request and tool shape
+(`input_schema`, top-level `system`, `x-api-key` auth, mandatory `max_tokens`), so it is not
+reachable through the OpenAI-compatible provider — it has its own `AnthropicProvider`. From the
+config side the difference is invisible: set `provider = "anthropic"` and export
+`ANTHROPIC_API_KEY`. Override the endpoint or the key variable with an `[anthropic]` subtable,
+the same way `[openai_compatible]` works:
+
+```toml
+schema   = 1
+provider = "anthropic"
+model    = "claude-sonnet-4-20250514"
+
+[anthropic]                                    # optional
+base_url    = "https://gateway.internal/anthropic/v1"
+api_key_env = "WORK_ANTHROPIC_KEY"
+```
+
+`byok-anthropic` and `byok-openai` are the original spellings and still load; they resolve to
+`anthropic` and `openai` respectively.
+
+**Reaching it from the desktop app.** The chat panel talks to the engine through the C bridge,
+which is only linked when the desktop is built with the `real-ffi` feature. That build needs a
+configured CMake build directory and the location of the engine's third-party libraries:
+
+```sh
+cmake --build build/dev                    # engine + C bridge archives
+cd src/desktop/src-tauri
+SOUXMAR_BUILD_DIR=$PWD/../../../build/dev \
+SOUXMAR_EXTRA_LINK_DIRS=/opt/homebrew/lib \
+  cargo build --features real-ffi
+```
+
+Without `real-ffi` the shell still builds and runs, but `chat_send` returns
+`FeatureNotWired` and the chat panel says so — no provider of any kind is reachable.
+
+**Verifying your endpoint.** The unit-test binary carries an opt-in live check, which is the
+same code path the app uses:
+
+```sh
+SOUXMAR_TEST_OPENAI_BASE_URL=https://api.x.ai/v1 \
+SOUXMAR_TEST_OPENAI_KEY=$XAI_API_KEY \
+SOUXMAR_TEST_OPENAI_MODEL=<model id> \
+  ./build/dev/tests/unit/souxmar_unit_tests --gtest_filter='OpenAICompatibleLive.*'
+```
 
 ### 2. Managed AI — Pro tier
 

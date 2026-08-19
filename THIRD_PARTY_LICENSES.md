@@ -14,6 +14,7 @@ CI verifies that every dependency in `vcpkg.json` is represented here; new entri
 | `spdlog`        | 1.13.0      | MIT                              | https://github.com/gabime/spdlog              |
 | `tomlplusplus`  | 3.4.0       | MIT                              | https://github.com/marzer/tomlplusplus        |
 | `yaml-cpp`      | 0.8.0       | MIT                              | https://github.com/jbeder/yaml-cpp            |
+| `libsodium`     | 1.0.18      | ISC                              | https://github.com/jedisct1/libsodium         |
 
 ### Test feature (`tests`, default-on)
 

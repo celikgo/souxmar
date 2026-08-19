@@ -32,3 +32,8 @@ souxmar-bridge = { path = "souxmar-bridge" }  # Sprint 12 push 2 — FFI boundar
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+# Link the desktop shell against the real engine through the C bridge.
+# Without this passthrough the only way to ask for the feature was
+# `--features souxmar-bridge/real-ffi`, which is not discoverable and
+# was documented nowhere.
+real-ffi = ["souxmar-bridge/real-ffi"]

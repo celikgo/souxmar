@@ -97,7 +97,7 @@ Out-of-tree plugins live under their authors' control. The project maintains an 
 
 To list a plugin in the index:
 
-1. Open a PR against `docs/plugin-index.md` with the manifest summary and a link to the source.
+1. Open a PR against `docs/plugin-index.toml` with the manifest summary and a link to the source.
 2. Plugins must be open-source under an OSI-approved license to appear in the index. Closed-source plugins are entirely valid and the SDK supports them; we just do not advertise them.
 3. The index is split into "conformant" (passes the conformance suite in CI) and "community" (does not). No other quality gate.
 

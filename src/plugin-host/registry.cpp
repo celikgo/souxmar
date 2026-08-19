@@ -96,7 +96,16 @@ std::vector<std::string> Registry::list_capabilities() const {
 std::vector<std::string> Registry::list_capabilities_in_namespace(std::string_view ns) const {
   std::shared_lock lock(mu_);
   std::vector<std::string> out;
-  const std::string prefix = std::string(ns) + ".";
+  // Accept "mesher.tetra" and "mesher.tetra." alike. In-tree callers pass
+  // the undotted form, but this is also reachable from the `list_plugins`
+  // agent tool with a string a user typed, and silently returning nothing
+  // for a trailing dot reads as "no such capability" rather than
+  // "you wrote the filter differently than I expected".
+  std::string_view trimmed = ns;
+  while (!trimmed.empty() && trimmed.back() == '.') {
+    trimmed.remove_suffix(1);
+  }
+  const std::string prefix = std::string(trimmed) + ".";
   for (const auto& [id, _] : entries_) {
     if (id.size() > prefix.size() && id.compare(0, prefix.size(), prefix) == 0) {
       out.push_back(id);

@@ -5,7 +5,7 @@ description: Use when investigating a determinism gate failure or auditing a new
 
 # Auditing pipeline determinism
 
-souxmar's determinism guarantee: **the same pipeline file, run on the same inputs, produces byte-identical outputs on Linux, macOS, and Windows, on every supported architecture.** This is verified by the determinism CI gate from Sprint 5 onward. Failures block merges.
+souxmar's determinism guarantee: **the same pipeline file, run on the same inputs, produces byte-identical outputs on Linux, macOS, and Windows, on every supported architecture.** This is verified by the `Cross-platform determinism` gate in `.github/workflows/ci.yml`, which is blocking. See `docs/CI.md`.
 
 This skill walks through diagnosing and fixing a determinism failure.
 
@@ -39,20 +39,40 @@ Determinism does **not** apply to:
 
 ## Diagnosing a failure
 
-When the gate fails, CI reports the diverging file and a short hash diff:
+The gate lives in `.github/workflows/ci.yml` as `Cross-platform determinism`. Each platform in the
+engine matrix runs `scripts/ci/determinism-fingerprint.sh`, which executes every example pipeline
+under a fixed `TZ` and `LC_ALL`, pipes the output through the synth-load normaliser
+(`scripts/synth-load/golden/normalize.py`), and hashes it. The per-platform manifests are uploaded
+with the engine artifact and diffed against each other in a downstream job.
+
+**There is no golden file** — the platforms are each other's reference, so nothing can drift by
+having an expected value quietly updated. A pipeline that fails identically everywhere is still
+deterministic, so its exit code is part of the fingerprint rather than an abort; what fails the gate
+is one platform disagreeing with another.
+
+The failure is a unified diff of two manifests:
 
 ```
-FAIL: examples/cantilever-beam/expected.vtu
-  Linux x86_64:  sha256:a93f...
-  macOS arm64:   sha256:a93f...
-  Windows x86_64: sha256:b2e1...   ← diverges
+--- artifacts/engine-linux-gcc/build/ci-linux-gcc/determinism.txt
++++ artifacts/engine-macos/build/ci-macos/determinism.txt
+-cantilever-beam  efbce55197134e6ad3a60a964f48a2985601f17010df51dec595d4b9cf7d2947
++cantilever-beam  b2e1a0c4...
 ```
 
 ### Step 1 — Reproduce locally
 
-If you have access to the divergent platform, run the failing pipeline locally and capture the output for diffing.
+Run the same script against your own build and compare the line for the named pipeline:
 
-If not, use the CI artifact (it uploads the divergent VTU) and compare against your local build's VTU.
+```bash
+scripts/ci/determinism-fingerprint.sh \
+  --engine build/dev/src/cli/souxmar \
+  --plugin-path "$PWD/build/dev/examples/plugins"
+```
+
+It is stable across repeated runs on one machine, so a difference between two of your own runs is
+itself a finding. If you have access to the divergent platform, run it there too. If not, the
+manifests in the CI artifacts are the comparison — note that they carry the *hash*, not the output,
+so reproducing the underlying file means re-running the pipeline on that platform.
 
 ### Step 2 — Identify what diverged
 
@@ -106,7 +126,10 @@ When adding a new solver, mesher, or transformation:
 
 1. **Identify nondeterminism sources.** Parallel reductions, hash-map iteration, RNGs, third-party tool calls.
 2. **Pin them.** Stable iteration, canonical sorts, seeded RNGs, stable backend modes.
-3. **Add a determinism test** in `tests/determinism/`:
+3. **Add the pipeline to the determinism gate.** There is no `tests/determinism/` directory: the
+   gate runs every pipeline under `examples/` through
+   `scripts/ci/determinism-fingerprint.sh`, so a new example is picked up automatically. What a
+   regression test looks like:
    ```yaml
    - pipeline: tests/determinism/<name>.souxmar.yaml
      expected_hash:
@@ -134,5 +157,6 @@ When adding a new solver, mesher, or transformation:
 
 - `docs/ENGINEERING_PRACTICES.md` — determinism gate definition.
 - `docs/SPRINT_PLAN.md` — when the gate became enforcing (Sprint 5).
-- `tests/determinism/` — existing determinism tests.
-- `tools/determinism-check.sh` — the comparison harness.
+- `scripts/ci/determinism-fingerprint.sh` — the gate itself, and `examples/` for the pipelines
+  it covers. (`tests/determinism/` does not exist; the gate walks `examples/`.)
+- `scripts/ci/determinism-fingerprint.sh` — the comparison harness.

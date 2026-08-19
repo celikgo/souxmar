@@ -39,7 +39,7 @@ a prompt for `confirm-once` and `confirm-always`; the CLI requires
 | `confirm-once`     | side-effecting but contained (`mesh`, `set_bc`, `solve`, `compute_field`) |
 | `confirm-always`   | filesystem writes (`export_results`, `screenshot_viewport`) |
 
-See [the confirmation page](/agents/confirmation) for the full
+See [the confirmation page](https://github.com/celikgo/souxmar/blob/master/docs/AI_INTEGRATION.md) for the full
 matrix + how to override per-project.
 
 ## Providers
@@ -67,7 +67,7 @@ Fields:
 - `heap_bytes_delta` on supported platforms (Linux + glibc ≥ 2.33)
 - `latency_ms` (Sprint 9 push 10)
 
-See [the audit-log page](/agents/audit-log) for the schema +
+See [the audit-log page](https://github.com/celikgo/souxmar/blob/master/docs/AI_INTEGRATION.md) for the schema +
 common queries.
 
 ## Eval suite

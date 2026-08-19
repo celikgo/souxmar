@@ -1,0 +1,164 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Composite action: toolchain + vcpkg + binary cache.
+#
+# Every job that compiles the engine needs the same four things, and
+# copy-pasting them across seven workflows is how they drift. The vcpkg
+# checkout is pinned to the same commit as the `builtin-baseline` in
+# vcpkg.json — the baseline pins package *versions*, but the vcpkg tool
+# itself still has to match, or a job resolves ports the manifest never
+# saw.
+
+name: Set up C++ toolchain
+description: Installs compilers, pins vcpkg, and restores the binary cache.
+
+inputs:
+  preset:
+    description: CMake configure preset (used only to key the cache).
+    required: true
+  vcpkg-features:
+    description: Semicolon-separated VCPKG_MANIFEST_FEATURES value.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install Linux toolchain
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        # ninja + pkg-config for the build; the rest are vcpkg's build
+        # dependencies for the ports in vcpkg.json.
+        #
+        # Every apt call here goes through apt-install.sh: the runners'
+        # package mirrors stall rather than fail, and an unbounded apt-get
+        # has hung this job past an hour before now.
+        # autoconf/automake/libtool are here because libsodium builds with
+        # autotools. Without them vcpkg provisions its own from
+        # ftpmirror.gnu.org, which round-robins to a random GNU mirror and
+        # returned 502 on the first cold run.
+        apt_install="$GITHUB_WORKSPACE/scripts/ci/apt-install.sh"
+        "$apt_install" \
+          ninja-build pkg-config curl zip unzip tar bison flex \
+          autoconf automake autoconf-archive libtool m4
+        # gcc-13 unconditionally, not just for the ci-linux-gcc preset.
+        # ubuntu-22.04 tops out at gcc-12 in the default archive, so a job
+        # that does not name a compiler silently gets gcc-11 — which is
+        # how the Python-bindings leg ended up being the only one built
+        # with a compiler nothing else in CI uses, and the only one whose
+        # -Wuseless-cast diagnostics differed.
+        "$apt_install" gcc-13 g++-13 || {
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          "$apt_install" gcc-13 g++-13
+        }
+        if [ "${{ inputs.preset }}" = "ci-linux-clang" ]; then
+          "$apt_install" clang-17 || {
+            # The GitHub image does not always carry clang-17; fall back
+            # to the LLVM apt channel rather than silently using a
+            # different compiler than the preset names.
+            wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+              | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
+            sudo add-apt-repository -y "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-17 main"
+            "$apt_install" clang-17
+          }
+        fi
+
+    - name: Install macOS toolchain
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        # autoconf-archive is not optional: libsodium's port checks for
+        # autoconf, autoconf-archive, automake and libtoolize by name and
+        # refuses to build without all four. It was in the apt list and
+        # missing here, which is exactly why Linux went green and macOS
+        # did not.
+        brew install ninja pkg-config autoconf autoconf-archive automake libtool
+
+    - name: Install Windows toolchain
+      if: runner.os == 'Windows'
+      shell: bash
+      run: choco install ninja --no-progress -y
+
+    - name: Read the pinned vcpkg baseline
+      id: baseline
+      shell: bash
+      run: |
+        # Single source of truth: whatever vcpkg.json pins, we check out.
+        baseline="$(python3 -c "import json;print(json.load(open('vcpkg.json'))['vcpkg-configuration']['default-registry']['baseline'])")"
+        echo "sha=$baseline" >> "$GITHUB_OUTPUT"
+        echo "vcpkg baseline: $baseline"
+
+    - name: Check out vcpkg at the pinned baseline
+      uses: actions/checkout@v7
+      with:
+        repository: microsoft/vcpkg
+        ref: ${{ steps.baseline.outputs.sha }}
+        path: .vcpkg
+        fetch-depth: 1
+
+    - name: Bootstrap vcpkg
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          ./.vcpkg/bootstrap-vcpkg.bat -disableMetrics
+        else
+          ./.vcpkg/bootstrap-vcpkg.sh -disableMetrics
+        fi
+        echo "VCPKG_ROOT=$GITHUB_WORKSPACE/.vcpkg" >> "$GITHUB_ENV"
+
+    - name: Configure vcpkg environment
+      shell: bash
+      run: |
+        # A plain directory cache rather than vcpkg's `x-gha` provider.
+        # x-gha speaks the Actions Cache v1 API, which the vcpkg pinned by
+        # vcpkg.json predates the retirement of — so it is a moving target
+        # tied to the baseline commit. A directory plus actions/cache
+        # behaves the same on every vcpkg version and every runner OS.
+        cache_dir="$GITHUB_WORKSPACE/.vcpkg-cache"
+        mkdir -p "$cache_dir"
+        echo "VCPKG_DEFAULT_BINARY_CACHE=$cache_dir" >> "$GITHUB_ENV"
+        echo "VCPKG_BINARY_SOURCES=clear;files,$cache_dir,readwrite" >> "$GITHUB_ENV"
+        echo "VCPKG_DISABLE_METRICS=1" >> "$GITHUB_ENV"
+        if [ -n "${{ inputs.vcpkg-features }}" ]; then
+          echo "VCPKG_MANIFEST_FEATURES=${{ inputs.vcpkg-features }}" >> "$GITHUB_ENV"
+        fi
+
+    - name: Pre-seed the autotools tarballs vcpkg fetches
+      shell: bash
+      run: |
+        # vcpkg's vcpkg-make provisions its own automake regardless of
+        # what apt or brew installed, and it fetches from
+        # ftpmirror.gnu.org — a redirector that round-robins to whichever
+        # GNU mirror is up, and which has returned 502 on every run so
+        # far. libsodium builds with autotools, so that one 502 fails the
+        # whole matrix.
+        #
+        # Dropping the tarball into vcpkg's downloads/ directory first
+        # makes it skip the download entirely; the SHA is verified by
+        # vcpkg either way, so a corrupt or substituted file cannot slip
+        # through. Best-effort: if the direct mirror is also down, vcpkg
+        # falls back to its own retry logic and we are no worse off.
+        mkdir -p "$VCPKG_ROOT/downloads"
+        for f in automake-1.17.tar.gz autoconf-2.72.tar.gz libtool-2.5.4.tar.gz; do
+          tool="${f%%-*}"
+          [ -f "$VCPKG_ROOT/downloads/$f" ] && continue
+          curl -fsSL --retry 3 --retry-delay 5 --max-time 120 \
+            "https://ftp.gnu.org/gnu/$tool/$f" \
+            -o "$VCPKG_ROOT/downloads/$f" \
+            && echo "seeded $f" \
+            || { rm -f "$VCPKG_ROOT/downloads/$f"; echo "could not seed $f (vcpkg will fetch it)"; }
+        done
+
+    - name: Restore the vcpkg binary cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}/.vcpkg-cache
+        # Ports only change when the manifest or the baseline changes.
+        key: vcpkg-${{ runner.os }}-${{ inputs.preset }}-${{ hashFiles('vcpkg.json') }}
+        restore-keys: |
+          vcpkg-${{ runner.os }}-${{ inputs.preset }}-
+
+    - name: Set up MSVC environment
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@v1

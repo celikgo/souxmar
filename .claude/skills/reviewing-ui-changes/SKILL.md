@@ -24,7 +24,7 @@ The desktop app's UI follows the design system in `docs/UI_DESIGN.md`. Every cha
 
 CI enforces these. This skill double-checks during review:
 
-1. **Never write raw hex colour values in component code.** All colour values come from CSS custom properties defined in `src/desktop/ui/tokens.css`. A `#15202B` literal anywhere outside `tokens.css` fails the build.
+1. **Never write raw hex colour values in component code.** All colour values come from CSS custom properties defined in `src/desktop/src/ui/tokens.css`. A `#15202B` literal anywhere outside `tokens.css` fails the build.
 2. **Use spacing tokens, not raw pixel values.** `gap-2` / `gap-4` / etc. — never `gap: 6px;` directly.
 3. **Use semantic colour tokens, not palette tokens for state.** `--success`, `--warning`, `--danger` exist — use them, not `--accent` for a "saved" indicator.
 4. **All interactive elements must have visible focus rings.** 2 px `border-strong` outline. Removing focus styles "because they look ugly" is forbidden.
@@ -109,5 +109,6 @@ The Three.js / VTK.js scene is the centrepiece. UI overlays (selection markers, 
 
 - `docs/UI_DESIGN.md` — full design system.
 - `docs/DESKTOP_APP.md` — performance budgets including UI surfaces.
-- `src/desktop/ui/tokens.css` — token source of truth.
-- `src/desktop/ui-storybook/` — component gallery + a11y tests.
+- `src/desktop/src/ui/tokens.css` — token source of truth.
+- `src/desktop/ui-storybook/` — component gallery + a11y tests. **Not built yet**; the closest
+  thing today is the Playwright suite in `tests/visual/`.

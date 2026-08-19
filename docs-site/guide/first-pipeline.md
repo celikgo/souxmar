@@ -119,7 +119,7 @@ python -c "import meshio; m = meshio.read('cantilever.vtu'); \
   [`examples/mesh-comparison/`](https://github.com/souxmar/souxmar/tree/master/examples/mesh-comparison)
   compares both meshers against the same geometry, renders an
   HTML quality report.
-- Read the [concepts page](/guide/concepts) for the pipeline's
+- Read the [concepts page](https://github.com/celikgo/souxmar/blob/master/docs/ARCHITECTURE.md) for the pipeline's
   data model + the stage/plugin separation that makes swaps
   one-liners.
 

@@ -11,24 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 import pysouxmar as sx
-
-
-@pytest.fixture
-def loaded_registry(plugins_root):
-    registry = sx.Registry()
-    loader   = sx.PluginLoader(registry, sx.version())
-    report   = sx.discover_plugins([plugins_root])
-    assert report.loaded, (
-        f"discovery returned no plugins in {plugins_root}; "
-        f"rejected: {[(r.candidate_path, r.reason) for r in report.rejected]}"
-    )
-    # Hold the LoadedPlugin handles in a list bound to the registry's
-    # lifetime so they outlive every test that uses the fixture.
-    handles = [loader.load(p) for p in report.loaded]
-    return registry, handles
 
 
 def test_discovery_finds_the_in_tree_plugins(plugins_root):
@@ -43,7 +26,17 @@ def test_load_registers_capabilities(loaded_registry):
     caps = set(registry.list_capabilities())
     assert "mesher.tetra.hello" in caps
     assert "writer.vtu" in caps
-    assert registry.list_capabilities_in_namespace("writer.") == ["writer.vtu"]
+    # Membership and namespace-correctness, not an exact list. This
+    # asserted == ["writer.vtu"] when vtu was the only writer in tree; the
+    # manufacturing block added five more, so an exact match makes adding a
+    # writer look like a regression. What the call actually promises is
+    # "everything under this namespace, and nothing else".
+    writers = registry.list_capabilities_in_namespace("writer.")
+    assert "writer.vtu" in writers
+    assert all(w.startswith("writer.") for w in writers)
+    assert writers == sorted(writers)
+    # The trailing dot is optional and must not change the answer.
+    assert registry.list_capabilities_in_namespace("writer") == writers
 
 
 def test_run_pipeline_writes_vtu(tmp_path, loaded_registry):
