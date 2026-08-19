@@ -42,7 +42,7 @@ The desktop app being open source is a **load-bearing trust
 commitment** to engineers in regulated industries (aerospace,
 defence, medical devices). They can audit every line. We've
 documented the no-relicensing decision in
-[`docs/BUSINESS_MODEL.md`](https://github.com/souxmar/souxmar/blob/master/docs/BUSINESS_MODEL.md)
+[`docs/BUSINESS_MODEL.md`](https://github.com/celikgo/souxmar/blob/master/docs/BUSINESS_MODEL.md)
 + in our governance docs; it's not something a future investor
 can unilaterally change.
 
@@ -55,7 +55,7 @@ product; the Pro tier is convenience layered on top.
 Sprint 16 launches the paid plugin marketplace. Authors set the
 price; we take 10 % + payment-processor fees. The marketplace
 itself is open-core — the listing format is part of the public
-[`docs/plugin-index.toml`](https://github.com/souxmar/souxmar/blob/master/docs/plugin-index.toml)
+[`docs/plugin-index.toml`](https://github.com/celikgo/souxmar/blob/master/docs/plugin-index.toml)
 surface; the paid distribution channel adds Stripe integration +
 ed25519-signing for the per-author trust chain.
 
@@ -85,6 +85,6 @@ buyers ask, and the answer affects their decisions.
 - **File bugs.** Especially from public-alpha real-world use.
 - **Author plugins.** Even free plugins enrich the ecosystem.
 - **Cite us.** If you ship a paper or a product on top of souxmar,
-  please credit the project + link to docs.souxmar.dev.
+  please credit the project + link to celikgo.github.io/souxmar.
 - **Spread the word.** Talk at your local FEM/CFD meetup; post your
   studies; share with engineers who'd benefit.

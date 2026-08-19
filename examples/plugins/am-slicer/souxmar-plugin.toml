@@ -4,10 +4,10 @@ name          = "AM Slicer and Build Report Writers"
 version       = "0.1.0"
 abi           = 1
 license       = "Apache-2.0"
-homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/am-slicer"
+homepage      = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/am-slicer"
 
 description   = "Planar slicer for additive manufacturing: FFF G-code, Common Layer Interface ASCII, and a Markdown build report with a content digest."
-documentation = "https://souxmar.dev/docs/plugins/am-slicer"
+documentation = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/am-slicer"
 tags          = ["writer", "additive-manufacturing", "slicer", "gcode", "cli", "report"]
 min_souxmar_abi_minor = 0
 

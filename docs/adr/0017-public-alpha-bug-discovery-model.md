@@ -199,7 +199,7 @@ adjustment, not a wholesale re-litigation.
 - Sprint 13's capacity forecast accounts for both the rotation
   load (variable; depends on external volume) and the harness
   build (8 pts upfront).
-- The "honest framing" in README.md / docs.souxmar.dev is updated
+- The "honest framing" in README.md / celikgo.github.io/souxmar is updated
   to say "public alpha, synthetic-load-backed" — clearer than
   "public alpha, dogfood-deferred."
 - The Sprint 13 retro reports the first week's external-volume

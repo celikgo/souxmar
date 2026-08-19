@@ -70,17 +70,23 @@ release tag so reproducible builds carry the version through.
 
 ```bash
 # Source
-curl -L https://github.com/souxmar/souxmar/releases/download/v<version>/souxmar-<version>-source.tar.gz | tar xz
+curl -L https://github.com/celikgo/souxmar/releases/download/v<version>/souxmar-<version>-source.tar.gz | tar xz
 cd souxmar-<version>
 cmake --preset dev && cmake --build --preset dev
 
 # Linux x86_64 CLI tarball
-curl -L https://github.com/souxmar/souxmar/releases/download/v<version>/souxmar-<version>-linux-x86_64.tar.gz | tar xz
+curl -L https://github.com/celikgo/souxmar/releases/download/v<version>/souxmar-<version>-linux-x86_64.tar.gz | tar xz
 ./souxmar-<version>-linux-x86_64/bin/souxmar version
 
-# Python
+# Python — only once pysouxmar is actually published. It is not on PyPI
+# today, so DELETE this block from the notes of any release that ships
+# before it is. Promising an install that 404s is the exact defect the
+# version-consistency and doc-link gates exist to stop.
 pip install pysouxmar==<version>
 ```
+
+Delete any line above whose artefact this release does not actually
+publish. A release note is a promise a reader will test within a minute.
 
 ### Known issues
 

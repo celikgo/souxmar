@@ -98,7 +98,7 @@ were named in retros:
   at Sprint 0 to 3 by Sprint 24 (founder + 2 contributors).
   Closes; v1.x maintenance cadence assumes the 3-person team.
 - **All remaining risks (R-018-R-040)** carry forward to
-  v1.x. Tracked per-risk in `docs/SPRINT_PLAN.md`'s
+  v1.x. Tracked per-risk in `docs/attic/SPRINT_PLAN.md`'s
   post-v1.0 rewrite.
 
 ## Post-v1.0 plan brief
@@ -115,7 +115,7 @@ Next 4 sprints (25-28):
   `viewport_renderer` flag. 4th of 6 BridgeFeatureSet flags
   structural.
 
-`docs/SPRINT_PLAN.md` rewritten post-v1.0 to cover the v1.x
+`docs/attic/SPRINT_PLAN.md` rewritten post-v1.0 to cover the v1.x
 arc; the v0.x plan is archived as `docs/SPRINT_PLAN.v0.x.md`.
 
 ## Outcome

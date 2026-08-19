@@ -1,12 +1,12 @@
 # docs-site — souxmar's Vitepress documentation
 
 Sprint 12 push 3. The end-user-facing documentation site served at
-**docs.souxmar.dev** (CNAME pointing at GitHub Pages, configured
-out-of-band on the souxmar.dev DNS).
+**celikgo.github.io/souxmar** (CNAME pointing at GitHub Pages, configured
+out-of-band on the souxmar.invalid DNS).
 
 This directory is the public docs surface. The repo's `docs/`
 directory holds **contributor-facing** documents (ADRs, governance,
-sprint plans, retros, RFCs); the split lets each evolve at its own
+RFCs); the split lets each evolve at its own
 cadence without conflating audiences.
 
 ## Running locally
@@ -50,7 +50,7 @@ Adding a page:
 `.github/workflows/docs-site.yml` rebuilds + publishes on every
 push to `master` that touches this directory. The deploy URL is
 `https://souxmar.github.io/souxmar/` (GitHub Pages default);
-the `docs.souxmar.dev` CNAME points at it.
+the `celikgo.github.io/souxmar` CNAME points at it.
 
 ## What's missing (Sprint 13+)
 
@@ -59,7 +59,7 @@ the `docs.souxmar.dev` CNAME points at it.
   + the v1 tool registry. Currently the `/agents/tools` page is
   hand-curated. Sprint 13 task: replace it with generated content
   from `souxmar agent list --json`.
-- **Versioned docs.** Today docs.souxmar.dev serves whatever's on
+- **Versioned docs.** Today celikgo.github.io/souxmar serves whatever's on
   `master`. Once we cut v1.0 we'll need `/v0.9/` and `/v1.0/`
   branches — Vitepress's versioning support is straightforward,
   defer to Sprint 14.

@@ -40,9 +40,9 @@ test = [
 ]
 
 [project.urls]
-Homepage      = "https://souxmar.dev"
-Documentation = "https://souxmar.dev/docs"
-Repository    = "https://github.com/souxmar/souxmar"
+Homepage      = "https://github.com/celikgo/souxmar"
+Documentation = "https://github.com/celikgo/souxmar/tree/master/docs"
+Repository    = "https://github.com/celikgo/souxmar"
 
 [tool.scikit-build]
 # Build the souxmar libraries + the binding alongside the in-source repo.

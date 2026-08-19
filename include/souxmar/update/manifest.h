@@ -4,7 +4,7 @@
 //
 // Sprint 10 push 4 of Platform's "Auto-updater across all 3 OSes;
 // signed manifest pipeline; rollback protocol" XL story
-// (docs/SPRINT_PLAN.md § Sprint 10). The whole-story design is locked
+// (docs/attic/SPRINT_PLAN.md § Sprint 10). The whole-story design is locked
 // in by ADR-0013; this header is the parser-and-validator's view of
 // the manifest.
 //

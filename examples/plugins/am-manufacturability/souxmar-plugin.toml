@@ -4,10 +4,10 @@ name          = "AM Manufacturability Checks"
 version       = "0.1.0"
 abi           = 1
 license       = "Apache-2.0"
-homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/am-manufacturability"
+homepage      = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/am-manufacturability"
 
 description   = "Design-for-additive-manufacturing checks: per-cell overhang/support need, a composite printability score, and per-layer build time from the mesh's own boundary facets."
-documentation = "https://souxmar.dev/docs/plugins/am-manufacturability"
+documentation = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/am-manufacturability"
 tags          = ["solver", "additive-manufacturing", "dfam", "overhang", "printability", "build-time"]
 min_souxmar_abi_minor = 0
 

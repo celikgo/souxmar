@@ -4,11 +4,11 @@ name          = "ASCII STL Reader"
 version       = "0.1.0"
 abi           = 1
 license       = "Apache-2.0"
-homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/stl-reader"
+homepage      = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/stl-reader"
 
 # Sprint 6 push 2 additive manifest fields.
 description   = "Parses ASCII STL files into a Tri3 surface mesh with vertex deduplication."
-documentation = "https://souxmar.dev/docs/plugins/stl-reader"
+documentation = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/stl-reader"
 tags          = ["reader", "stl", "tessellated", "reference"]
 min_souxmar_abi_minor = 1   # reader.* capability surface lands at ABI minor 1.
 

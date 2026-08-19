@@ -4,10 +4,10 @@ name          = "OpenFOAM CFD Adapter (subprocess)"
 version       = "0.1.0"
 abi           = 1
 license       = "Apache-2.0"   # THIS plugin's license; OpenFOAM itself stays GPLv3 on disk
-homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/openfoam-solver"
+homepage      = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/openfoam-solver"
 
 description   = "Invokes OpenFOAM as a subprocess per ADR-0009. OpenFOAM (GPLv3) must be installed separately; the plugin links no GPL'd code."
-documentation = "https://souxmar.dev/docs/plugins/openfoam-solver"
+documentation = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/openfoam-solver"
 tags          = ["solver", "cfd", "openfoam", "subprocess"]
 min_souxmar_abi_minor = 0
 

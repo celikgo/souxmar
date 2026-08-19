@@ -352,7 +352,7 @@ implementation. That push will deliver:
 - ADR-0007 → ADR-0008 — ABI v1 freeze (locked).
 - ADR-0006 — bulk buffer protocol (the mesh-transfer mechanism the
   case-directory generator relies on).
-- `docs/SPRINT_PLAN.md` § Risk register entry R-003.
+- `docs/attic/SPRINT_PLAN.md` § Risk register entry R-003.
 - `docs/GOVERNANCE.md` § Plugin index governance — Apache-licensed
   index entries only.
 - OpenFOAM Foundation licensing FAQ

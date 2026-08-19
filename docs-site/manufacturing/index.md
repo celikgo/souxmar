@@ -61,16 +61,16 @@ output fields. So `layer_height: 0.001` is one millimetre and
 
 ## Reference documents in the repo
 
-- [`docs/MANUFACTURING.md`](https://github.com/souxmar/souxmar/blob/master/docs/MANUFACTURING.md)
+- [`docs/MANUFACTURING.md`](https://github.com/celikgo/souxmar/blob/master/docs/MANUFACTURING.md)
   — the domain guide: every capability, every input key with unit
   and default, every output component order, the fidelity table and
   the calibration procedures.
-- [`docs/MARINE.md`](https://github.com/souxmar/souxmar/blob/master/docs/MARINE.md)
+- [`docs/MARINE.md`](https://github.com/celikgo/souxmar/blob/master/docs/MARINE.md)
   — marine conventions, collapse modes, corrosion, and the
   advisory-only scope statement.
-- [ADR-0044](https://github.com/souxmar/souxmar/blob/master/docs/adr/0044-manufacturing-capability-namespaces.md)
+- [ADR-0044](https://github.com/celikgo/souxmar/blob/master/docs/adr/0044-manufacturing-capability-namespaces.md)
   — why these capabilities live under the existing five plugin
   namespaces instead of a new one.
-- [RFC-0012](https://github.com/souxmar/souxmar/blob/master/docs/rfcs/0012-am-process-simulation.md)
+- [RFC-0012](https://github.com/celikgo/souxmar/blob/master/docs/rfcs/0012-am-process-simulation.md)
   — the physics roadmap: what replaces the closed-form models, and
   how it gets validated.

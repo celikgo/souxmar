@@ -2,9 +2,9 @@
 
 A two-week-cadence plan to ship souxmar from empty repository to v1.0. Twelve sprints (six months) get us to **internal alpha** — the team that built it can use it for real work. Twelve more sprints (six months) get us to **public v1.0**. This document is the rolling plan; the next four sprints are committed, the rest are projected and revised at each retro.
 
-The plan is written for a six-team structure (~10–12 engineers), as defined in [`TEAM_STRUCTURE.md`](TEAM_STRUCTURE.md). Each sprint section lists per-team commitments, cross-team dependencies, and explicit exit criteria. Stories not meeting their exit criteria roll over with an explicit RFC if they are blocking; otherwise they go back to the backlog.
+The plan is written for a six-team structure (~10–12 engineers), a hypothetical staffing model that never existed. Each sprint section lists per-team commitments, cross-team dependencies, and explicit exit criteria. Stories not meeting their exit criteria roll over with an explicit RFC if they are blocking; otherwise they go back to the backlog.
 
-We follow the engineering practices in [`ENGINEERING_PRACTICES.md`](ENGINEERING_PRACTICES.md): perf-as-code, security-as-code, ADRs for non-trivial choices, no merging on red CI.
+We follow the engineering practices in [`ENGINEERING_PRACTICES.md`](../ENGINEERING_PRACTICES.md): perf-as-code, security-as-code, ADRs for non-trivial choices, no merging on red CI.
 
 ---
 
@@ -977,7 +977,7 @@ Numbering continues the project-wide `R-nnn` sequence — the last ID issued was
 
 **Numbering note.** `docs/rfcs/` currently contains 0001–0006 and 0011 plus the template; slots 0007–0010 (reserved by the v1.4–v1.6 block) and 0013 (reserved by the v1.7–v1.9 block for the fatigue contract) were never filed. RFC-0012 is now filed as `docs/rfcs/0012-am-process-simulation.md`, which means the v1.7–v1.9 block's reservation of "RFC-012" for the cross-solver comparison contract collides and must take a free slot when it is actually written. This block takes 0014 and 0015.
 
-Two ADRs land with the block: [ADR-0044](adr/0044-manufacturing-capability-namespaces.md) (capability-namespace placement and the two structural constraints behind it) and [ADR-0045](adr/0045-agent-tool-contract-am-ratchet.md) (the additive tool ratchet for tools 19–24). **ADR-0043 was already claimed by RFC-0011's CalculiX work**, which is why this block starts at 0044.
+Two ADRs land with the block: [ADR-0044](../adr/0044-manufacturing-capability-namespaces.md) (capability-namespace placement and the two structural constraints behind it) and [ADR-0045](../adr/0045-agent-tool-contract-am-ratchet.md) (the additive tool ratchet for tools 19–24). **ADR-0043 was already claimed by RFC-0011's CalculiX work**, which is why this block starts at 0044.
 
 ---
 

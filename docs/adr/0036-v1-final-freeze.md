@@ -70,7 +70,7 @@ v2.0 is *post-v1.0 future-sprint scope*. ADR-0036 doesn't open it.
 
 - The `souxmar` GitHub release page hosts v1.0.0 artefacts
   signed via the release signing key per ADR-0014.
-- `docs.souxmar.dev` updates with v1.0 release notes; the
+- `celikgo.github.io/souxmar` updates with v1.0 release notes; the
   "Status" banner in README.md flips from "Release candidate"
   to "Stable: v1.0.0."
 - Sprint 25+ enters the v1.x maintenance cadence; the

@@ -102,4 +102,4 @@ Before merging a token change PR:
 - `src/desktop/src/ui/tokens.css` — token source of truth.
 - `tests/visual/` — the Playwright visual-regression suite.
   (`src/desktop/ui-storybook/` is planned and not built.)
-- `docs/SPRINT_PLAN.md` — risk R-007 (palette legal review).
+- `docs/attic/SPRINT_PLAN.md` — risk R-007 (palette legal review).

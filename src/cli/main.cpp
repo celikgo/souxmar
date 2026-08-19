@@ -356,7 +356,7 @@ int cmd_plugin_install(const std::string& plugin_id,
   }
 
   // Sprint 16 push 4 — the actual install body (license check
-  // against marketplace.souxmar.dev + fetch + verify + extract)
+  // against marketplace.souxmar.invalid + fetch + verify + extract)
   // is queued for Sprint 17 push 2 when the marketplace service
   // returns real responses instead of 503. The CLI surface
   // already names the contract; the desktop client (per ADR-0022)

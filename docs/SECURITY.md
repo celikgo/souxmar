@@ -141,10 +141,16 @@ Per ADR-0003:
 
 ## Reporting
 
-Send security reports privately to **security@souxmar.dev**. We
-respond within 72 hours. Critical issues receive a CVE coordinated
-through MITRE; we publish a post-mortem within 30 days of the fix
-landing.
+Report privately through GitHub's private vulnerability reporting,
+which is enabled on this repository:
+
+  https://github.com/celikgo/souxmar/security/advisories/new
+
+[`SECURITY.md`](../SECURITY.md) at the repository root is the
+authoritative policy — scope, timelines and what to include. The
+timelines there are the real ones for a single-maintainer project;
+any faster figure in an earlier revision of this file was aspirational
+and has been removed.
 
 For non-vulnerability hardening suggestions, open a regular issue
 or RFC per `docs/GOVERNANCE.md`.

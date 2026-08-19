@@ -41,7 +41,7 @@ email-link. Downstream services see no difference.
   business decision per BUSINESS_MODEL.md.
 - **Team tier:** SSO + SCIM available.
 - **Enterprise tier:** SSO + SCIM + custom domain (e.g.
-  `acme.souxmar.dev` as a CNAME of `account.souxmar.dev`).
+  `acme.souxmar.invalid` as a CNAME of `account.souxmar.invalid`).
 
 ## Consequences
 

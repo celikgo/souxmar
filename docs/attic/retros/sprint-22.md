@@ -49,7 +49,7 @@ land alongside.
   *into* v1.0 release if not commit by Sprint 24 push 1.
 - **DNS / Discord / on-call rotation.** **Sprint 22 retro
   promotes to blocking v1.0 launch.** v1.0.0 cannot ship
-  without `docs.souxmar.dev` resolving via CNAME, a real
+  without `celikgo.github.io/souxmar` resolving via CNAME, a real
   Discord invite, and at least one named on-call besides the
   founder. Sprint 23 retro must report these as resolved.
 

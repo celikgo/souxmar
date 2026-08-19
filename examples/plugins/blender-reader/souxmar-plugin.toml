@@ -4,10 +4,10 @@ name          = "Blender (.blend) Reader"
 version       = "0.1.0"
 abi           = 1
 license       = "Apache-2.0"
-homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/blender-reader"
+homepage      = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/blender-reader"
 
 description   = "Reads Blender .blend files by invoking blender as a subprocess to export OBJ, then parses the OBJ into a Tri3 mesh."
-documentation = "https://souxmar.dev/docs/plugins/blender-reader"
+documentation = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/blender-reader"
 tags          = ["reader", "blend", "blender", "subprocess", "concept-geom"]
 min_souxmar_abi_minor = 1
 

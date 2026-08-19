@@ -42,9 +42,9 @@
 //     `publishing-plugin-marketplace` documents the convention.
 //   * `paid` is a bool. The open index lists free plugins by default;
 //     a `paid = true` entry indicates the plugin is in the paid
-//     marketplace (purchase via souxmar.dev/plugins) — flagged in
-//     `souxmar plugin search` output so users know which entries
-//     require a license.
+//     marketplace — flagged in `souxmar plugin search` output so
+//     users know which entries require a license. The in-tree index
+//     lives at docs/plugin-index.toml.
 
 #pragma once
 

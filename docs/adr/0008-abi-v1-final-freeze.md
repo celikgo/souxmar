@@ -116,7 +116,7 @@ plugin in `examples/plugins/` has been built against the candidate,
 the conformance suite has been green every night, and the ratchet
 mechanism has been exercised once (the Sprint 6 push 4 minor bump)
 without incident. Deferring would be ceremony without benefit; the
-project's principle from `docs/SPRINT_PLAN.md` is "time-based cadence,
+project's principle from `docs/attic/SPRINT_PLAN.md` is "time-based cadence,
 no blocking on dates."
 
 ### Soak for another full sprint

@@ -4,10 +4,10 @@ name          = "Marine / Subsea Loads and Integrity"
 version       = "0.1.0"
 abi           = 1
 license       = "Apache-2.0"
-homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/marine"
+homepage      = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/marine"
 
 description   = "Closed-form marine engineering set: seawater hydrostatic load cases, preliminary pressure-hull collapse margin, seawater corrosion / pitting / galvanic indicators, and an advisory AM qualification dossier. Preliminary design aids, not classification-society calculations."
-documentation = "https://souxmar.dev/docs/plugins/marine"
+documentation = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/marine"
 tags          = ["solver", "writer", "marine", "subsea", "hydrostatic", "pressure-hull", "corrosion", "galvanic", "qualification", "additive-manufacturing"]
 min_souxmar_abi_minor = 0
 

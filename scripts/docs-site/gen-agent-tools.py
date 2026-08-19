@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # scripts/docs-site/gen-agent-tools.py — generate the public tool
-# catalogue page on docs.souxmar.dev from the binary's own
+# catalogue page on celikgo.github.io/souxmar from the binary's own
 # `souxmar agent list --json` output.
 #
 # Sprint 13 push 2 closes the Sprint 12 retro's "/agents/tools page
@@ -30,7 +30,6 @@ import sys
 import textwrap
 from pathlib import Path
 
-
 HEADER = textwrap.dedent("""\
     <!--
       This file is **generated** by scripts/docs-site/gen-agent-tools.py.
@@ -47,7 +46,7 @@ HEADER = textwrap.dedent("""\
     generated directly from `souxmar agent list --json` — what you see
     below is exactly what the engine ships in this revision of the
     binary. The contract is **frozen final at v1**
-    ([ADR-0011](https://github.com/souxmar/souxmar/blob/master/docs/adr/0011-tool-contract-v1-final-freeze.md)).
+    ([ADR-0011](https://github.com/celikgo/souxmar/blob/master/docs/adr/0011-tool-contract-v1-final-freeze.md)).
 
     """)
 
@@ -95,7 +94,7 @@ def fetch_tool_catalogue(engine: Path) -> dict:
         raise SystemExit(
             f"agent list --json output is not valid JSON: {exc}\n"
             f"  first 400 bytes: {proc.stdout[:400]!r}"
-        )
+        ) from exc
     if catalogue.get("schema") != 1:
         raise SystemExit(
             f"unexpected schema in agent list output: "

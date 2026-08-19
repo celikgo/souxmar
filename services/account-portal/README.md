@@ -4,7 +4,7 @@ Sprint 17 push 2 scaffold. ADR-0026.
 
 ## What this is
 
-`account.souxmar.dev` — the source of truth for souxmar user
+`account.souxmar.invalid` — the source of truth for souxmar user
 identities + token issuance. Hosts the Stripe.js checkout
 iframe for subscriptions + paid-plugin purchases. Consumed by
 the proxy + marketplace + cloud-sync's `auth.rs` modules

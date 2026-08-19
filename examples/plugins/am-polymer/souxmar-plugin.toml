@@ -4,10 +4,10 @@ name          = "Polymer AM Thermal + Bond Strength"
 version       = "0.1.0"
 abi           = 1
 license       = "Apache-2.0"
-homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/am-polymer"
+homepage      = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/am-polymer"
 
 description   = "FFF/FDM interlayer thermal cycling (lumped-capacitance road cooling) plus Yang-Pitchumani reptation healing for interlayer degree of healing and Z-strength fraction."
-documentation = "https://souxmar.dev/docs/plugins/am-polymer"
+documentation = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/am-polymer"
 tags          = ["solver", "postproc", "additive-manufacturing", "fff", "fdm", "polymer", "thermal", "bonding"]
 min_souxmar_abi_minor = 0
 

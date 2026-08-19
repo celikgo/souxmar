@@ -3,7 +3,7 @@
 // fenicsx-solver — Sprint 7 push 2 opt-in FEM solver.
 //
 // Registers `solver.heat.fenicsx`. The real heat-equation (Poisson)
-// solver behind the docs/SPRINT_PLAN.md Sprint 7 deliverable: convert
+// solver behind the docs/attic/SPRINT_PLAN.md Sprint 7 deliverable: convert
 // a souxmar Mesh into a `dolfinx::mesh::Mesh`, assemble the Poisson
 // problem with PETSc-backed linear algebra, solve, and read the
 // solution back into a souxmar `Field`.

@@ -17,8 +17,8 @@ seeing empty sha256s should land here, not file an issue.
 | Per-platform VR baselines (darwin)     | Same as linux                                                       | Same as linux, macos-14 runner                                                                | 2 sprints (S14-S15)  |
 | Per-platform VR baselines (win32)      | Same as linux                                                       | Same as linux, windows-2022 runner                                                            | 2 sprints (S14-S15)  |
 | docs-site `/agents/tools` content      | Wired (placeholder); generator + `--check-only` gate live          | Same PR as the synth-load bootstrap; the maintainer's first run of `gen-agent-tools.py` against the v0.9.3 binary replaces the placeholder | 3 sprints (S13-S15) |
-| DNS CNAME for docs.souxmar.dev         | Not wired                                                          | Operational; out-of-band registrar work                                                       | 4 sprints (S12-S15) |
-| Discord server + invite redirect       | Not wired                                                          | Operational; community-launch coordination                                                    | 4 sprints (S12-S15) |
+| Custom domain for the docs site        | Not needed — the site is live at the default GitHub Pages URL, https://celikgo.github.io/souxmar/ | Would only matter if a domain is ever registered | n/a |
+| Discord server                         | Dropped — never created, and the references to it have been removed | n/a | n/a |
 | On-call rotation table (COMMUNITY.md)  | Placeholder ("TBA")                                                 | Team grows past N=1; rotation can be filled in then                                            | 4 sprints (S12-S15) |
 
 When the stale-for counter passes 5 sprints, the line escalates
@@ -67,9 +67,10 @@ When a maintainer is ready to land the first real data:
    #   directory. The artefact's layout mirrors the directory
    #   structure under tests/visual/test-results/.
 
-   # Docs-site agent tools:
+   # Docs-site agent tools — DONE, the page is generated from the
+   # binary and the CI gate now blocks. Re-run after any tool change:
    scripts/docs-site/gen-agent-tools.py \
-     --engine build/dev/tools/souxmar/souxmar \
+     --engine build/dev/src/cli/souxmar \
      --out    docs-site/agents/tools.md
    ```
 
@@ -78,8 +79,9 @@ When a maintainer is ready to land the first real data:
      no unexpected output drift.
    - VR baselines render the dim-theme palette correctly on
      each platform.
-   - The generated agent tool docs match the 18-tool catalogue
-     ADR-0011 names.
+   - The generated agent tool docs match the catalogue the binary
+     reports — 24 tools, ADR-0011's frozen 18 plus the six additive
+     ratchets through ADR-0045.
 5. Commit all in one PR titled
    `infra: bootstrap corpora + baselines after v0.9.2 (Sprint X push N)`.
 6. The same PR flips `continue-on-error: true` to `false` in

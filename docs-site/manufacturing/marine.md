@@ -206,7 +206,7 @@ check_marine_integrity    corrosion / galvanic / collapse-margin summary
 ## Next
 
 - [Additive manufacturing](/manufacturing/additive)
-- [`docs/MARINE.md`](https://github.com/souxmar/souxmar/blob/master/docs/MARINE.md)
+- [`docs/MARINE.md`](https://github.com/celikgo/souxmar/blob/master/docs/MARINE.md)
   — full conventions, seawater properties, every input key, and
   **"What would make this class-credible"**: the honest gap list
   between this block and a class submission.

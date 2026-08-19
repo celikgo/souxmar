@@ -323,7 +323,7 @@ Seven PRs in Sprint 30 — the most PR-heavy sprint of the post-v1.0 block.
 
 ## References
 
-- `docs/SPRINT_PLAN.md` — Post-v1.0 plan, Sprint 30 row (v1.2 release).
+- `docs/attic/SPRINT_PLAN.md` — Post-v1.0 plan, Sprint 30 row (v1.2 release).
 - `docs/rfcs/0003-cad-kernel.md` — BREP session this RFC mutates.
 - `docs/rfcs/0004-2d-sketcher.md` — Sketches consumed as feature inputs.
 - `docs/rfcs/0001-viewport-renderer.md` — Renderer invalidates on body change.

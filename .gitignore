@@ -93,3 +93,5 @@ examples/**/*.gcode
 examples/**/*.cli
 examples/am-*/[a-z]*-report.md
 examples/am-*/[a-z]*-dossier.md
+docs-site/.vitepress/dist/
+docs-site/.vitepress/cache/

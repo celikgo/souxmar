@@ -37,7 +37,7 @@ Manifest base_manifest() {
   m.release.released_at = "2026-05-10T10:00:00Z";
   m.release.min_previous_version = "0.8.0";
   m.release.rollback_target = "0.8.4";
-  m.release.notes_url = "https://souxmar.dev/releases/0.9.0";
+  m.release.notes_url = "https://github.com/celikgo/souxmar/releases";
   m.release.mandatory = false;
   m.signing.algorithm = "ed25519";
   m.signing.public_key_id = "release-2026";
@@ -45,7 +45,7 @@ Manifest base_manifest() {
   Artifact linux_x86;
   linux_x86.os = Os::Linux;
   linux_x86.arch = Arch::X86_64;
-  linux_x86.url = "https://dl.souxmar.dev/0.9.0/linux-x86_64.tar.zst";
+  linux_x86.url = "https://dl.souxmar.invalid/0.9.0/linux-x86_64.tar.zst";
   linux_x86.sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
   linux_x86.size = 48217600;
   m.artifacts.push_back(linux_x86);
@@ -189,7 +189,7 @@ TEST(UpdateApplyGate, HappyPathApplies) {
   EXPECT_EQ(a.artifact.os, Os::Linux);
   EXPECT_EQ(a.artifact.arch, Arch::X86_64);
   EXPECT_EQ(a.mandatory, false);
-  EXPECT_EQ(a.artifact.url, "https://dl.souxmar.dev/0.9.0/linux-x86_64.tar.zst");
+  EXPECT_EQ(a.artifact.url, "https://dl.souxmar.invalid/0.9.0/linux-x86_64.tar.zst");
 }
 
 TEST(UpdateApplyGate, HappyPathOnFreshInstall) {

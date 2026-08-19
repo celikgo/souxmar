@@ -16,7 +16,7 @@ info:
     url:       https://www.apache.org/licenses/LICENSE-2.0
 
 servers:
-  - url: https://proxy.souxmar.dev
+  - url: https://proxy.souxmar.invalid
     description: Production (Sprint 17+; today this URL 404s).
   - url: http://127.0.0.1:8080
     description: Local development.

@@ -227,7 +227,7 @@ Four PRs in Sprint 27, plus the reader plugin.
 
 ## References
 
-- `docs/SPRINT_PLAN.md` — Post-v1.0 plan, Sprint 27 row (v1.1 release).
+- `docs/attic/SPRINT_PLAN.md` — Post-v1.0 plan, Sprint 27 row (v1.1 release).
 - `docs/rfcs/0001-viewport-renderer.md` — Sister RFC; chunk-encoding decision is shared.
 - `docs/rfcs/0006-time-series.md` — Time-series playback (Sprint 32); this RFC does *not* address transient.
 - `include/souxmar-c/field.h` — Existing field handle this RFC layers on.

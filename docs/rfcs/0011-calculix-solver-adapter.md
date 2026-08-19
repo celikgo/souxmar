@@ -300,7 +300,7 @@ Sixteen PRs across four sprints. Each sprint releases.
 
 ## References
 
-- `docs/SPRINT_PLAN.md` — Post-v1.6 plan, Sprints 37–40 (added by this PR).
+- `docs/attic/SPRINT_PLAN.md` — Post-v1.6 plan, Sprints 37–40 (added by this PR).
 - `docs/adr/0009-openfoam-process-isolation.md` — Subprocess-plugin precedent.
 - `docs/rfcs/0002-field-stream-protocol.md` — Field handle CalculiX results map onto.
 - `docs/rfcs/0006-time-series.md` — Mode-shape playback path.

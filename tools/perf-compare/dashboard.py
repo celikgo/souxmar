@@ -42,7 +42,6 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
 
 # ----- Reading Google Benchmark JSON ---------------------------------------
 
@@ -131,25 +130,34 @@ def _fmt_time(ns: float, unit: str) -> str:
     if ns <= 0 or ns != ns:  # zero / NaN
         return "—"
     if unit == "ns":
-        if ns >= 1_000_000_000: return f"{ns / 1_000_000_000:.3f} s"
-        if ns >= 1_000_000:     return f"{ns / 1_000_000:.3f} ms"
-        if ns >= 1_000:         return f"{ns / 1_000:.3f} µs"
+        if ns >= 1_000_000_000:
+            return f"{ns / 1_000_000_000:.3f} s"
+        if ns >= 1_000_000:
+            return f"{ns / 1_000_000:.3f} ms"
+        if ns >= 1_000:
+            return f"{ns / 1_000:.3f} µs"
         return f"{ns:.1f} ns"
     if unit == "us":
-        if ns >= 1_000_000:     return f"{ns / 1_000_000:.3f} s"
-        if ns >= 1_000:         return f"{ns / 1_000:.3f} ms"
+        if ns >= 1_000_000:
+            return f"{ns / 1_000_000:.3f} s"
+        if ns >= 1_000:
+            return f"{ns / 1_000:.3f} ms"
         return f"{ns:.3f} µs"
     if unit == "ms":
-        if ns >= 1_000:         return f"{ns / 1_000:.3f} s"
+        if ns >= 1_000:
+            return f"{ns / 1_000:.3f} s"
         return f"{ns:.3f} ms"
     return f"{ns:.3f} {unit}"
 
 
 def _delta_class(ratio: float, threshold: float) -> str:
     """Map a current/baseline ratio to a CSS class name."""
-    if ratio != ratio:                  return "muted"   # NaN — no baseline
-    if ratio > 1.0 + threshold:         return "regress"
-    if ratio < 1.0 - threshold:         return "improve"
+    if ratio != ratio:
+        return "muted"   # NaN — no baseline
+    if ratio > 1.0 + threshold:
+        return "regress"
+    if ratio < 1.0 - threshold:
+        return "improve"
     return "within"
 
 
@@ -316,8 +324,10 @@ def render_bin_card(binary_name: str,
         if not base or base["real_time"] <= 0:
             continue
         ratio = r["real_time"] / base["real_time"]
-        if ratio > 1.0 + threshold: has_regress = True
-        if ratio < 1.0 - threshold: has_improve = True
+        if ratio > 1.0 + threshold:
+            has_regress = True
+        if ratio < 1.0 - threshold:
+            has_improve = True
     if has_regress:
         badge += ' <span class="badge regress">regression</span>'
     elif has_improve:
@@ -378,10 +388,14 @@ def render_bin_card(binary_name: str,
     build = current_meta.get("library_build", "")
     date  = current_meta.get("date", "")
     meta_bits = []
-    if host:  meta_bits.append(f"<code>{html.escape(host)}</code>")
-    if cpus:  meta_bits.append(f"{cpus} CPU")
-    if build: meta_bits.append(html.escape(build))
-    if date:  meta_bits.append(html.escape(date))
+    if host:
+        meta_bits.append(f"<code>{html.escape(host)}</code>")
+    if cpus:
+        meta_bits.append(f"{cpus} CPU")
+    if build:
+        meta_bits.append(html.escape(build))
+    if date:
+        meta_bits.append(html.escape(date))
     if meta_bits:
         parts.append(f'<div class="meta" style="margin-top:10px">{" · ".join(meta_bits)}</div>')
 
@@ -432,7 +446,7 @@ def render_html(*,
     parts.append('<footer>')
     parts.append('Built by <code>tools/perf-compare/dashboard.py</code> · ')
     parts.append('see <code>docs/ENGINEERING_PRACTICES.md</code> § Performance budgets · ')
-    parts.append('<a href="https://github.com/souxmar/souxmar">souxmar</a>')
+    parts.append('<a href="https://github.com/celikgo/souxmar">souxmar</a>')
     parts.append('</footer>')
     parts.append('</body></html>')
     return "\n".join(parts)

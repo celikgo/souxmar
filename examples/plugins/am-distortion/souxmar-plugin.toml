@@ -4,10 +4,10 @@ name          = "AM Distortion + Residual Stress"
 version       = "0.1.0"
 abi           = 1
 license       = "Apache-2.0"
-homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/am-distortion"
+homepage      = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/am-distortion"
 
 description   = "Part-scale AM distortion by the Keller-Ploshikhin inherent-strain method with Stoney-type layer-wise curvature accumulation, plus an elastic residual-stress read-back with a yield cap."
-documentation = "https://souxmar.dev/docs/plugins/am-distortion"
+documentation = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/am-distortion"
 tags          = ["solver", "postproc", "additive-manufacturing", "lpbf", "distortion", "residual-stress", "inherent-strain"]
 min_souxmar_abi_minor = 0
 

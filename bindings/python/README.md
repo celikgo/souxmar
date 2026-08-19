@@ -1,6 +1,6 @@
 # pysouxmar
 
-Python bindings for [souxmar](https://souxmar.dev), the open-source CAE
+Python bindings for [souxmar](https://github.com/celikgo/souxmar), the open-source CAE
 platform. Wraps the souxmar C++ libraries (core, plugin host, pipeline
 runner) via pybind11 so Python users can write CAE workflows without
 touching CMake.

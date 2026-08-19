@@ -156,7 +156,7 @@ When adding a new solver, mesher, or transformation:
 ## Reference
 
 - `docs/ENGINEERING_PRACTICES.md` — determinism gate definition.
-- `docs/SPRINT_PLAN.md` — when the gate became enforcing (Sprint 5).
+- `docs/attic/SPRINT_PLAN.md` — when the gate became enforcing (Sprint 5).
 - `scripts/ci/determinism-fingerprint.sh` — the gate itself, and `examples/` for the pipelines
   it covers. (`tests/determinism/` does not exist; the gate walks `examples/`.)
 - `scripts/ci/determinism-fingerprint.sh` — the comparison harness.

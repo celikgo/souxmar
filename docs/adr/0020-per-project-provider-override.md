@@ -82,8 +82,8 @@ model = "claude-sonnet-4-6"
 endpoint = "http://localhost:11434"
 
 [managed]
-# Default: https://proxy.souxmar.dev
-endpoint = "https://proxy.souxmar.dev"
+# Default: https://proxy.souxmar.invalid
+endpoint = "https://proxy.souxmar.invalid"
 # Sprint 14 push 4's openapi.yaml schema is the contract.
 ```
 

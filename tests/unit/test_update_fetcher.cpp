@@ -16,9 +16,9 @@
 using namespace souxmar::update;
 
 TEST(Fetcher, HttpsUrlShape) {
-  EXPECT_TRUE(looks_like_https_url("https://dl.souxmar.dev/0.9.0/manifest.toml"));
+  EXPECT_TRUE(looks_like_https_url("https://dl.souxmar.invalid/0.9.0/manifest.toml"));
   EXPECT_TRUE(looks_like_https_url("https://host:8443/"));
-  EXPECT_FALSE(looks_like_https_url("http://dl.souxmar.dev/x"));
+  EXPECT_FALSE(looks_like_https_url("http://dl.souxmar.invalid/x"));
   EXPECT_FALSE(looks_like_https_url("file:///etc/passwd"));
   EXPECT_FALSE(looks_like_https_url("https://"));
   EXPECT_FALSE(looks_like_https_url("https:///path"));

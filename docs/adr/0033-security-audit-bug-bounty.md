@@ -40,7 +40,7 @@ this as the publisher's responsibility).
 - **Platform:** HackerOne (selected for triage workflow
   integration matching ADR-0017's SLA matrix).
 - **Scope:** matches the pen-test scope plus
-  `*.souxmar.dev` services.
+  `*.souxmar.invalid` services.
 - **Out of scope:** social engineering, physical access,
   third-party services (Anthropic / Stripe / GitHub).
 - **Bounty tiers:**

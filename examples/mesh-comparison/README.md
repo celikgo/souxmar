@@ -38,7 +38,9 @@ The report's summary table answers four questions:
 ## Files
 
 * `pipeline-grid.yaml` — runs `mesher.tetra.grid` against
-  `cube.step`. Always-on; runs without Gmsh.
+  `cube.step`. The *mesher* is always-on, but the pipeline still
+  reads a STEP file, so it needs `-DSOUXMAR_WITH_OPENCASCADE=ON`
+  and a `cube.step` in this directory. It does not need Gmsh.
 * `pipeline-gmsh.yaml` — runs `mesher.tetra.gmsh`. Requires Gmsh
   (`-DSOUXMAR_WITH_GMSH=ON` at configure time + a Gmsh install on
   the host).

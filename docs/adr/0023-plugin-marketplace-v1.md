@@ -28,8 +28,8 @@ license-verification step before download.
 {
   "id": "com.acme.surface-mesher-pro",
   "version": "1.2.3",
-  "manifest_url": "https://marketplace.souxmar.dev/plugins/<id>/manifest.toml",
-  "signature_url": "https://marketplace.souxmar.dev/plugins/<id>/manifest.toml.sig",
+  "manifest_url": "https://marketplace.https://github.com/celikgo/souxmar/blob/master/docs/plugin-index.toml/<id>/manifest.toml",
+  "signature_url": "https://marketplace.https://github.com/celikgo/souxmar/blob/master/docs/plugin-index.toml/<id>/manifest.toml.sig",
   "license_key_required": true,
   "price_usd_one_time": 99.00,
   "price_usd_monthly":   12.00,
@@ -101,7 +101,7 @@ load-bearing for Sprint 16 push 3's Stripe integration shape.
 ## Consequences
 
 - New `services/plugin-marketplace/` directory (axum binary,
-  v1 API at `marketplace.souxmar.dev`).
+  v1 API at `marketplace.souxmar.invalid`).
 - The existing `plugin-index.json` schema gains optional
   fields (additive Tier-0 — old clients ignore them and see
   only free plugins).
@@ -120,7 +120,7 @@ load-bearing for Sprint 16 push 3's Stripe integration shape.
   rotation triggers a manual review before publication. **Likelihood:
   Med (over a year); Impact: High.**
 - **R-026 (license-check unavailability).** If
-  `marketplace.souxmar.dev` is down, paid plugin re-installs
+  `marketplace.souxmar.invalid` is down, paid plugin re-installs
   can't validate. **Mitigation:** entitlement receipts cache
   in the OS keychain with a 90-day expiry; re-validation only
   blocks after expiry. **Likelihood: Low; Impact: Low.**

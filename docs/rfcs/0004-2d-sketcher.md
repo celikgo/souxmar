@@ -17,7 +17,7 @@ Add a 2D sketcher to the workbench: pick a plane, draw primitives (line, polylin
 
 The post-v1.0 block's Sprint 30 (parametric features) requires sketch inputs; without RFC-004, the feature operations have nothing to extrude or revolve. Concretely:
 
-- Without an in-app sketcher, the only way to introduce geometry today is to import a STEP file from an external CAD tool — confirmed at the architectural level by the Sprint 24 retro's post-v1.0 plan (`docs/retros/sprint-24.md`), which lists viewport rendering at Sprint 28 / v1.1.0 but leaves authoring entirely to imports. That gap is what RFC-004 closes.
+- Without an in-app sketcher, the only way to introduce geometry today is to import a STEP file from an external CAD tool — confirmed at the architectural level by the Sprint 24 retro's post-v1.0 plan (`docs/attic/retros/sprint-24.md`), which lists viewport rendering at Sprint 28 / v1.1.0 but leaves authoring entirely to imports. That gap is what RFC-004 closes.
 - The agent's "design a bracket" eval case (planned for Sprint 30) presumes a sketch tool surface that does not exist.
 - Architectural / civil users — one of our three primary personas per `docs/VISION.md` — author 2D plans more than 3D bodies; a competent sketcher unlocks that workflow even before the parametric tree lands.
 
@@ -367,7 +367,7 @@ Six PRs in Sprint 29.
 
 ## References
 
-- `docs/SPRINT_PLAN.md` — Post-v1.0 plan, Sprint 29 row.
+- `docs/attic/SPRINT_PLAN.md` — Post-v1.0 plan, Sprint 29 row.
 - `docs/rfcs/0003-cad-kernel.md` — Sketches anchor to BREP faces from sessions defined there.
 - `docs/rfcs/0005-feature-tree.md` — Feature operations consume sketches as inputs.
 - `docs/PLUGIN_SDK.md` — Plugin-type taxonomy; gains `sketch.solver.*`.

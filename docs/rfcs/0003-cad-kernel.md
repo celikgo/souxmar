@@ -56,7 +56,7 @@ model         = "single-threaded-per-session"
 [plugin.licensing]
 # Spelled out because of the LGPL relink rights.
 includes_dynamic_dep = ["OpenCASCADE >= 7.8 LTS"]
-relink_rights_url    = "https://souxmar.dev/licensing/occt-relink"
+relink_rights_url    = "https://github.com/celikgo/souxmar/licensing/occt-relink"
 ```
 
 The conformance suite gains a `cad.*` plugin type with tests for: open / close a session, import STEP, list bodies, export geometry snapshot (must equal the legacy `occt-reader` output bit-for-bit on the same input).
@@ -256,7 +256,7 @@ Four PRs in Sprint 28.
 
 ## References
 
-- `docs/SPRINT_PLAN.md` — Post-v1.0 plan, Sprint 28 row.
+- `docs/attic/SPRINT_PLAN.md` — Post-v1.0 plan, Sprint 28 row.
 - `docs/rfcs/0004-2d-sketcher.md` — Builds on this surface (sketches anchor to BREP faces).
 - `docs/rfcs/0005-feature-tree.md` — Builds on this surface (`feature.extrude` etc. mutate the session).
 - `docs/rfcs/0001-viewport-renderer.md` — Tessellated CAD bodies feed the renderer's surface stream.
