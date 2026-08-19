@@ -43,7 +43,7 @@ will not change under you.
 Three of these are `solver.*` while doing no solving: `overhang`,
 `printability` and `buildtime` analyse a mesh and produce a field,
 and the `postproc.*` dispatch path requires an upstream field. See
-[ADR-0044](https://github.com/souxmar/souxmar/blob/master/docs/adr/0044-manufacturing-capability-namespaces.md)
+[ADR-0044](https://github.com/celikgo/souxmar/blob/master/docs/adr/0044-manufacturing-capability-namespaces.md)
 — "solver" here is a vtable shape, not a claim.
 
 ## Run the metal chain
@@ -168,7 +168,7 @@ before you feed it to a machine.**
 
 Until then the numbers are relative. The step-by-step procedures are
 in
-[`docs/MANUFACTURING.md`](https://github.com/souxmar/souxmar/blob/master/docs/MANUFACTURING.md#calibration).
+[`docs/MANUFACTURING.md`](https://github.com/celikgo/souxmar/blob/master/docs/MANUFACTURING.md#calibration).
 
 ## From chat
 
@@ -186,8 +186,8 @@ read-only and silent.
 ## Next
 
 - [Marine and subsea](/manufacturing/marine)
-- [`docs/MANUFACTURING.md`](https://github.com/souxmar/souxmar/blob/master/docs/MANUFACTURING.md)
+- [`docs/MANUFACTURING.md`](https://github.com/celikgo/souxmar/blob/master/docs/MANUFACTURING.md)
   — every input key, unit, default and output component, plus the
   fidelity table.
-- [RFC-0012](https://github.com/souxmar/souxmar/blob/master/docs/rfcs/0012-am-process-simulation.md)
+- [RFC-0012](https://github.com/celikgo/souxmar/blob/master/docs/rfcs/0012-am-process-simulation.md)
   — where the closed-form models break and what replaces them.

@@ -1,9 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "souxmar",
-  "version-string": "0.0.1",
+  "version-string": "0.9.0",
   "description": "Open-source CAE platform: CAD, mesh, FEM/CFD, post-processing.",
-  "homepage": "https://souxmar.dev",
+  "homepage": "https://github.com/celikgo/souxmar",
   "license": "Apache-2.0",
   "supports": "(linux | osx | windows) & (x64 | arm64)",
   "dependencies": [

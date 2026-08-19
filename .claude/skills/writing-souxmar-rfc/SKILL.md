@@ -119,6 +119,6 @@ A maintainer should reject an RFC that has any of these:
 ## Reference
 
 - `docs/GOVERNANCE.md` — full RFC process and merge tiers.
-- `docs/SPRINT_PLAN.md` — when RFC office hours run.
+- `docs/attic/SPRINT_PLAN.md` — when RFC office hours run.
 - `docs/adr/` — accepted decisions, for precedent on tone and depth.
 - `docs/rfcs/` (when present) — accepted RFCs, for precedent on structure.

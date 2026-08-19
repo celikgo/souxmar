@@ -382,7 +382,7 @@ Not a contract — a forcing function, so reviewers know what approving this com
 - [ ] **PR 13 — `solver.am.polymer.fff.fe`** with crystallisation latent heat and conduction into buried roads.
 - [ ] **PR 14 — Printability weight calibration** against a corpus of parts with known build outcomes, or an explicit decision not to and a docs statement that the weights remain unvalidated.
 - [ ] **PR 15 — (conditional) `souxmar_registry_add_mesher_ext`** per § 5, with its own ADR under ADR-0008's ratchet rules, only once a second mesher wants it.
-- [ ] Documentation: `docs/MANUFACTURING.md` fidelity table gains its L2 column; `docs/AI_INTEGRATION.md` gains any additive solver options; `docs/ROADMAP.md` and `docs/SPRINT_PLAN.md` gain the block.
+- [ ] Documentation: `docs/MANUFACTURING.md` fidelity table gains its L2 column; `docs/AI_INTEGRATION.md` gains any additive solver options; `docs/ROADMAP.md` and `docs/attic/SPRINT_PLAN.md` gain the block.
 
 ## References
 

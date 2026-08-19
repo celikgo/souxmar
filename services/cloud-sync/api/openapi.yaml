@@ -11,7 +11,7 @@ info:
     url:       https://www.apache.org/licenses/LICENSE-2.0
 
 servers:
-  - url: https://sync.souxmar.dev
+  - url: https://sync.souxmar.invalid
     description: Production (Sprint 17+; today this URL 404s).
   - url: http://127.0.0.1:8081
     description: Local development.

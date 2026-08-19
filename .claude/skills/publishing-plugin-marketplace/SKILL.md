@@ -83,7 +83,7 @@ A passing attestation older than 6 months auto-expires the badge until refreshed
 
 ## Paid marketplace publishing
 
-The paid marketplace is launched at Sprint 16 per `docs/SPRINT_PLAN.md`. Pre-launch authors can pre-register via the form linked from `docs/BUSINESS_MODEL.md`.
+The paid marketplace is launched at Sprint 16 per `docs/attic/SPRINT_PLAN.md`. Pre-launch authors can pre-register via the form linked from `docs/BUSINESS_MODEL.md`.
 
 ### Eligibility
 

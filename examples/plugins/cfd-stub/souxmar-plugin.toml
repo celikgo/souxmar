@@ -4,10 +4,10 @@ name          = "CFD Stub Solver"
 version       = "0.1.0"
 abi           = 1
 license       = "Apache-2.0"
-homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/cfd-stub"
+homepage      = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/cfd-stub"
 
 description   = "Closed-form uniform-velocity vector field. Always-on stand-in for the OpenFOAM adapter in default CI."
-documentation = "https://souxmar.dev/docs/plugins/cfd-stub"
+documentation = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/cfd-stub"
 tags          = ["solver", "cfd", "stub", "reference"]
 min_souxmar_abi_minor = 0
 

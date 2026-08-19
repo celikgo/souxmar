@@ -6,13 +6,13 @@ The souxmar project adopts the **[Contributor Covenant, version 2.1](https://www
 
 The Code of Conduct applies to:
 
-- All project spaces: the GitHub repositories, issue trackers, pull requests, discussions, official Discord and Slack channels, mailing lists, in-person and virtual events.
+- All project spaces: the GitHub repository, issue tracker, pull requests and discussions, and any in-person or virtual event held under the project's name.
 - All representations of the project in public, including by maintainers, contributors, and users acting in a project capacity.
 - Both technical and non-technical interactions.
 
 ## Reporting
 
-Report concerns to **conduct@souxmar.dev** (placeholder address; will be activated when the GitHub organisation is provisioned in Sprint 0).
+Report concerns to **conduct@souxmar.invalid** (placeholder address; will be activated when the GitHub organisation is provisioned in Sprint 0).
 
 Reports are handled by a rotating subset of maintainers — never by the maintainer who is the subject of a report. The reporting maintainer recuses themselves on receipt and routes the report to colleagues.
 

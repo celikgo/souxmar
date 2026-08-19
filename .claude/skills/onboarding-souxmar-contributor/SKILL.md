@@ -25,7 +25,7 @@ This skill walks a new contributor from `git clone` to a merged first PR. Same f
 ### 1. Clone
 
 ```bash
-git clone https://github.com/souxmar/souxmar.git
+git clone https://github.com/celikgo/souxmar.git
 cd souxmar
 git config commit.gpgsign true   # if signing commits
 ```
@@ -44,7 +44,7 @@ Total time: 60–90 min.
    - Backend: `docs/PLUGIN_SDK.md`.
    - Desktop: `docs/DESKTOP_APP.md` and `docs/UI_DESIGN.md`.
    - AI: `docs/AI_INTEGRATION.md`.
-   - Platform: `docs/SPRINT_PLAN.md` and the existing CI workflows.
+   - Platform: `docs/attic/SPRINT_PLAN.md` and the existing CI workflows.
    - DX: `docs/PLUGIN_SDK.md`, `docs/AI_INTEGRATION.md`, plus any open docs PRs.
 
 ### 3. Install build deps
@@ -133,12 +133,12 @@ When in doubt, ask in the PR description which tier you think it is. A maintaine
 
 ## Where to ask questions
 
-- `#souxmar-dev` Slack (internal) or `#dev` on Discord (external) for general help.
+- [GitHub Discussions](https://github.com/celikgo/souxmar/discussions) for general help. There is no chat channel.
 - The PR thread for review questions.
 - The weekly RFC office hours (Wednesday) for design-shape questions.
 - A direct mention to a maintainer if the question is blocking and time-sensitive.
 
-We do not have daily standups. Async questions on Slack/Discord get answered the same day.
+There are no standups and no chat channel; souxmar has one maintainer. Async questions go to GitHub Discussions.
 
 ## What to expect in the first month (new hire)
 
@@ -162,5 +162,4 @@ External contributors: pace is yours. Maintainers will respond on your timeline.
 - `CONTRIBUTING.md` — full contributing guide.
 - `docs/GOVERNANCE.md` — merge tiers, roles.
 - `docs/ENGINEERING_PRACTICES.md` — Definition of Done.
-- `docs/SPRINT_PLAN.md` — current sprint context.
-- `docs/TEAM_STRUCTURE.md` — who owns what.
+- `docs/attic/SPRINT_PLAN.md` — current sprint context.

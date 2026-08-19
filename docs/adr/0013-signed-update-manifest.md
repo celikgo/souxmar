@@ -15,7 +15,7 @@
 ## Context
 
 Sprint 10's Platform XL story is "Auto-updater across all 3 OSes;
-signed manifest pipeline; rollback protocol" (`docs/SPRINT_PLAN.md`).
+signed manifest pipeline; rollback protocol" (`docs/attic/SPRINT_PLAN.md`).
 A user installing souxmar must be able to:
 
 1. **Discover** that a newer release exists, on their channel.
@@ -73,14 +73,14 @@ version              = "0.9.0"                    # SemVer of the offered build
 released_at          = "2026-05-10T10:00:00Z"
 min_previous_version = "0.8.0"                    # refuse to apply unless caller is >= this
 rollback_target      = "0.8.4"                    # `souxmar update rollback` lands here; empty disables
-notes_url            = "https://souxmar.dev/releases/0.9.0"
+notes_url            = "https://github.com/celikgo/souxmar/releases"
 mandatory            = false                      # true => clients SHOULD apply before expires_at
 
 # One [[artifact]] per (os, arch) pair. No duplicates allowed.
 [[artifact]]
 os     = "linux"                                  # linux | macos | windows
 arch   = "x86_64"                                 # x86_64 | aarch64
-url    = "https://dl.souxmar.dev/0.9.0/souxmar-0.9.0-linux-x86_64.tar.zst"
+url    = "https://dl.souxmar.invalid/0.9.0/souxmar-0.9.0-linux-x86_64.tar.zst"
 sha256 = "<64 hex chars>"                         # binds the manifest to a specific artefact
 size   = 48217600                                 # bytes; download-progress + pre-flight disk check
 
@@ -142,7 +142,7 @@ consistent.
 ### Why this channel structure
 
 Three channels — **stable**, **beta**, **nightly** — match the
-existing release-cadence vocabulary in `docs/SPRINT_PLAN.md`
+existing release-cadence vocabulary in `docs/attic/SPRINT_PLAN.md`
 (public alpha at S12, beta at S22, v1.0 at S24; nightly is
 intra-sprint dogfood). A `channel.expires_at` field forces every
 manifest to declare its own expiry, so the client can refuse a
@@ -351,7 +351,7 @@ the deciding factor in not adopting full TUF on day one.
 
 ## References
 
-- `docs/SPRINT_PLAN.md` § Sprint 10 — the auto-updater XL story.
+- `docs/attic/SPRINT_PLAN.md` § Sprint 10 — the auto-updater XL story.
 - `docs/DESKTOP_APP.md` § Update protocol — the desktop app's
   consumer of this manifest (push 6+).
 - `docs/SECURITY.md` § Release signing — key storage and

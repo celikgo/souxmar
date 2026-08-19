@@ -7,7 +7,7 @@ string(STRIP "${SOUXMAR_VERSION_RAW}" SOUXMAR_VERSION)
 project(souxmar
   VERSION ${SOUXMAR_VERSION}
   DESCRIPTION "Open-source CAE platform: CAD, mesh, FEM/CFD, post-processing."
-  HOMEPAGE_URL "https://souxmar.dev"
+  HOMEPAGE_URL "https://github.com/celikgo/souxmar"
   LANGUAGES C CXX
 )
 

@@ -5,7 +5,7 @@ description: Use when cutting a souxmar release (alpha, beta, RC, or stable). Wa
 
 # Releasing souxmar
 
-souxmar releases follow an 8-week cadence (per `docs/SPRINT_PLAN.md` and `docs/GOVERNANCE.md`). Releases are time-based, not feature-based: anything that is not green at cut-time ships in the next train.
+souxmar releases follow an 8-week cadence (per `docs/attic/SPRINT_PLAN.md` and `docs/GOVERNANCE.md`). Releases are time-based, not feature-based: anything that is not green at cut-time ships in the next train.
 
 ## When to use this skill
 
@@ -84,7 +84,7 @@ souxmar releases follow an 8-week cadence (per `docs/SPRINT_PLAN.md` and `docs/G
 ## Announcement
 
 1. **Project blog** — short release-notes post.
-2. **Discord / GitHub Discussions** — pinned post.
+2. **GitHub Discussions** — pinned post.
 3. **Mailing list** — release announcement.
 4. **Hacker News / r/CFD / r/FEA** — only for milestone releases (`v0.9`, `v1.0`, `v1.5` etc.), not point releases.
 5. **Security disclosures** (if any) published to the security advisories page on the same day.
@@ -128,7 +128,7 @@ For severe security issues (CVSS > 7):
 
 ## Reference
 
-- `docs/SPRINT_PLAN.md` — release cadence.
+- `docs/attic/SPRINT_PLAN.md` — release cadence.
 - `docs/GOVERNANCE.md` — release policy.
 - `docs/ENGINEERING_PRACTICES.md` — incident response process.
 - `.github/workflows/release.yml` — the release pipeline.

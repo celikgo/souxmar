@@ -305,7 +305,7 @@ Six PRs in Sprint 32.
 
 ## References
 
-- `docs/SPRINT_PLAN.md` — Post-v1.0 plan, Sprint 32 row (v1.3 release).
+- `docs/attic/SPRINT_PLAN.md` — Post-v1.0 plan, Sprint 32 row (v1.3 release).
 - `docs/rfcs/0002-field-stream-protocol.md` — Single-frame field stream this RFC extends.
 - `docs/rfcs/0001-viewport-renderer.md` — Renderer this RFC drives; shared-mmap follow-up becomes mandatory.
 - `docs/adr/0009-openfoam-process-isolation.md` — Subprocess-plugin precedent the `writer.video` plugin follows.

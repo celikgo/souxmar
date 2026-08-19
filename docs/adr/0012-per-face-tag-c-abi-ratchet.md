@@ -266,7 +266,7 @@ surface itself is convention-agnostic.
 - ADR-0008 — ABI v1 final freeze + ratchet rules (the gating ADR).
 - ADR-0006 — bulk-buffer ABI (the precedent for "what stays imperative
   vs. what gets a bulk path").
-- `docs/retros/sprint-08.md` § One ADR-worthy decision surfaced — names
+- `docs/attic/retros/sprint-08.md` § One ADR-worthy decision surfaced — names
   this ratchet exactly.
 - `include/souxmar-c/mesh.h` — the header under ratchet.
 - `examples/plugins/openfoam-solver/openfoam_solver.cpp` — the

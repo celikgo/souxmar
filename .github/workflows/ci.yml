@@ -491,6 +491,65 @@ jobs:
             --out docs-site/agents/tools.md \
             --check-only
 
+  # ---------------------------------------------------------------------
+  # The version is stated in five places. They must agree.
+  #
+  # This gate exists because the README once announced a stable v1.0.0 that
+  # had no tag, no release, and a VERSION file reading 0.9.0. Cheap, fast,
+  # and it cannot be skipped by the changes filter — a version can be made
+  # inconsistent by editing any one of the five files.
+  # ---------------------------------------------------------------------
+  version-consistency:
+    name: version-consistency
+    timeout-minutes: 10
+    needs: [engine]
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }        # `git describe` needs the tags
+      - uses: actions/setup-python@v7
+        with: { python-version: '3.12' }
+
+      - name: VERSION, vcpkg.json, package.json, README and CHANGELOG agree
+        run: python3 scripts/check-version-consistency.py
+
+      # The CLI reads its version from the VERSION file through CMake, so it
+      # can only disagree if the artifact was built from a different tree.
+      # Checked whenever the engine job produced one.
+      - uses: actions/download-artifact@v8
+        if: needs.engine.result == 'success'
+        with: { name: engine-linux-gcc, path: engine }
+      - name: The built CLI reports the same version
+        if: needs.engine.result == 'success'
+        run: |
+          chmod -R +x engine/
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          scripts/ci/apt-install.sh --only-upgrade libstdc++6
+          python3 scripts/check-version-consistency.py \
+            --binary engine/src/cli/souxmar
+
+  # ---------------------------------------------------------------------
+  # The claims in the docs must still be true of the tree.
+  # ---------------------------------------------------------------------
+  docs-truth:
+    name: Documentation matches the tree
+    timeout-minutes: 10
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version: '3.12' }
+
+      - name: Capability table is current
+        # docs/CAPABILITIES.md is generated from the plugin manifests, the
+        # CMake wiring and the test sources. Regenerating it is one command,
+        # which the failure message prints.
+        run: python3 scripts/gen-capability-table.py --check
+
+      - name: No dead hostnames, no broken relative links
+        run: python3 scripts/check-doc-links.py
+
   determinism:
     name: Cross-platform determinism
     timeout-minutes: 15
@@ -707,6 +766,8 @@ jobs:
     needs:
       - governance
       - format
+      - version-consistency
+      - docs-truth
       - engine
       - conformance
       - agent-evals

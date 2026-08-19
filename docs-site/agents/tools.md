@@ -16,13 +16,13 @@
 
 This page is **generated** from the engine binary itself by running
 `souxmar agent list --json` through
-[`scripts/docs-site/gen-agent-tools.py`](https://github.com/souxmar/souxmar/blob/master/scripts/docs-site/gen-agent-tools.py).
+[`scripts/docs-site/gen-agent-tools.py`](https://github.com/celikgo/souxmar/blob/master/scripts/docs-site/gen-agent-tools.py).
 The first build of this page off the v0.9.0 binary will replace this
 placeholder with the full 18-tool catalogue.
 
-If you're reading this on docs.souxmar.dev, the CI workflow that
+If you're reading this on celikgo.github.io/souxmar, the CI workflow that
 rebuilds this page lives at
-[`.github/workflows/docs-site.yml`](https://github.com/souxmar/souxmar/blob/master/.github/workflows/docs-site.yml).
+[`.github/workflows/docs-site.yml`](https://github.com/celikgo/souxmar/blob/master/.github/workflows/docs-site.yml).
 The placeholder was committed in Sprint 13 push 2; the contract for
 the generated content lives in the script's header.
 
@@ -46,7 +46,7 @@ scripts/docs-site/gen-agent-tools.py \
 
 ## The contract
 
-- **18 tools**, frozen at v1 final (see [ADR-0011](https://github.com/souxmar/souxmar/blob/master/docs/adr/0011-tool-contract-v1-final-freeze.md)).
+- **18 tools**, frozen at v1 final (see [ADR-0011](https://github.com/celikgo/souxmar/blob/master/docs/adr/0011-tool-contract-v1-final-freeze.md)).
 - Tools are grouped by category: Read, Mesh, BC, Material, Solve,
   Field, Pipeline, Discovery, Export, UI.
 - Each tool has a confirmation policy — `auto`, `confirm-once`, or

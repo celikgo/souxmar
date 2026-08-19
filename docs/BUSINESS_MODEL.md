@@ -66,7 +66,7 @@ The standard "AWS will fork it and resell it" fear. Mitigations:
 
 Out-of-tree plugin authors choose:
 
-- **Free + listed in the open index.** Apache 2.0 (or any OSI-approved license) source, listed on `souxmar.dev/plugins`, indexed by `souxmar plugin search`. No fee, no revenue share.
+- **Free + listed in the open index.** Apache 2.0 (or any OSI-approved license) source, listed on `https://github.com/celikgo/souxmar/blob/master/docs/plugin-index.toml`, indexed by `souxmar plugin search`. No fee, no revenue share.
 - **Paid via marketplace.** We host the binaries, handle Stripe billing, issue licenses, run the conformance suite in CI. Author keeps 90% of revenue. We keep 10%.
 
 We do not gatekeep on quality (other than the conformance badge) and we do not exclude plugins that compete with our managed services. A third party can sell a hosted-compute plugin that competes with ours; that is fair game.

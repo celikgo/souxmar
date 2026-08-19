@@ -4,7 +4,7 @@ name          = "VTU Writer (in-tree, no VTK dep)"
 version       = "0.1.0"
 abi           = 1
 license       = "Apache-2.0"
-homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/vtu-writer"
+homepage      = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/vtu-writer"
 
 [plugin.binary]
 file          = "libvtu_writer.so"

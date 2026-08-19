@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Sprint 12 push 3 — Vitepress config for the public docs site at
-// docs.souxmar.dev. Built by .github/workflows/docs-site.yml and
-// published to GitHub Pages on every push to master.
+// Vitepress config for the public docs site at celikgo.github.io/souxmar.
+// Built by .github/workflows/docs-site.yml and published to GitHub Pages on
+// every push to master that touches docs-site/.
 //
 // The site is the canonical public surface for end-user documentation;
 // the in-repo `docs/` directory continues to hold ADRs, governance
-// docs, sprint plans, retros — the *contributor*-facing artefacts.
+// docs and RFCs — the *contributor*-facing artefacts. Superseded
+// planning artefacts live in docs/attic/ and are not published here.
 // Anything an end user needs to know lives under `docs-site/`.
 
 import { defineConfig } from "vitepress";
@@ -15,10 +16,10 @@ export default defineConfig({
   title: "souxmar",
   description: "Open-source CAE platform: CAD, mesh, FEM, CFD, with an agentic AI chat.",
   cleanUrls: true,
-  // The site is served at https://docs.souxmar.dev/; with a
-  // sub-path deploy under github.com/souxmar/souxmar/gh-pages, the
-  // base must match.
-  base: process.env.SOUXMAR_DOCS_BASE || "/",
+  // Served at https://celikgo.github.io/souxmar/ — a *project* Pages site,
+  // so every asset sits under the /souxmar/ sub-path and the base must say
+  // so. Override with SOUXMAR_DOCS_BASE when serving from somewhere else.
+  base: process.env.SOUXMAR_DOCS_BASE || "/souxmar/",
 
   themeConfig: {
     logo: "/logo.svg",
@@ -33,9 +34,8 @@ export default defineConfig({
       {
         text: "v0.9.0",
         items: [
-          { text: "Changelog",        link: "https://github.com/souxmar/souxmar/blob/master/CHANGELOG.md" },
-          { text: "ADRs",             link: "https://github.com/souxmar/souxmar/tree/master/docs/adr" },
-          { text: "Sprint retros",    link: "https://github.com/souxmar/souxmar/tree/master/docs/retros" },
+          { text: "Changelog",        link: "https://github.com/celikgo/souxmar/blob/master/CHANGELOG.md" },
+          { text: "ADRs",             link: "https://github.com/celikgo/souxmar/tree/master/docs/adr" },
         ]
       },
     ],
@@ -103,8 +103,7 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: "github",  link: "https://github.com/souxmar/souxmar" },
-      { icon: "discord", link: "https://souxmar.dev/community" },
+      { icon: "github",  link: "https://github.com/celikgo/souxmar" },
     ],
 
     footer: {

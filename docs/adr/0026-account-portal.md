@@ -21,7 +21,7 @@ the scaffold + ratifies the architecture.
 
 ### What the portal contains
 
-`account.souxmar.dev` — a small web app + API:
+`account.souxmar.invalid` — a small web app + API:
 
 - Sign-up + sign-in (email-link OAuth; no password; sketched
   in the portal scaffold's openapi.yaml).

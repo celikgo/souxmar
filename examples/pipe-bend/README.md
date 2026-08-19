@@ -149,4 +149,4 @@ all three stages `[CACHED]` and skips dispatch entirely.
 - [`examples/plugins/cfd-stub`](../plugins/cfd-stub) — the always-on solver.
 - [`examples/plugins/openfoam-solver`](../plugins/openfoam-solver) — the opt-in adapter.
 - [ADR-0009](../../docs/adr/0009-openfoam-process-isolation.md) — subprocess-only invocation of GPL OpenFOAM.
-- [`docs/SPRINT_PLAN.md` § Sprint 8](../../docs/SPRINT_PLAN.md) — the sprint plan that landed this work.
+- [`docs/attic/SPRINT_PLAN.md` § Sprint 8](../../docs/attic/SPRINT_PLAN.md) — the sprint plan that landed this work.

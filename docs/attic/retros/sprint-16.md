@@ -128,7 +128,7 @@ portal; quota counter persisted"). Plus carry-overs:
 - ADR-0025 + typed CLI `--json` shapes (~3 pts).
 - Synth-load + VR baselines actual bootstrap PR (~3 pts).
 - Launch-comms HN post + 5 partner emails (~2 pts operational).
-- Account portal at `account.souxmar.dev` + Stripe.js iframe
+- Account portal at `account.souxmar.invalid` + Stripe.js iframe
   integration (~10 pts; Sprint 17 push 2).
 - Plugin install body (marketplace download + verify + extract)
   (~6 pts; Sprint 17 push 3).

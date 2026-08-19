@@ -70,12 +70,12 @@ release tag so reproducible builds carry the version through.
 
 ```bash
 # Source
-curl -L https://github.com/souxmar/souxmar/releases/download/v<version>/souxmar-<version>-source.tar.gz | tar xz
+curl -L https://github.com/celikgo/souxmar/releases/download/v<version>/souxmar-<version>-source.tar.gz | tar xz
 cd souxmar-<version>
 cmake --preset dev && cmake --build --preset dev
 
 # Linux x86_64 CLI tarball
-curl -L https://github.com/souxmar/souxmar/releases/download/v<version>/souxmar-<version>-linux-x86_64.tar.gz | tar xz
+curl -L https://github.com/celikgo/souxmar/releases/download/v<version>/souxmar-<version>-linux-x86_64.tar.gz | tar xz
 ./souxmar-<version>-linux-x86_64/bin/souxmar version
 
 # Python

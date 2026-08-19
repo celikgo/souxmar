@@ -112,11 +112,11 @@ python -c "import meshio; m = meshio.read('cantilever.vtu'); \
   `reader.obj` (always-on, Sprint 8 push 3) or wire in OCCT for
   STEP / IGES (`-DSOUXMAR_WITH_OPENCASCADE=ON`).
 - Try the swap-mesher exercise:
-  [`examples/swap-mesher/`](https://github.com/souxmar/souxmar/tree/master/examples/swap-mesher)
+  [`examples/swap-mesher/`](https://github.com/celikgo/souxmar/tree/master/examples/swap-mesher)
   shows the one-line `mesher.tetra.grid` → `mesher.tetra.gmsh` swap
   through the same pipeline.
 - Run the mesh-comparison study:
-  [`examples/mesh-comparison/`](https://github.com/souxmar/souxmar/tree/master/examples/mesh-comparison)
+  [`examples/mesh-comparison/`](https://github.com/celikgo/souxmar/tree/master/examples/mesh-comparison)
   compares both meshers against the same geometry, renders an
   HTML quality report.
 - Read the [concepts page](https://github.com/celikgo/souxmar/blob/master/docs/ARCHITECTURE.md) for the pipeline's

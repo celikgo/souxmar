@@ -4,10 +4,10 @@ name          = "OpenCASCADE STEP/IGES Reader"
 version       = "0.1.0"
 abi           = 1
 license       = "Apache-2.0"
-homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/occt-reader"
+homepage      = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/occt-reader"
 
 description   = "Reads STEP and IGES CAD files via OpenCASCADE into a souxmar Geometry."
-documentation = "https://souxmar.dev/docs/plugins/occt-reader"
+documentation = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/occt-reader"
 tags          = ["reader", "step", "iges", "cad", "occt"]
 min_souxmar_abi_minor = 1
 

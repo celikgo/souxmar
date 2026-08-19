@@ -139,20 +139,20 @@ version              = "{VERSION}"
 released_at          = "2026-05-10T10:00:00Z"
 min_previous_version = "0.8.0"
 rollback_target      = "0.8.4"
-notes_url            = "https://souxmar.dev/releases/{VERSION}"
+notes_url            = "https://github.com/celikgo/souxmar/releases{VERSION}"
 mandatory            = false
 
 [[artifact]]
 os     = "linux"
 arch   = "x86_64"
-url    = "https://dl.souxmar.dev/{VERSION}/linux-x86_64.tar.zst"
+url    = "https://dl.souxmar.invalid/{VERSION}/linux-x86_64.tar.zst"
 sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 size   = 48217600
 
 [[artifact]]
 os     = "macos"
 arch   = "aarch64"
-url    = "https://dl.souxmar.dev/{VERSION}/macos-aarch64.tar.zst"
+url    = "https://dl.souxmar.invalid/{VERSION}/macos-aarch64.tar.zst"
 sha256 = "1123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 size   = 47900800
 

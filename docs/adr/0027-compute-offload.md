@@ -46,7 +46,7 @@ inputs through `compute-offload` service.
 
 ### Wire-protocol
 
-The desktop client (or CLI) `POSTs` to `compute.souxmar.dev/v1/jobs`:
+The desktop client (or CLI) `POSTs` to `compute.souxmar.invalid/v1/jobs`:
 
 - Request: `{ project_id, stage_id, plugin_id, inputs_json,
   mesh_handle_blob, capacity }`. Mesh + Field handles are

@@ -4,10 +4,10 @@ name          = "Gmsh Tetra Mesher"
 version       = "0.1.0"
 abi           = 1
 license       = "Apache-2.0"
-homepage      = "https://github.com/souxmar/souxmar/tree/main/examples/plugins/gmsh-mesher"
+homepage      = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/gmsh-mesher"
 
 description   = "Gmsh-backed tetrahedral mesher driving the Gmsh C++ API."
-documentation = "https://souxmar.dev/docs/plugins/gmsh-mesher"
+documentation = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/gmsh-mesher"
 tags          = ["mesher", "tetrahedral", "gmsh"]
 min_souxmar_abi_minor = 0
 

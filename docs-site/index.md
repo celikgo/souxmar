@@ -14,7 +14,7 @@ hero:
       link: /guide/first-pipeline
     - theme: alt
       text: GitHub →
-      link: https://github.com/souxmar/souxmar
+      link: https://github.com/celikgo/souxmar
 
 features:
   - title: Single pipeline, three surfaces
@@ -55,7 +55,7 @@ us nothing. The Pro tier adds managed AI + cloud sync; see
   release.
 - **Auditable trust path.** Releases are signed with an ed25519
   key whose rotation procedure is documented in
-  [ADR-0014](https://github.com/souxmar/souxmar/blob/master/docs/adr/0014-release-signing-key-rotation.md);
+  [ADR-0014](https://github.com/celikgo/souxmar/blob/master/docs/adr/0014-release-signing-key-rotation.md);
   the embedded trust store + the `souxmar update` flow are
   documented in [the updates guide](https://github.com/celikgo/souxmar/blob/master/docs/SECURITY.md#updates).
 

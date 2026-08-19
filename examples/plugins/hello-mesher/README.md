@@ -6,7 +6,7 @@ The canonical souxmar reference plugin. The smallest possible thing that exercis
 - One mesher vtable.
 - One registration call against the host's registry.
 
-`mesh_fn` is a placeholder that returns `SOUXMAR_E_NOT_IMPLEMENTED`. Producing a real mesh from this plugin requires the host-side Mesh accessor C ABI which lands in Sprint 3 (see [`docs/SPRINT_PLAN.md`](../../../docs/SPRINT_PLAN.md)). The purpose of *this* plugin is to exercise:
+`mesh_fn` is a placeholder that returns `SOUXMAR_E_NOT_IMPLEMENTED`. Producing a real mesh from this plugin requires the host-side Mesh accessor C ABI which lands in Sprint 3 (see [`docs/attic/SPRINT_PLAN.md`](../../../docs/attic/SPRINT_PLAN.md)). The purpose of *this* plugin is to exercise:
 
 - The `souxmar_add_plugin` CMake macro
 - The plugin loader's binary open + symbol resolve + register call sequence

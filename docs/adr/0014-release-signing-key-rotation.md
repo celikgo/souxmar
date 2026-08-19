@@ -76,7 +76,7 @@ A user who hasn't run an update check in 60 days does NOT silently
 fall off the upgrade path — their client refuses the new-key
 manifest with `SignatureStatus::UnknownKeyId`, the apply gate
 records this in the rollback log, and the desktop app surfaces "your
-trust store is out of date; reinstall from souxmar.dev to receive
+trust store is out of date; reinstall from souxmar.invalid to receive
 future updates."
 
 ### 3. Emergency rotation

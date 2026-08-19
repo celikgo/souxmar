@@ -6,7 +6,6 @@ This document is the on-ramp. The deeper contracts live in:
 
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) — merge tiers, RFC process, maintainer roles
 - [`docs/ENGINEERING_PRACTICES.md`](docs/ENGINEERING_PRACTICES.md) — Definition of Done, perf budgets, security baseline
-- [`docs/TEAM_STRUCTURE.md`](docs/TEAM_STRUCTURE.md) — who owns what
 - [`docs/PLUGIN_SDK.md`](docs/PLUGIN_SDK.md) — for plugin authors specifically
 - [`.claude/skills/onboarding-souxmar-contributor/SKILL.md`](.claude/skills/onboarding-souxmar-contributor/SKILL.md) — first-PR walkthrough
 - [`.claude/skills/writing-souxmar-rfc/SKILL.md`](.claude/skills/writing-souxmar-rfc/SKILL.md) — for Tier-3 changes
@@ -15,7 +14,7 @@ This document is the on-ramp. The deeper contracts live in:
 
 ```bash
 # 1. Clone
-git clone https://github.com/souxmar/souxmar.git
+git clone https://github.com/celikgo/souxmar.git
 cd souxmar
 
 # 2. Build (uses vcpkg in manifest mode; first run ~20–30 min)
@@ -32,7 +31,7 @@ If that succeeds end-to-end on your machine, your environment is healthy.
 ## Code of Conduct
 
 Participation in this project is governed by the [Contributor Covenant 2.1](CODE_OF_CONDUCT.md).
-Reports go to `conduct@souxmar.dev` (placeholder until org is provisioned).
+Reports go to `conduct@souxmar.invalid` (placeholder until org is provisioned).
 
 ## Developer Certificate of Origin (DCO)
 
@@ -118,10 +117,10 @@ For the last three, an RFC is required before code review begins. See [`docs/GOV
 
 ## Communication
 
-- **Daily questions:** `#dev` on Discord (link at souxmar.dev/community).
+- **Questions:** [GitHub Discussions](https://github.com/celikgo/souxmar/discussions).
 - **Design discussions:** GitHub Discussions in the project repo.
 - **Real-time review:** weekly RFC office hours (Wednesdays — calendar in the team Slack).
-- **Security disclosures:** `security@souxmar.dev` or GitHub private security advisories. Do not file in public issues.
+- **Security disclosures:** `security@souxmar.invalid` or GitHub private security advisories. Do not file in public issues.
 
 ## Bug reports + the public-facing triage SLA
 

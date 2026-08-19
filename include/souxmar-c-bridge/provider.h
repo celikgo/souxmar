@@ -55,7 +55,7 @@ typedef struct souxmar_bridge_chat_response_t souxmar_bridge_chat_response_t;
  *   2  BYOK Anthropic
  *   3  BYOK OpenAI
  *   4  Ollama
- *   5  Managed (proxy.souxmar.dev — Pro tier, Sprint 15+)
+ *   5  Managed (proxy.souxmar.invalid — Pro tier, Sprint 15+)
  *   6  OpenAI-compatible (xAI/Grok, DeepSeek, Groq, OpenRouter,
  *      Mistral, Together, or any self-hosted server speaking the
  *      /chat/completions shape). The service is decided by the

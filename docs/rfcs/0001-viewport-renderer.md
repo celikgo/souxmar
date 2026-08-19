@@ -17,8 +17,8 @@ Wire a real 3D viewport renderer into the souxmar desktop app, replacing the SVG
 
 The v1.0 workbench has `viewport_renderer: false` hard-coded in `souxmar_bridge::BridgeFeatureSet::default()` (`src/desktop/src-tauri/souxmar-bridge/src/lib.rs:103`). The Viewport panel renders an SVG placeholder when the flag is off, which is every shipped build today. A user opening the cantilever sample sees a stylised beam sketch rather than the tetrahedral mesh that was actually generated. Concretely:
 
-- The Sprint 24 retro (`docs/retros/sprint-24.md`) names Sprint 28 / `v1.1.0` as the "viewport rendering — Three.js + VTK.js wired through the `viewport_renderer` flag" line item — i.e., closing this gap was already on the schedule. The post-v1.0 plan pulls it forward to S25 because every subsequent visualization sprint is blocked by it.
-- The post-v1.0 block (Sprints 25–32, `docs/SPRINT_PLAN.md`) explicitly blocks five subsequent sprints on this surface existing: S26 (mesh viz features), S27 (results fields, ships `v1.1`), S30 (parametric features, ships `v1.2`), S31 (BCs from viewport), S32 (transient + animation, ships `v1.3`).
+- The Sprint 24 retro (`docs/attic/retros/sprint-24.md`) names Sprint 28 / `v1.1.0` as the "viewport rendering — Three.js + VTK.js wired through the `viewport_renderer` flag" line item — i.e., closing this gap was already on the schedule. The post-v1.0 plan pulls it forward to S25 because every subsequent visualization sprint is blocked by it.
+- The post-v1.0 block (Sprints 25–32, `docs/attic/SPRINT_PLAN.md`) explicitly blocks five subsequent sprints on this surface existing: S26 (mesh viz features), S27 (results fields, ships `v1.1`), S30 (parametric features, ships `v1.2`), S31 (BCs from viewport), S32 (transient + animation, ships `v1.3`).
 - The agent's eval suite has no test today that asserts *the user can perceive* a mesh — only that the bridge call returns a Mesh handle. A renderer closes that observability gap on the user side, not just on the test side, and unlocks the `viz.*` agent tool family planned across S27 and beyond.
 
 Now is the right time because the v1 ABI is frozen final (`docs/adr/0008-abi-v1-final-freeze.md`), so the renderer can be designed against a stable mesh handle without churn risk; and the additive-minor ratchet exists precisely for the case where a load-bearing host-side surface needs to layer on top of frozen plugin types.
@@ -200,7 +200,7 @@ Shipping v1.x with the SVG placeholder is not viable; it blocks five subsequent 
 
 - **Bundle size:** adding Three.js + its loaders adds ~600 KB minified + brotli to the desktop bundle. Tracked against the perf budget in `docs/ENGINEERING_PRACTICES.md`; acceptable but a real number.
 - **Maintenance surface:** Three.js's major versions are not strictly semver-safe; we will pin to a specific minor and bump deliberately. The exact r-release is picked during PR 3 against the highest stable release available at Sprint 25 day 1, and ratified in ADR-0043 (see Implementation plan).
-- **Determinism story:** the renderer introduces a screenshot-level golden test (`viz-golden`) that is **not byte-exact** across OSes; only numeric solver output stays under the exact-byte determinism gate (R-015 in the post-v1.0 risk register, `docs/SPRINT_PLAN.md`).
+- **Determinism story:** the renderer introduces a screenshot-level golden test (`viz-golden`) that is **not byte-exact** across OSes; only numeric solver output stays under the exact-byte determinism gate (R-015 in the post-v1.0 risk register, `docs/attic/SPRINT_PLAN.md`).
 - **New ABI surface to support forever:** `surface_stream.h` joins the frozen v1 ABI as a v1.4 add. Once shipped, the function signatures cannot change without an RFC + a major bump.
 - **WebGPU drift:** WebGPU adoption rate may overtake our WebGL2 baseline within 18 months, at which point we carry two render paths longer than we'd like. Mitigation: a yearly "drop WebGL2?" review starting 2027-Q2.
 
@@ -260,7 +260,7 @@ Five PRs, sized to fit in Sprint 25 (with a slip lane into S25.5 for the shared-
 
 ## References
 
-- `docs/SPRINT_PLAN.md` — Post-v1.0 plan, Sprint 25 row and R-011/R-015 risk register.
+- `docs/attic/SPRINT_PLAN.md` — Post-v1.0 plan, Sprint 25 row and R-011/R-015 risk register.
 - `docs/ROADMAP.md` — Post-1.0 themes, "GPU back-end" mention (separate concern; the renderer is not the solver).
 - `docs/AI_INTEGRATION.md` — Agent tool contract; confirmation policy.
 - `docs/ENGINEERING_PRACTICES.md` — Perf budget format.

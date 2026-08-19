@@ -145,13 +145,13 @@ version              = "{VERSION}"
 released_at          = "2026-05-10T10:00:00Z"
 min_previous_version = "0.0.0"
 rollback_target      = "0.0.0"
-notes_url            = "https://souxmar.dev/releases/{VERSION}"
+notes_url            = "https://github.com/celikgo/souxmar/releases{VERSION}"
 mandatory            = false
 
 [[artifact]]
 os     = "linux"
 arch   = "x86_64"
-url    = "https://dl.souxmar.dev/{VERSION}/linux-x86_64.tar.zst"
+url    = "https://dl.souxmar.invalid/{VERSION}/linux-x86_64.tar.zst"
 sha256 = "{SHA256}"
 size   = {SIZE}
 

@@ -88,7 +88,7 @@ push-driven by what was planned in SPRINT_PLAN.md.
   `SOUXMAR_C_BRIDGE_LIB_DIR`, build the Tauri shell with
   `--features real-ffi`.**
 - **The Sprint 12 retro's operational follow-ups are still open.**
-  DNS CNAME for docs.souxmar.dev, Discord server + redirect,
+  DNS CNAME for celikgo.github.io/souxmar, Discord server + redirect,
   on-call rotation table population — all unmoved this sprint
   because they're not coding tasks. **Action: separate
   "launch-comms" punch list lives outside the sprint cadence;

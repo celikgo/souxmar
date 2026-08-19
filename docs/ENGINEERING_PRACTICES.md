@@ -119,7 +119,7 @@ Pro/Team/Enterprise tiers may opt into additional usage analytics for billing re
 1. **Detection.** Alert from monitoring or external report.
 2. **Acknowledge** (P0: < 30 min; P1: < 4 h).
 3. **Mitigate first, fix second.** Roll back if needed; pulled releases get a security advisory.
-4. **Communicate.** Status page + Discord + GitHub if user-visible.
+4. **Communicate.** A GitHub issue or Discussions post if user-visible.
 5. **Post-mortem within 5 working days.** Blameless. Output: timeline, root cause, action items with owners and deadlines, runbook update.
 6. **Action items tracked in Linear** with the same priority as feature work.
 

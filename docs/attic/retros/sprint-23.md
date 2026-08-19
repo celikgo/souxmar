@@ -24,9 +24,9 @@ contracts; flip Stripe live; ship the release candidate."
 - **DNS / Discord / on-call rotation: stale 11 sprints.**
   Promoted last sprint to "blocking v1.0." **Status this
   sprint:** the founder cleared DNS CNAME for
-  `docs.souxmar.dev` (12 hours of registrar work, real but
+  `celikgo.github.io/souxmar` (12 hours of registrar work, real but
   outside-CI). Discord server stood up + invite redirect
-  wired to `souxmar.dev/community`. On-call rotation table
+  wired to `https://github.com/celikgo/souxmar/discussions`. On-call rotation table
   populated with 2 names (founder + first contributor).
   **All three resolved this sprint** — v1.0 launch is no
   longer blocked operationally.

@@ -11,7 +11,7 @@
 
 ## Context
 
-The agent tool framework landed in [Sprint 4 push 3](../SPRINT_PLAN.md)
+The agent tool framework landed in [Sprint 4 push 3](../attic/SPRINT_PLAN.md)
 with five tools. The catalogue has grown additively every sprint
 since — Sprint 5 push 2 (8), Sprint 6 push 1 (9), Sprint 6 push 3 (13),
 Sprint 8 push 4 (16), Sprint 8 push 5 (18). Every addition has

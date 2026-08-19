@@ -17,8 +17,8 @@ seeing empty sha256s should land here, not file an issue.
 | Per-platform VR baselines (darwin)     | Same as linux                                                       | Same as linux, macos-14 runner                                                                | 2 sprints (S14-S15)  |
 | Per-platform VR baselines (win32)      | Same as linux                                                       | Same as linux, windows-2022 runner                                                            | 2 sprints (S14-S15)  |
 | docs-site `/agents/tools` content      | Wired (placeholder); generator + `--check-only` gate live          | Same PR as the synth-load bootstrap; the maintainer's first run of `gen-agent-tools.py` against the v0.9.3 binary replaces the placeholder | 3 sprints (S13-S15) |
-| DNS CNAME for docs.souxmar.dev         | Not wired                                                          | Operational; out-of-band registrar work                                                       | 4 sprints (S12-S15) |
-| Discord server + invite redirect       | Not wired                                                          | Operational; community-launch coordination                                                    | 4 sprints (S12-S15) |
+| Custom domain for the docs site        | Not needed — the site is live at the default GitHub Pages URL, https://celikgo.github.io/souxmar/ | Would only matter if a domain is ever registered | n/a |
+| Discord server                         | Dropped — never created, and the references to it have been removed | n/a | n/a |
 | On-call rotation table (COMMUNITY.md)  | Placeholder ("TBA")                                                 | Team grows past N=1; rotation can be filled in then                                            | 4 sprints (S12-S15) |
 
 When the stale-for counter passes 5 sprints, the line escalates

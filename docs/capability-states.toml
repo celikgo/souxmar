@@ -1,0 +1,206 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# The one thing scripts/gen-capability-table.py cannot read out of the code:
+# what KIND of model sits behind each capability id. Everything else in
+# docs/CAPABILITIES.md is derived from the tree.
+#
+# The generator refuses to run when this file and the code disagree — a new
+# capability with no entry here is an error, an entry for a capability no
+# plugin provides is an error, and a state of "implemented and tested" with no
+# covering test in tests/integration/ is an error.
+#
+# Valid states: "implemented and tested" | "implemented, untested" | "stub" |
+# "planned". `note` is the honest one-line description of the model.
+
+# ---------------------------------------------------------------------------
+# ABI reference plugins — these exist to exercise the C ABI, not to compute
+# ---------------------------------------------------------------------------
+[capability."mesher.tetra.hello"]
+state = "stub"
+note  = "Emits one unit tetrahedron and ignores the input geometry entirely. Exists to exercise the C ABI mesh handles."
+
+[capability."writer.vtu"]
+state = "implemented and tested"
+note  = "Hand-emits ParaView-readable VTK XML UnstructuredGrid (ASCII) without linking VTK."
+
+[capability."writer.text-summary"]
+state = "implemented and tested"
+note  = "Two-line text summary of a mesh. Reference writer for the ABI."
+
+# ---------------------------------------------------------------------------
+# Meshers
+# ---------------------------------------------------------------------------
+[capability."mesher.tetra.grid"]
+state = "implemented and tested"
+note  = "Structured NxNxN grid over the geometry's bounding box, 5 tetrahedra per hex. Does not conform to the geometry — it meshes the box, not the shape."
+
+[capability."mesher.tetra.gmsh"]
+state = "implemented, untested"
+note  = "Drives the Gmsh C++ API for a real conforming tetrahedral mesh. No test in tests/integration/ because the default CI matrix does not install Gmsh."
+
+[capability."mesher.am.layered"]
+state = "implemented and tested"
+note  = "Layer-aligned Hex8 voxel grid perpendicular to the build direction; stamps cell tag = layer index, which every other AM capability reads."
+
+# ---------------------------------------------------------------------------
+# Readers
+# ---------------------------------------------------------------------------
+[capability."reader.stl"]
+state = "implemented and tested"
+note  = "ASCII STL parsed to a Tri3 surface mesh."
+
+[capability."reader.obj"]
+state = "implemented and tested"
+note  = "Wavefront OBJ parsed to a Tri3 surface mesh."
+
+[capability."reader.step"]
+state = "implemented, untested"
+note  = "STEP through OpenCASCADE, entity topology preserved. No test in tests/integration/ because the default CI matrix does not install OCCT."
+
+[capability."reader.iges"]
+state = "implemented, untested"
+note  = "IGES through OpenCASCADE. Same CI caveat as reader.step."
+
+[capability."reader.blend"]
+state = "implemented, untested"
+note  = "Runs Blender as a subprocess to export .blend to OBJ, then parses that. No test in tests/integration/ because the default CI matrix does not install Blender."
+
+[capability."reader.lattice"]
+state = "implemented and tested"
+note  = "Parametric strut lattice (cubic/bcc/fcc/octet/diamond) emitted as Edge2 beams. A reader rather than a mesher because the v1 mesher ABI passes no value bag."
+
+# ---------------------------------------------------------------------------
+# Solvers — closed-form demonstrations
+#
+# These register the capability id a real solver would claim, so that the
+# pipeline, the examples and the agent evals have something runnable in the
+# default CI matrix. None of them discretises anything.
+# ---------------------------------------------------------------------------
+[capability."solver.heat.linear"]
+state = "stub"
+note  = "Closed-form T = T_steady(1 - exp(-t/tau)) times a cosine profile over the bounding box. **Not FEM**: no conduction, no boundary conditions, no stiffness, no mesh dependence."
+
+[capability."solver.elasticity.linear"]
+state = "stub"
+note  = "Closed-form uniaxial tension along x — the analytical bar solution a real solver should converge to. **Not FEM**: ignores boundary conditions, mesh stiffness and cell tags."
+
+[capability."solver.modal.linear"]
+state = "stub"
+note  = "Closed-form Euler-Bernoulli cantilever; the bounding-box x-span is taken as the beam length. **Not an eigensolve** — no mass or stiffness matrix is ever formed."
+
+[capability."solver.cfd.simple"]
+state = "stub"
+note  = "Uniform velocity field with per-patch inlet/wall/outlet routing. **Not Navier-Stokes**: nothing is advected, nothing is solved."
+
+# ---------------------------------------------------------------------------
+# Solvers — real external engines, behind opt-in build flags
+# ---------------------------------------------------------------------------
+[capability."solver.heat.fenicsx"]
+state = "implemented, untested"
+note  = "The only discretised FEM solve in the tree: assembles and solves the Poisson problem with DOLFINx and PETSc. No test in tests/integration/ because the default CI matrix does not install DOLFINx."
+
+[capability."solver.cfd.openfoam.simple"]
+state = "implemented, untested"
+note  = "Generates an OpenFOAM case and execs `simpleFoam` out of process per ADR-0009; never links libOpenFOAM. No test in tests/integration/ because the default CI matrix does not install OpenFOAM."
+
+[capability."solver.cfd.openfoam.pimple"]
+state = "implemented, untested"
+note  = "As above, transient `pimpleFoam`."
+
+[capability."solver.cfd.openfoam.inter"]
+state = "implemented, untested"
+note  = "As above, two-phase VOF `interFoam`."
+
+# ---------------------------------------------------------------------------
+# Post-processing
+# ---------------------------------------------------------------------------
+[capability."postproc.scalar_magnitude"]
+state = "implemented and tested"
+note  = "Reduces a field of any component count to a scalar magnitude, preserving location and time steps."
+
+[capability."postproc.mesh_quality"]
+state = "implemented and tested"
+note  = "Per-cell signed volume, edge ratio, Jacobian, aspect ratio and skew."
+
+# ---------------------------------------------------------------------------
+# Additive manufacturing — closed-form and heuristic engineering models with a
+# cited source in every header. Screening and preliminary-sizing aids, not
+# calibrated process simulations. See docs/PHYSICS.md.
+# ---------------------------------------------------------------------------
+[capability."solver.am.thermal.lpbf"]
+state = "implemented and tested"
+note  = "Rosenthal (1946) moving point source in its surface (2*pi) form, layer by layer. Under-predicts LPBF melt-pool depth by 1.5-2x; calibrate absorptivity first."
+
+[capability."postproc.am.melt_pool"]
+state = "implemented and tested"
+note  = "Melt-pool depth by bracketed bisection, width by a 1024-point scan plus ternary search, keyhole onset by normalised enthalpy (King 2014). Fixed iteration counts, for bit-identical results across platforms."
+
+[capability."solver.am.distortion.inherent_strain"]
+state = "implemented and tested"
+note  = "Inherent-strain distortion accumulated layer by layer. The strain magnitude is a hand-entered calibration constant, not a prediction."
+
+[capability."postproc.am.residual_stress"]
+state = "implemented and tested"
+note  = "Elastic read-back of the locked-in strain from the distortion stage; re-runnable against a different yield strength without re-running the mechanics."
+
+[capability."solver.am.polymer.fff"]
+state = "implemented and tested"
+note  = "FFF/FDM interlayer thermal cycling — the temperature history at the road interface, which is what sets Z-direction strength."
+
+[capability."postproc.am.bond_strength"]
+state = "implemented and tested"
+note  = "Polymer healing law applied to that interface thermal history."
+
+[capability."solver.am.overhang"]
+state = "implemented and tested"
+note  = "Per-cell downskin angle, overhang classification and support need, from extracted boundary faces."
+
+[capability."solver.am.printability"]
+state = "implemented and tested"
+note  = "Composite DfAM printability score. The weighting is a documented choice, not a measured threshold."
+
+[capability."solver.am.buildtime"]
+state = "implemented and tested"
+note  = "Per-layer cross-sectional area and build time."
+
+[capability."writer.am.gcode"]
+state = "implemented and tested"
+note  = "Planar slicing (boundary extraction, plane intersection, contour chaining, hole classification, deterministic ordering) to FFF/FDM G-code."
+
+[capability."writer.am.cli"]
+state = "implemented and tested"
+note  = "The same slice written as Common Layer Interface (CLI) ASCII."
+
+[capability."writer.am.report"]
+state = "implemented and tested"
+note  = "Markdown build report / traveller sheet."
+
+# ---------------------------------------------------------------------------
+# Marine / subsea
+# ---------------------------------------------------------------------------
+[capability."solver.marine.hydrostatic"]
+state = "implemented and tested"
+note  = "Nodal seawater pressure per depth load case, density from the EOS-80 one-atmosphere correlation (Millero & Poisson 1981). Pressure only — no stress, no deflection."
+
+[capability."solver.marine.hull_collapse"]
+state = "implemented and tested"
+note  = "Windenburg-Trilling (1934) interframe instability, membrane yield, Bresse-Levy long-cylinder and Zoelly (1915) sphere buckling. Modes are dropped, not clamped, when the geometry leaves their validity bracket. **Not a classification-society calculation.**"
+
+[capability."solver.marine.corrosion"]
+state = "implemented and tested"
+note  = "PREN/CPT pitting, oxygen-limited galvanic coupling and sqrt(t) pit growth from ASM Handbook Vol. 13A, LaQue (1975), DNV-RP-B401 and Melchers (2003). Indicative rates for comparing alloys, not design data."
+
+[capability."writer.marine.qualification_report"]
+state = "implemented and tested"
+note  = "Markdown AM qualification dossier. Advisory checklist derived from public practice — souxmar is not a classification society and issues no approval."
+
+# ---------------------------------------------------------------------------
+# Rendered verbatim under "What is deliberately not here"
+# ---------------------------------------------------------------------------
+[absent]
+notes = [
+  "**No CAD kernel.** `include/souxmar-c/brep.h` and `sketch.h` are ABI surface only. The in-core backing in `src/core/c_abi_brep.cpp` returns `NOT_IMPLEMENTED` from every operation, and no `cad.*` plugin exists in this repository. Parametric modelling, the feature tree and the 2D sketcher are designed (RFC-0003, RFC-0005) and unbuilt.",
+  "**No topology optimisation**, and no calibrated, mesh-resolved AM process solver. Both are named as future work, neither is started.",
+  "**No viewport rendering.** The desktop app's 3D viewport is scaffolded; the Three.js/VTK.js renderer behind it is RFC-0001 and unbuilt.",
+  "**The Pro-tier services are scaffolds.** `services/` contains API shapes and handlers with no deployment behind them; every `*.souxmar.invalid` hostname in this repository is a placeholder on the RFC 6761 reserved TLD, chosen so that nothing here can be mistaken for a running endpoint.",
+]

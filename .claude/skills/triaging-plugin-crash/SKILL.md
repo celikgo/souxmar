@@ -114,5 +114,5 @@ If the entire desktop app crashed (not "the plugin crashed"), suspect one of the
 
 - `docs/PLUGIN_SDK.md` — plugin ABI, error model, threading contracts.
 - `docs/AI_INTEGRATION.md` — audit log format.
-- `docs/SPRINT_PLAN.md` — risk R-006.
+- `docs/attic/SPRINT_PLAN.md` — risk R-006.
 - `src/plugin-host/guard.cpp` — the crash isolation implementation.

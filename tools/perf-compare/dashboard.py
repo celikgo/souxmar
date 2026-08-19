@@ -432,7 +432,7 @@ def render_html(*,
     parts.append('<footer>')
     parts.append('Built by <code>tools/perf-compare/dashboard.py</code> · ')
     parts.append('see <code>docs/ENGINEERING_PRACTICES.md</code> § Performance budgets · ')
-    parts.append('<a href="https://github.com/souxmar/souxmar">souxmar</a>')
+    parts.append('<a href="https://github.com/celikgo/souxmar">souxmar</a>')
     parts.append('</footer>')
     parts.append('</body></html>')
     return "\n".join(parts)

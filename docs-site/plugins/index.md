@@ -23,7 +23,7 @@ The pipeline runner dispatches on the capability name; swapping
 C ABI (`include/souxmar-c/`). C is the lingua franca — plugins can
 be written in any language with a C FFI (C, C++, Rust, Zig, …). The
 ABI is documented in
-[`PLUGIN_SDK.md`](https://github.com/souxmar/souxmar/blob/master/docs/PLUGIN_SDK.md);
+[`PLUGIN_SDK.md`](https://github.com/celikgo/souxmar/blob/master/docs/PLUGIN_SDK.md);
 the canonical entry-point macro is `souxmar_plugin_register_v1`.
 
 Three ratchets across the v1 line:
@@ -31,10 +31,10 @@ Three ratchets across the v1 line:
 - v1.0 → v1.1: `reader.*` capability namespace added (Sprint 6 push 4).
 - v1.1 → v1.2: mmap-buffer ingest path added (Sprint 7 push 3).
 - v1.2 → v1.3: per-face tags on `Mesh` (Sprint 9 push 2,
-  [ADR-0012](https://github.com/souxmar/souxmar/blob/master/docs/adr/0012-per-face-tag-c-abi-ratchet.md)).
+  [ADR-0012](https://github.com/celikgo/souxmar/blob/master/docs/adr/0012-per-face-tag-c-abi-ratchet.md)).
 
 All ratchets are **additive minor surfaces** per
-[ADR-0008](https://github.com/souxmar/souxmar/blob/master/docs/adr/0008-abi-v1-final-freeze.md);
+[ADR-0008](https://github.com/celikgo/souxmar/blob/master/docs/adr/0008-abi-v1-final-freeze.md);
 no symbol has ever been removed or changed semantically. A v1.0
 plugin runs on every v1.x release.
 
@@ -60,7 +60,7 @@ in [authoring](https://github.com/celikgo/souxmar/blob/master/docs/PLUGIN_SDK.md
 ## Marketplace
 
 The plugin index at
-[`docs/plugin-index.toml`](https://github.com/souxmar/souxmar/blob/master/docs/plugin-index.toml)
+[`docs/plugin-index.toml`](https://github.com/celikgo/souxmar/blob/master/docs/plugin-index.toml)
 is the canonical list. Adding a plugin is a PR against that file;
 the CI workflow runs `souxmar-conformance` against your published
 binary on each of the four CI platforms (Linux / macOS x86_64 /

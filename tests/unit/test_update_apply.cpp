@@ -58,7 +58,7 @@ Manifest manifest_for(const std::string& version,
   Artifact a;
   a.os = Os::Linux;
   a.arch = Arch::X86_64;
-  a.url = "https://dl.souxmar.dev/" + version + "/linux-x86_64.tar.zst";
+  a.url = "https://dl.souxmar.invalid/" + version + "/linux-x86_64.tar.zst";
   a.sha256 = sha256_hex(payload);
   a.size = payload.size();
   m.artifacts.push_back(a);

@@ -37,13 +37,13 @@ version              = "0.9.0"
 released_at          = "2026-05-10T10:00:00Z"
 min_previous_version = "0.8.0"
 rollback_target      = "0.8.4"
-notes_url            = "https://souxmar.dev/releases/0.9.0"
+notes_url            = "https://github.com/celikgo/souxmar/releases"
 mandatory            = false
 
 [[artifact]]
 os     = "linux"
 arch   = "x86_64"
-url    = "https://dl.souxmar.dev/0.9.0/souxmar-0.9.0-linux-x86_64.tar.zst"
+url    = "https://dl.souxmar.invalid/0.9.0/souxmar-0.9.0-linux-x86_64.tar.zst"
 sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 size   = 48217600
 
@@ -67,41 +67,41 @@ version              = "0.9.0"
 released_at          = "2026-05-10T10:00:00Z"
 min_previous_version = "0.8.0"
 rollback_target      = "0.8.4"
-notes_url            = "https://souxmar.dev/releases/0.9.0"
+notes_url            = "https://github.com/celikgo/souxmar/releases"
 mandatory            = true
 
 [[artifact]]
 os     = "linux"
 arch   = "x86_64"
-url    = "https://dl.souxmar.dev/0.9.0/linux-x86_64.tar.zst"
+url    = "https://dl.souxmar.invalid/0.9.0/linux-x86_64.tar.zst"
 sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 size   = 48217600
 
 [[artifact]]
 os     = "linux"
 arch   = "aarch64"
-url    = "https://dl.souxmar.dev/0.9.0/linux-aarch64.tar.zst"
+url    = "https://dl.souxmar.invalid/0.9.0/linux-aarch64.tar.zst"
 sha256 = "1123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 size   = 47900800
 
 [[artifact]]
 os     = "macos"
 arch   = "aarch64"
-url    = "https://dl.souxmar.dev/0.9.0/macos-aarch64.tar.zst"
+url    = "https://dl.souxmar.invalid/0.9.0/macos-aarch64.tar.zst"
 sha256 = "2123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 size   = 52300100
 
 [[artifact]]
 os     = "macos"
 arch   = "x86_64"
-url    = "https://dl.souxmar.dev/0.9.0/macos-x86_64.tar.zst"
+url    = "https://dl.souxmar.invalid/0.9.0/macos-x86_64.tar.zst"
 sha256 = "3123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 size   = 53100200
 
 [[artifact]]
 os     = "windows"
 arch   = "x86_64"
-url    = "https://dl.souxmar.dev/0.9.0/windows-x86_64.zip"
+url    = "https://dl.souxmar.invalid/0.9.0/windows-x86_64.zip"
 sha256 = "4123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 size   = 51200000
 

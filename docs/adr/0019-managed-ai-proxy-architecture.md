@@ -81,7 +81,7 @@ The proxy does **NOT** contain:
 The desktop client never sees an Anthropic / OpenAI API key when
 operating in Pro-tier mode. Instead:
 
-- The user signs in to `account.souxmar.dev` (Sprint 17+ wires
+- The user signs in to `account.souxmar.invalid` (Sprint 17+ wires
   the account portal; for the MVP, tokens come from a CLI
   command).
 - The proxy issues a souxmar-scoped opaque token, format
@@ -180,7 +180,7 @@ Reasons:
 
 The proxy *binary* is **not** shipped to end-users. End-users
 get the desktop client; the desktop client either talks to the
-hosted proxy at `proxy.souxmar.dev` (Pro tier) or to their own
+hosted proxy at `proxy.souxmar.invalid` (Pro tier) or to their own
 local Ollama / BYOK keys (Free tier) — never to a local copy of
 the proxy.
 

@@ -8,7 +8,7 @@ no privileged path.
 ## Tool surface (frozen v1, 18 tools)
 
 The agent tool contract is **frozen final at v1** per
-[ADR-0011](https://github.com/souxmar/souxmar/blob/master/docs/adr/0011-tool-contract-v1-final-freeze.md).
+[ADR-0011](https://github.com/celikgo/souxmar/blob/master/docs/adr/0011-tool-contract-v1-final-freeze.md).
 Eighteen tools across these categories:
 
 | Category   | Tools                                                                      |
@@ -54,7 +54,7 @@ multiple LLM providers:
 | Ollama (local)    | **Available v0.9.0** | Llama-3.1, Qwen-2.5, Mistral-Nemo verified |
 
 Per-model compatibility for Ollama:
-[`docs/ai-providers/ollama-compatibility.md`](https://github.com/souxmar/souxmar/blob/master/docs/ai-providers/ollama-compatibility.md).
+[`docs/ai-providers/ollama-compatibility.md`](https://github.com/celikgo/souxmar/blob/master/docs/ai-providers/ollama-compatibility.md).
 
 ## Audit log
 
@@ -77,7 +77,7 @@ expanding to 60 by Sprint 12). The nightly gate requires
 ≥ 90 % pass-rate. There's also an LLM-driven eval surface
 (`evals/v1-llm/`) that exercises the full model-emits-a-tool-call
 loop with a configurable provider; see
-[`souxmar-eval-llm`](https://github.com/souxmar/souxmar/tree/master/tools/eval-llm).
+[`souxmar-eval-llm`](https://github.com/celikgo/souxmar/tree/master/tools/eval-llm).
 
 ## What the agent will NOT do
 

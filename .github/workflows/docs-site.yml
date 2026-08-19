@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Builds docs-site/ with Vitepress and publishes it to GitHub Pages at
+# https://celikgo.github.io/souxmar/.
+#
+# This workflow was removed at c7f6214 and the docs URLs in the README kept
+# pointing at a site nobody was rebuilding. It is restored here because the
+# alternative — documenting a URL that does not resolve — is the defect this
+# repository is trying to stop repeating.
+
+name: Docs site
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docs-site/**'
+      - '.github/workflows/docs-site.yml'
+  pull_request:
+    paths:
+      - 'docs-site/**'
+      - '.github/workflows/docs-site.yml'
+  workflow_dispatch:
+
+# Read the repo; mint an id-token and write Pages only for the deploy job.
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Install
+        working-directory: docs-site
+        run: npm install --no-audit --no-fund
+      - name: Build
+        working-directory: docs-site
+        run: npx vitepress build
+      - uses: actions/configure-pages@v5
+        if: github.event_name != 'pull_request'
+      - uses: actions/upload-pages-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          path: docs-site/.vitepress/dist
+
+  deploy:
+    name: Deploy to Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
