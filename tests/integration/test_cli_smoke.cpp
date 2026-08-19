@@ -144,8 +144,7 @@ TEST_F(CliSmokeTest, RunCantileverExampleProducesVtuOutput) {
   fs::copy_file(pipeline_src, pipeline_local);
 
   std::ostringstream cmd;
-  cmd << cd_to(workdir_) << " && " << shell_quote(SOUXMAR_TEST_CLI_BINARY)
-      << " run pipeline.yaml"
+  cmd << cd_to(workdir_) << " && " << shell_quote(SOUXMAR_TEST_CLI_BINARY) << " run pipeline.yaml"
       << " --plugin-path " << shell_quote(plugins_root()) << " --cache-dir "
       << shell_quote(cachedir_) << " > run1.log 2>&1";
   const int rc1 = run_cli(cmd.str());
@@ -177,10 +176,9 @@ TEST_F(CliSmokeTest, ReRunHitsDiskCacheForWriterStage) {
   const auto pipeline_local = workdir_ / "pipeline.yaml";
   fs::copy_file(pipeline_src, pipeline_local);
 
-  const std::string base = cd_to(workdir_) + " && "
-                           + shell_quote(SOUXMAR_TEST_CLI_BINARY) + " run pipeline.yaml"
-                           + " --plugin-path " + shell_quote(plugins_root()) + " --cache-dir "
-                           + shell_quote(cachedir_);
+  const std::string base = cd_to(workdir_) + " && " + shell_quote(SOUXMAR_TEST_CLI_BINARY)
+                           + " run pipeline.yaml" + " --plugin-path " + shell_quote(plugins_root())
+                           + " --cache-dir " + shell_quote(cachedir_);
 
   ASSERT_EQ(run_cli(base + " > run1.log 2>&1"), 0);
   ASSERT_EQ(run_cli(base + " > run2.log 2>&1"), 0);

@@ -230,6 +230,13 @@ scripts/check-secrets.sh
 scripts/check-frozen-headers.sh
 scripts/check-tool-contract.sh
 
+# clang-format, the way CI checks it — changed *lines*, not whole files.
+# Diff against the merge base, not `master...HEAD`: the three-dot form
+# compares commits only, so uncommitted work reports clean and then fails
+# in CI.
+git diff -U0 "$(git merge-base master HEAD)" -- '*.cpp' '*.h' \
+  | clang-format-diff-17 -p1
+
 cmake --preset dev && cmake --build --preset dev
 ctest --preset dev --output-on-failure
 
