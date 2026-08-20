@@ -175,6 +175,8 @@ This is the baseline. Sprints 1–4 plan at ~70% of capacity (60 pts) to leave r
 
 **Exit criteria:**
 - `pip install pysouxmar` (from local index) and run a 20-line analysis.
+  <!-- unpublished-ok: pysouxmar --> (Archived plan. pysouxmar was never
+  published to PyPI; this exit criterion was not met.)
 - Desktop app loads a `.vtu` and renders it with field colour mapping.
 - AI agent (called from CLI in headless mode) completes a 5-step tool sequence ending in a screenshot.
 - Pipeline parallel runner shows ≥1.6× speed-up on a 2-branch DAG vs sequential.

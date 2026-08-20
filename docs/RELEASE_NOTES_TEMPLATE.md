@@ -78,11 +78,11 @@ cmake --preset dev && cmake --build --preset dev
 curl -L https://github.com/celikgo/souxmar/releases/download/v<version>/souxmar-<version>-linux-x86_64.tar.gz | tar xz
 ./souxmar-<version>-linux-x86_64/bin/souxmar version
 
-# Python — only once pysouxmar is actually published. It is not on PyPI
-# today, so DELETE this block from the notes of any release that ships
-# before it is. Promising an install that 404s is the exact defect the
-# version-consistency and doc-link gates exist to stop.
-pip install pysouxmar==<version>
+# Python — pysouxmar is NOT on PyPI, so this release publishes no
+# `pip install` line. Add one here only once the package actually
+# resolves; scripts/check-live-references.py fails the build if a code
+# block teaches an install for a package that 404s, which is the exact
+# defect this template used to carry.
 ```
 
 Delete any line above whose artefact this release does not actually

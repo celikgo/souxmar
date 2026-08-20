@@ -22,6 +22,9 @@ governing equation, the literature citation, the validity envelope, and the
 direction and magnitude of its known error. If you only read one page, read
 that one.
 
+**Documentation site: <https://celikgo.github.io/souxmar/>** — the same docs
+rendered and searchable. CI fails if it stops resolving.
+
 <!-- version --> `v0.9.0`
 
 ## What this is NOT

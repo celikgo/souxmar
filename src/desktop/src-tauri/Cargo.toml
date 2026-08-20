@@ -1,6 +1,6 @@
 [package]
 name        = "souxmar-desktop"
-version     = "0.9.0-beta3"
+version     = "0.9.0"
 description = "souxmar desktop application (Tauri 2 shell)"
 edition     = "2021"
 license     = "Apache-2.0"
