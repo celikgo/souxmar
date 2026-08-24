@@ -5,6 +5,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+
 using namespace souxmar::pipeline;
 
 namespace {
