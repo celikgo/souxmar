@@ -117,6 +117,34 @@
         "SOUXMAR_ENABLE_TSAN": "ON",
         "SOUXMAR_BUILD_TESTS": "ON"
       }
+    },
+    {
+      "name": "ci-linux-asan",
+      "displayName": "CI: AddressSanitizer + UBSan (Linux, gcc-13)",
+      "inherits": "asan",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc-13",
+        "CMAKE_CXX_COMPILER": "g++-13"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "ci-linux-tsan",
+      "displayName": "CI: ThreadSanitizer (Linux, gcc-13)",
+      "inherits": "tsan",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc-13",
+        "CMAKE_CXX_COMPILER": "g++-13"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
     }
   ],
   "buildPresets": [
@@ -127,7 +155,9 @@
     { "name": "ci-macos",       "configurePreset": "ci-macos",       "jobs": 0 },
     { "name": "ci-windows",     "configurePreset": "ci-windows",     "jobs": 0 },
     { "name": "asan",           "configurePreset": "asan",           "jobs": 0 },
-    { "name": "tsan",           "configurePreset": "tsan",           "jobs": 0 }
+    { "name": "tsan",           "configurePreset": "tsan",           "jobs": 0 },
+    { "name": "ci-linux-asan",  "configurePreset": "ci-linux-asan",  "jobs": 0 },
+    { "name": "ci-linux-tsan",  "configurePreset": "ci-linux-tsan",  "jobs": 0 }
   ],
   "testPresets": [
     {
@@ -143,6 +173,8 @@
     { "name": "ci-macos",       "configurePreset": "ci-macos",       "inherits": "default-test" },
     { "name": "ci-windows",     "configurePreset": "ci-windows",     "inherits": "default-test" },
     { "name": "asan",           "configurePreset": "asan",           "inherits": "default-test" },
-    { "name": "tsan",           "configurePreset": "tsan",           "inherits": "default-test" }
+    { "name": "tsan",           "configurePreset": "tsan",           "inherits": "default-test" },
+    { "name": "ci-linux-asan",  "configurePreset": "ci-linux-asan",  "inherits": "default-test" },
+    { "name": "ci-linux-tsan",  "configurePreset": "ci-linux-tsan",  "inherits": "default-test" }
   ]
 }

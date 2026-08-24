@@ -10,7 +10,17 @@ The desktop app is open-source under the same Apache 2.0 license as the rest of 
 | ---------- | ----------------------------- | --------------------------- |
 | macOS      | Signed, notarised `.dmg`      | macOS 13 (Ventura), arm64 + x86_64 universal |
 | Windows    | Code-signed `.msi` + `.exe`   | Windows 10 22H2 / Server 2022, x86_64 + arm64 |
-| Linux      | `.AppImage` + `.deb` + `.rpm` | Ubuntu 22.04 / Fedora 39 / equivalent, x86_64 + arm64 |
+| Linux      | `.AppImage` + `.deb` + `.rpm` | Ubuntu 24.04 / Fedora 39 / equivalent, x86_64 + arm64 (see note) |
+
+The Linux row used to say Ubuntu 22.04, and that was not true of anything we
+shipped. The published `souxmar-0.9.0-linux-x64.tar.gz` binary requires
+`GLIBCXX_3.4.32`, which is GCC 13.2's libstdc++: Ubuntu 22.04 ships GCC 12's
+(`GLIBCXX_3.4.30`), so the binary exits before `main()` there. It needs only
+`GLIBC_2.34`, so glibc was never the constraint — linking against the
+toolchain-PPA gcc-13 while building on 22.04 was. Fedora 39 does ship GCC 13.2
+and is unaffected. Dropping the floor back to 22.04 means statically linking
+libstdc++ and libgcc into the Linux release artifact, which is a real change to
+how plugins share a C++ runtime with the host and has not been made.
 
 Auto-update is built in, signed, opt-in. No telemetry beyond optional crash reports the user must enable on first launch.
 

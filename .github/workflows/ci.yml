@@ -276,8 +276,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: linux-gcc,   os: ubuntu-22.04, preset: ci-linux-gcc }
-          - { name: linux-clang, os: ubuntu-22.04, preset: ci-linux-clang }
+          - { name: linux-gcc,   os: ubuntu-24.04, preset: ci-linux-gcc }
+          - { name: linux-clang, os: ubuntu-24.04, preset: ci-linux-clang }
           - { name: macos,       os: macos-14,     preset: ci-macos }
           - { name: windows,     os: windows-2022, preset: ci-windows }
     steps:
@@ -400,21 +400,12 @@ jobs:
     timeout-minutes: 15
     needs: [changes, engine]
     if: needs.changes.outputs.plugins == 'true' || needs.changes.outputs.engine == 'true'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with: { name: engine-linux-gcc, path: engine }
       - run: chmod -R +x engine/
-      - name: Match the runtime to the toolchain that built the artifact
-        # The artifact is built with gcc-13 from the toolchain PPA, so it
-        # needs GLIBCXX_3.4.31 — newer than the libstdc++ a stock
-        # ubuntu-22.04 runner ships. Without this the binary exits before
-        # main() with a version-not-found error that looks nothing like
-        # the test failure it gets mistaken for.
-        run: |
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          scripts/ci/apt-install.sh --only-upgrade libstdc++6
       - name: Run the v1 conformance suite
         run: engine/tools/conformance/souxmar-conformance engine/examples/plugins
 
@@ -423,21 +414,12 @@ jobs:
     timeout-minutes: 20
     needs: [changes, engine]
     if: needs.changes.outputs.agent == 'true' || needs.changes.outputs.engine == 'true'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with: { name: engine-linux-gcc, path: engine }
       - run: chmod -R +x engine/
-      - name: Match the runtime to the toolchain that built the artifact
-        # The artifact is built with gcc-13 from the toolchain PPA, so it
-        # needs GLIBCXX_3.4.31 — newer than the libstdc++ a stock
-        # ubuntu-22.04 runner ships. Without this the binary exits before
-        # main() with a version-not-found error that looks nothing like
-        # the test failure it gets mistaken for.
-        run: |
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          scripts/ci/apt-install.sh --only-upgrade libstdc++6
       - name: Scripted evals
         # The pass-rate gate is the one ENGINEERING_PRACTICES names; the
         # p95 gate catches dispatcher regressions the pass rate cannot.
@@ -459,7 +441,7 @@ jobs:
     timeout-minutes: 15
     needs: [changes, engine]
     if: needs.changes.outputs.agent == 'true' || needs.changes.outputs.engine == 'true'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     # This was advisory while docs-site/agents/tools.md was a committed
     # placeholder claiming an 18-tool catalogue against a 24-tool binary —
     # a gate that can never go green teaches people to ignore red gates.
@@ -471,15 +453,6 @@ jobs:
       - uses: actions/download-artifact@v8
         with: { name: engine-linux-gcc, path: engine }
       - run: chmod -R +x engine/
-      - name: Match the runtime to the toolchain that built the artifact
-        # The artifact is built with gcc-13 from the toolchain PPA, so it
-        # needs GLIBCXX_3.4.31 — newer than the libstdc++ a stock
-        # ubuntu-22.04 runner ships. Without this the binary exits before
-        # main() with a version-not-found error that looks nothing like
-        # the test failure it gets mistaken for.
-        run: |
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          scripts/ci/apt-install.sh --only-upgrade libstdc++6
       - name: Agent tool reference matches the binary
         # Fails when someone adds a tool and forgets to regenerate the
         # page. The fix it prints is one command.
@@ -504,7 +477,7 @@ jobs:
     timeout-minutes: 10
     needs: [engine]
     if: always()
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }        # `git describe` needs the tags
@@ -524,8 +497,6 @@ jobs:
         if: needs.engine.result == 'success'
         run: |
           chmod -R +x engine/
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          scripts/ci/apt-install.sh --only-upgrade libstdc++6
           python3 scripts/check-version-consistency.py \
             --binary engine/src/cli/souxmar
 
@@ -535,7 +506,7 @@ jobs:
   docs-truth:
     name: Documentation matches the tree
     timeout-minutes: 10
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -564,7 +535,7 @@ jobs:
     timeout-minutes: 15
     needs: [changes, engine]
     if: needs.changes.outputs.engine == 'true'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -611,7 +582,7 @@ jobs:
     name: Python bindings
     needs: [changes]
     if: needs.changes.outputs.python == 'true'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
@@ -657,7 +628,7 @@ jobs:
     timeout-minutes: 45
     needs: [changes]
     if: needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -703,7 +674,7 @@ jobs:
     timeout-minutes: 20
     needs: [changes]
     if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: src/desktop
@@ -734,7 +705,7 @@ jobs:
     timeout-minutes: 45
     needs: [changes, engine]
     if: needs.changes.outputs.engine == 'true'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7

@@ -277,7 +277,7 @@ Each adapter is feature-gated by a CMake option (`-DSOUXMAR_WITH_GMSH=ON`). A so
 
 - **Build system:** CMake 3.25+. Plugins are first-class CMake targets via a helper `souxmar_add_plugin(...)` macro that bakes in the manifest, ABI version check, and install rules.
 - **Dependencies:** vcpkg manifests in-tree, with conan as a documented alternative. No `git submodule` for build deps.
-- **CI:** GitHub Actions matrix across Ubuntu 22.04 / macOS 14 / Windows Server 2022, x86_64 and arm64. Every PR runs unit + integration + plugin-conformance suites and a small benchmark sentinel.
+- **CI:** GitHub Actions matrix across Ubuntu 24.04 / macOS 14 / Windows Server 2022, x86_64 and arm64. Every PR runs unit + integration + plugin-conformance suites and a small benchmark sentinel.
 - **Distribution:**
   - Source releases: tarball + sha256, signed.
   - Binary core: per-OS tarballs.

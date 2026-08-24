@@ -51,7 +51,7 @@ When a maintainer is ready to land the first real data:
    - `synth-load-report` (eval-nightly run) → contains the
      JSON report with computed fingerprints in `bootstrap`
      status.
-   - `visual-regression-{ubuntu-22.04,macos-14,windows-2022}`
+   - `visual-regression-{ubuntu-24.04,macos-14,windows-2022}`
      (visual-regression workflow) → contains three sets of
      reference PNGs.
 3. Locally:

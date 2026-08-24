@@ -23,6 +23,43 @@ catalogue stands at **24 tools**, most recently
 
 ### Changed
 
+- **Linux CI runners move to `ubuntu-24.04`, and nothing in this repository
+  talks to Launchpad any more.** `gcc-13` is not in jammy's archive at all, so
+  `add-apt-repository -y ppa:ubuntu-toolchain-r/test` was not a fallback — it
+  was the sole source of the project's compiler, on the critical path of every
+  Linux job in every workflow, reached fresh on each job with no cache. On
+  2026-08-24 Launchpad's REST API answered HTTP 500
+  (`GPGKeyTemporarilyNotFoundError`) and took out the nightly run. ubuntu-24.04
+  preinstalls GCC 13.3.0 and Clang 17.0.6 — exactly the versions the presets
+  pin — so the toolchain step now touches the network zero times, three
+  `libstdc++6`-upgrade workarounds in `ci.yml` are deleted, and the migration
+  lands ahead of the 2026-09-17 start of the ubuntu-22.04 deprecation.
+
+  **This changes the published Linux artefact's glibc floor from 2.35 to
+  2.39.** The practical support floor does not move: `souxmar-0.9.0-linux-x64`
+  already required `GLIBCXX_3.4.32` (GCC 13.2's libstdc++, which jammy does not
+  ship), so it could not run on Ubuntu 22.04 — the platform it was built on —
+  and `docs/DESKTOP_APP.md` advertised a floor the binary never met. That row
+  now says Ubuntu 24.04 and records why. Restoring 22.04 support means
+  statically linking libstdc++ and libgcc into the release artefact, which
+  changes how plugins share a C++ runtime with the host and has not been done.
+  RHEL 9 (glibc 2.34) is the one platform this genuinely drops.
+
+- **The nightly sanitizers build with the compiler they were meant to use.**
+  `CMakePresets.json`'s `asan` and `tsan` presets inherit only `base` and pin
+  no compiler, so on a Linux runner CMake picked `/usr/bin/c++` = GCC 11.4.0
+  while every other Linux job used gcc-13. GCC 11's `-Wuseless-cast` fires on
+  three portability casts GCC 13's does not — `pipeline/cache.h:145`,
+  `pipeline/cache.cpp:66`, `pipeline/registry_dispatcher.cpp:478`, all of them
+  narrowing or widening between `size_t` and `uint64_t`, which is a no-op only
+  on LP64 — and `-Werror` made that the reason the nightly was red every night
+  for months. The casts are correct; the presets were wrong. New
+  `ci-linux-asan` / `ci-linux-tsan` presets pin gcc-13 and carry a
+  `hostSystemName == Linux` condition, leaving the local `asan`/`tsan` presets
+  portable for macOS and Windows contributors. Note that compiling is not
+  passing: `ctest --preset ci-linux-asan` has never executed once in CI
+  history.
+
 - **`VERSION` is now literally the single source of truth.** The desktop app
   (`0.9.0-beta3`), its Tauri config, the `souxmar-bridge` crate (`0.9.1-dev`)
   and the Python bindings (`0.0.1`) each stated a different version from the

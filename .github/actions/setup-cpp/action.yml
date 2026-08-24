@@ -42,26 +42,43 @@ runs:
         "$apt_install" \
           ninja-build pkg-config curl zip unzip tar bison flex \
           autoconf automake autoconf-archive libtool m4
-        # gcc-13 unconditionally, not just for the ci-linux-gcc preset.
-        # ubuntu-22.04 tops out at gcc-12 in the default archive, so a job
-        # that does not name a compiler silently gets gcc-11 — which is
-        # how the Python-bindings leg ended up being the only one built
-        # with a compiler nothing else in CI uses, and the only one whose
-        # -Wuseless-cast diagnostics differed.
-        "$apt_install" gcc-13 g++-13 || {
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          "$apt_install" gcc-13 g++-13
+        # gcc-13 unconditionally, not just for the ci-linux-gcc preset: a job
+        # that does not name a compiler otherwise picks up whatever
+        # /usr/bin/c++ happens to be, which is how the Python-bindings leg
+        # ended up being the only one built with a compiler nothing else in
+        # CI uses, and the only one whose -Wuseless-cast diagnostics differed.
+        # clang-17 only where a preset asks for it.
+        #
+        # ubuntu-24.04 preinstalls GCC 13.3.0 and Clang 17.0.6 — exactly the
+        # versions ci-linux-gcc and ci-linux-clang pin — so the common path
+        # below touches the network zero times.
+        #
+        # It used to be `apt-get gcc-13 || add-apt-repository -y
+        # ppa:ubuntu-toolchain-r/test`, because gcc-13 is not in jammy's
+        # archive at all. add-apt-repository resolves a PPA through
+        # Launchpad's REST API, so every Linux job in every workflow needed
+        # Launchpad to be up. On 2026-08-24 it answered HTTP 500
+        # (GPGKeyTemporarilyNotFoundError) and took out the entire nightly
+        # run; the same call appeared three more times in ci.yml. Nothing in
+        # this repository talks to Launchpad now.
+        ensure_compiler() {
+          cc="$1"; cxx="$2"
+          if command -v "$cc" >/dev/null 2>&1 && command -v "$cxx" >/dev/null 2>&1; then
+            # --version, not -dumpfullversion: the latter is GCC-only and
+            # clang++ exits non-zero on it, which would fail the step under
+            # the `set -e` GitHub gives a composite `shell: bash` step.
+            echo "toolchain: already on the image — $("$cxx" --version | head -1)"
+            return 0
+          fi
+          # Not on the image after all — the image changed under us. Say so
+          # loudly, then try the archive. If that fails the job fails here,
+          # with the reason, rather than three steps later inside CMake.
+          echo "::warning::$cxx is not preinstalled on $(lsb_release -ds); installing from the archive"
+          "$apt_install" "$cc" "$cxx"
         }
+        ensure_compiler gcc-13 g++-13
         if [ "${{ inputs.preset }}" = "ci-linux-clang" ]; then
-          "$apt_install" clang-17 || {
-            # The GitHub image does not always carry clang-17; fall back
-            # to the LLVM apt channel rather than silently using a
-            # different compiler than the preset names.
-            wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
-              | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
-            sudo add-apt-repository -y "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-17 main"
-            "$apt_install" clang-17
-          }
+          ensure_compiler clang-17 clang++-17
         fi
 
     - name: Install macOS toolchain
