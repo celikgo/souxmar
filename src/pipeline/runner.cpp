@@ -58,6 +58,13 @@ RunResult run_pipeline(const Pipeline& pipeline,
     // Build the cache-context string: capability id + plugin version.
     auto version = dispatcher.plugin_version(stage.plugin);
     auto context = version.empty() ? stage.plugin : fmt::format("{}@{}", stage.plugin, version);
+    // Folded in before the cache lookup, not after: for a reader this carries
+    // a digest of the bytes on disk, and it is what makes a cache hit mean
+    // "the same input" rather than "the same filename".
+    if (const auto extra = dispatcher.cache_key_extra(stage.plugin, stage.input); !extra.empty()) {
+      context += "|";
+      context += extra;
+    }
 
     sr.content_hash = hash_inputs(context, stage.input, upstream_hashes);
 
