@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# fem-cantilever — the first example in this repository that solves
+# something. Every other pipeline under examples/ drives a closed-form or
+# heuristic model; this one assembles a stiffness matrix and solves it.
+#
+# A 60 x 20 x 20 mm steel bar, held at the -X face and pulled along +X by a
+# 10 MPa traction on the +X face. The exact answer for that load case is a
+# state of uniform uniaxial stress, and because its displacement field is
+# linear it lies inside the Hex8 finite-element space — so the numbers this
+# pipeline writes are the analytic ones to solver tolerance, not an
+# approximation of them. tests/integration/test_fem_elasticity.cpp asserts
+# exactly that on the same element, which is what makes this example a check
+# rather than a demo.
+#
+# The tension load case is deliberate. Bending would be the more photogenic
+# picture, but a trilinear hexahedron shear-locks: with one element through
+# the thickness it is far too stiff and a coarse mesh under-predicts a
+# bending deflection badly. Showing a load case the element gets exactly
+# right, and saying why, beats shipping a pretty picture that is quietly 40%
+# wrong. To bend it instead, change the traction vector to
+# [0.0, 0.0, -1.0e7] and drop target_size — then read the shear-locking note
+# in docs/CAPABILITIES.md before believing the number.
+#
+# Run:
+#   souxmar run examples/fem-cantilever/pipeline.yaml \
+#     --plugin-path build/dev/examples/plugins
+#
+# Output: fem-cantilever.vtu in $PWD — open it in ParaView, colour by
+# "displacement", and apply Warp By Vector.
+
+version: 1
+
+stages:
+  # Stage 1: mesh.
+  #
+  # mesher.am.layered rather than mesher.tetra.grid, for two reasons. It
+  # needs no upstream Geometry — the only always-on readers in the tree
+  # produce meshes, not geometry, and reader.step is behind the OpenCASCADE
+  # build flag that no CI leg sets — so this example actually runs in the
+  # default matrix. And it stamps the canonical side tags (10 = -X, 11 = +X,
+  # 12 = -Y, 13 = +Y, 14 = -Z, 15 = +Z), which is what lets the solve below
+  # name its boundaries by tag instead of by coordinate.
+  - id: mesh
+    plugin: mesher.am.layered
+    input:
+      target_size: 0.005     # 5 mm voxels -> 12 x 4 x 4 hexes
+
+  # Stage 2: solve.
+  #
+  # Roller supports on the three minimum faces rather than a full clamp:
+  # they remove all six rigid-body modes and nothing else, so the bar is
+  # free to contract under Poisson's ratio and the exact uniaxial solution
+  # stays admissible. Clamping -X in all three components would suppress
+  # that contraction near the support — correct FEM, but for a different
+  # problem, and the analytic check above would no longer hold.
+  - id: solve
+    plugin: solver.elasticity.fem
+    input:
+      mesh:           { from: mesh }
+      youngs_modulus: 210.0e9      # structural steel
+      poisson_ratio:  0.3
+      fix:
+        - { face_tag: 10, components: x }   # -X face: no axial motion
+        - { face_tag: 12, components: y }   # -Y face: no lateral motion
+        - { face_tag: 14, components: z }   # -Z face: no vertical motion
+      traction:
+        - { face_tag: 11, vector: [1.0e7, 0.0, 0.0] }   # +X face, 10 MPa
+
+  # Stage 3: write.
+  #
+  # The `field:` key is what carries the solved displacement into
+  # <PointData>. Without it the writer emits geometry only — which is what
+  # it did for every solver in this tree until the field-emission fix that
+  # landed alongside this example.
+  - id: write
+    plugin: writer.vtu
+    input:
+      mesh:  { from: mesh }
+      field: { from: solve }
+      path:  fem-cantilever.vtu

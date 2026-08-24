@@ -394,9 +394,10 @@ jobs:
           # nothing bounded how much of the corpus could be EXIT-* while the
           # gate still announced "3 platforms agree on every pipeline".
           #
-          # 4 is what the corpus actually hashes today, read off run
-          # 32355873858 (Engine (linux-gcc), 2026-08-20): am-lpbf-bracket,
-          # cantilever-beam, modal-beam and thermal-fin hash.
+          # 5 is what the corpus actually hashes today: am-lpbf-bracket,
+          # cantilever-beam, modal-beam and thermal-fin, read off run
+          # 32355873858 (Engine (linux-gcc), 2026-08-20), plus
+          # fem-cantilever, which landed with solver.elasticity.fem.
           # am-marine-propeller, am-polymer-auv-fairing,
           # am-submarine-pressure-hull, pipe-bend and stl-cube are all
           # EXIT-70. Those five are genuinely broken examples, not a gate
@@ -408,7 +409,7 @@ jobs:
           scripts/ci/determinism-fingerprint.sh \
             --engine "$engine" \
             --plugin-path "$PWD/build/${{ matrix.preset }}/examples/plugins" \
-            --min-hashed 4 \
+            --min-hashed 5 \
             --out "build/${{ matrix.preset }}/determinism.txt"
           cat "build/${{ matrix.preset }}/determinism.txt"
 

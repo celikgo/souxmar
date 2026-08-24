@@ -41,6 +41,8 @@ add_executable(souxmar_integration_tests
   test_swap_mesher.cpp
   # Sprint 7 push 2.
   test_elasticity_stub.cpp
+  # The real FEM solver the stub above stands in for.
+  test_fem_elasticity.cpp
   # Sprint 8 push 2.
   test_cfd_stub.cpp
   # Sprint 8 push 3.

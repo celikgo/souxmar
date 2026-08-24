@@ -1,0 +1,24 @@
+[plugin]
+id            = "dev.souxmar.examples.fem-elasticity"
+name          = "Linear-Elasticity FEM Solver"
+version       = "0.1.0"
+abi           = 1
+license       = "Apache-2.0"
+homepage      = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/fem-elasticity"
+
+description   = "Small-strain linear isotropic elasticity by isoparametric FEM (Tet4 + Hex8), assembled to CSR and solved with Jacobi-preconditioned CG. No external dependency."
+documentation = "https://github.com/celikgo/souxmar/tree/master/examples/plugins/fem-elasticity"
+tags          = ["solver", "elasticity", "fem", "structural"]
+min_souxmar_abi_minor = 0
+
+[plugin.binary]
+file          = "libfem_elasticity.so"
+
+[plugin.capabilities]
+provides      = ["solver.elasticity.fem"]
+
+[plugin.threading]
+model         = "reentrant"
+
+[plugin.dependencies]
+souxmar       = ">=0.0.1,<2.0"

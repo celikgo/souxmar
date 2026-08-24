@@ -119,12 +119,37 @@ TEST(SwapMesher, GridMesherFromProgrammaticGeometry) {
   ASSERT_NE(so->mesh, nullptr);
 
   // target_size=0.5 against a 1×1×1 bbox → 3 nodes per axis → 27 nodes
-  // and 5×2×2×2 = 40 tets. Pinning the exact count guards against a
+  // and 6×2×2×2 = 48 tets. Pinning the exact count guards against a
   // regression in the bbox-to-N computation (the contract is "same
   // result format as anything else producing tetrahedral cells", and
   // the count is part of the format the swap-test promises).
   EXPECT_EQ(so->mesh->num_nodes(), 27u);
-  EXPECT_EQ(so->mesh->num_cells(), 40u);
+  EXPECT_EQ(so->mesh->num_cells(), 48u);
+
+  // Geometry, not just arithmetic. The count above was 40 for a long time
+  // and was correct arithmetic over a hex decomposition that did not tile
+  // the hex: three of its five tets were inverted and a fourth was
+  // degenerate. A count assertion cannot see that. These two can, and they
+  // are the cheapest statement of what a mesher actually promises — that
+  // the cells are non-degenerate and that together they fill the box.
+  double total = 0.0;
+  for (std::size_t c = 0; c < so->mesh->num_cells(); ++c) {
+    const auto n = so->mesh->cell_nodes(souxmar::core::CellIndex{c});
+    ASSERT_EQ(n.size(), 4u);
+    const auto p0 = so->mesh->node(n[0]);
+    const auto p1 = so->mesh->node(n[1]);
+    const auto p2 = so->mesh->node(n[2]);
+    const auto p3 = so->mesh->node(n[3]);
+    const double a[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
+    const double b[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
+    const double d[3] = {p3[0] - p0[0], p3[1] - p0[1], p3[2] - p0[2]};
+    const double vol = (a[0] * (b[1] * d[2] - b[2] * d[1]) + a[1] * (b[2] * d[0] - b[0] * d[2])
+                        + a[2] * (b[0] * d[1] - b[1] * d[0]))
+                       / 6.0;
+    EXPECT_GT(vol, 0.0) << "cell " << c << " is inverted or degenerate";
+    total += vol;
+  }
+  EXPECT_NEAR(total, 1.0, 1e-12) << "the tets must tile the 1x1x1 bounding box exactly";
 }
 
 TEST(SwapMesher, GridMesherRejectsMissingGeometry) {

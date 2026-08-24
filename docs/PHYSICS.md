@@ -8,21 +8,36 @@ much.**
 
 Read the headline first, because it applies to every model on this page:
 
-> Every model documented here is **closed-form or heuristic**. None of them
-> discretises anything. There is no stiffness matrix, no assembly, no linear
-> solve, no time integration, and no mesh convergence to study — refining the
-> mesh will not change a single number below. They are **screening and
-> preliminary-sizing aids**: tools for ranking options, sanity-checking a
-> supplier's claim, and finding the parameter you should go and measure.
-> They are not calibrated process simulations, and nothing here is a
-> qualification, an approval, or a permit to build, dive or fly.
+> Every model documented **on this page** is **closed-form or heuristic**.
+> None of them discretises anything. There is no stiffness matrix, no
+> assembly, no linear solve, no time integration, and no mesh convergence to
+> study — refining the mesh will not change a single number below. They are
+> **screening and preliminary-sizing aids**: tools for ranking options,
+> sanity-checking a supplier's claim, and finding the parameter you should go
+> and measure. They are not calibrated process simulations, and nothing here
+> is a qualification, an approval, or a permit to build, dive or fly.
 
-The one genuine discretised solve in this repository is
-`solver.heat.fenicsx` (DOLFINx + PETSc, Poisson), which is behind an opt-in
-build flag and is not covered here. `solver.heat.linear`,
-`solver.elasticity.linear`, `solver.modal.linear` and `solver.cfd.simple`
-are **demonstration stubs** — see [`CAPABILITIES.md`](CAPABILITIES.md) for
-what each one actually returns.
+That headline used to say "every model in this repository", and until
+`solver.elasticity.fem` landed it was true of the whole default build. It is
+now true only of this page.
+
+Two capabilities do discretise:
+
+- **`solver.elasticity.fem`** — small-strain linear isotropic elasticity by
+  isoparametric FEM (Tet4 and Hex8), assembled to a CSR stiffness matrix and
+  solved with Jacobi-preconditioned conjugate gradients. Always-on, no
+  external dependency, and it passes the constant-strain patch test exactly
+  on both elements. Its own validity envelope — shear locking in bending,
+  volumetric locking as ν → 0.5, no stress output — is documented in the
+  plugin header and in [`CAPABILITIES.md`](CAPABILITIES.md). It is not
+  covered on this page because this page is about closed-form models; a
+  discretised solver's error is a property of the mesh, not of a correlation.
+- **`solver.heat.fenicsx`** — DOLFINx + PETSc Poisson, behind an opt-in build
+  flag and therefore not built by any CI leg.
+
+`solver.heat.linear`, `solver.elasticity.linear`, `solver.modal.linear` and
+`solver.cfd.simple` remain **demonstration stubs** — see
+[`CAPABILITIES.md`](CAPABILITIES.md) for what each one actually returns.
 
 Every equation on this page is reproduced independently by
 [`scripts/gen-physics-figures.py`](../scripts/gen-physics-figures.py), which

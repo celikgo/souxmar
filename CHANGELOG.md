@@ -21,8 +21,79 @@ catalogue stands at **24 tools**, most recently
 
 ## [Unreleased]
 
+### Added
+
+- **`solver.elasticity.fem` — the first real solve in the default build.**
+  Small-strain linear isotropic elasticity by isoparametric FEM: Tet4
+  (one-point) and Hex8 (2x2x2 Gauss) elements, assembled into a CSR stiffness
+  matrix, Dirichlet conditions applied by symmetric elimination, consistent
+  Neumann surface tractions, and a Jacobi-preconditioned conjugate-gradient
+  solve. No external dependency and always-on, so all four engine legs and the
+  cross-platform determinism gate exercise it — unlike `solver.heat.fenicsx`,
+  the only other discretised solver in the tree, which is behind a build flag
+  no workflow sets. It passes the constant-strain patch test *exactly* on both
+  element types, and reproduces `solver.elasticity.linear`'s closed form to
+  6e-14 relative, closing the loop that plugin's own header asks for.
+  `docs/PHYSICS.md`'s headline claim that nothing in the repository
+  discretises anything has been corrected accordingly. Shear locking,
+  volumetric locking as ν → 0.5, and the absence of stress output are
+  documented in `docs/CAPABILITIES.md` and the plugin header. Determinism
+  rests on the solver calling no libm function at all — every operation is a
+  correctly-rounded IEEE-754 add, multiply or divide, the residual test
+  compares squared norms so not even `sqrt` is needed, and the target is built
+  with `-ffp-contract=off` so an FMA cannot fuse on arm64 and not on x86-64.
+- **`examples/fem-cantilever/`** — the first example that solves something,
+  and the fifth of ten to produce a determinism fingerprint rather than
+  `EXIT-70`. The gate's `--min-hashed` floor ratchets 4 → 5 with it.
+
+- **`security-ok`, the second required status check.** `needs:` cannot cross
+  workflows, so `ci-ok` structurally cannot cover CodeQL, the SCA scans,
+  dependency review or the licence inventory — while `docs/CI.md` marked four
+  of them "Blocking: Yes" *and* said to require exactly one check, which
+  cannot both be true. `security.yml` also gains the `merge_group:` trigger
+  `ci.yml` already had, without which a required check never reports inside a
+  merge queue and blocks it rather than gating it. `docs/CI.md` now carries
+  the exact `gh api` payload, and states plainly that **no branch protection
+  is enabled today**, so every gate in this repository is currently advisory.
+  `.github/CODEOWNERS` no longer claims to gate merges; it assigns reviewers.
+
+- **`scripts/check-live-references.py`**, wired into `ci.yml`. The existing
+  `check-doc-links.py` is offline and cannot see two defects this repository
+  has shipped: an install command for a package that is not on the registry,
+  and a documentation site that stopped deploying. This one resolves every
+  documented `pip`/`npm`/`cargo install` of a first-party package against its
+  registry, and every promised URL over the network. An unpublished package
+  may still be *named* — saying `pip install pysouxmar` does not work is the
+  honest thing to write — but only in prose that says so, or behind an
+  explicit `<!-- unpublished-ok: NAME -->` marker; inside a fenced code block
+  it is always an error. It also asserts that the README links the docs site
+  and that the repository `homepage` field points at it. A definite 404 fails
+  the build; an unreachable network warns and skips (`--strict` to fail).
+
 ### Fixed
 
+- **`writer.vtu` discarded every field.** The writer vtable's `field`
+  parameter was unnamed and never read, so no solver's results ever reached a
+  `.vtu` file, and `ROADMAP.md` Phase 2's definition of done — "a `.vtu` that
+  opens in ParaView and shows a recognisably correct stress field" — was
+  unreachable for that reason alone, independently of whether any solver
+  computed one. Nodal fields now emit as `<PointData>` and cell fields as
+  `<CellData>`, one `<DataArray>` per time step, at `max_digits10` precision
+  so a solved value survives the round trip through text. Face and
+  Gauss-point fields are still dropped, deliberately: neither has a VTU
+  equivalent, and interpolating them here would invent numbers the solver
+  never produced.
+- **`mesher.tetra.grid` emitted a hex decomposition that did not tile the
+  hex.** Its five-tetrahedron table had three inverted tets and one degenerate
+  one — corners 0, 2, 5 and 7 of the unit cube are coplanar, because (1,1,1)
+  is exactly (0,1,0) + (1,0,1) — with signed volumes summing to −2/6 instead
+  of +6/6. Replaced with Kuhn's six-tet subdivision: positively oriented,
+  tiles exactly, and conforming between neighbouring hexes without the
+  checkerboard parity rule a correct five-tet split would need. Nothing caught
+  this because until `solver.elasticity.fem` no consumer in the tree formed a
+  Jacobian; `test_swap_mesher.cpp` now asserts per-cell positive volume and
+  total volume against the bounding box, which a cell-count assertion cannot
+  see.
 - **The `Benchmarks (advisory)` job has never compiled, so the perf
   comparison it exists for has never run once.** One
   `-Werror=useless-cast` (`bench_mesh_construction.cpp:48`, which fires only
@@ -90,18 +161,11 @@ catalogue stands at **24 tools**, most recently
   while the gate announced "3 platforms agree on every pipeline". Both counts
   are now reported and `--min-hashed` makes the floor a committed ratchet.
 
-### Added
-
-- **`security-ok`, the second required status check.** `needs:` cannot cross
-  workflows, so `ci-ok` structurally cannot cover CodeQL, the SCA scans,
-  dependency review or the licence inventory — while `docs/CI.md` marked four
-  of them "Blocking: Yes" *and* said to require exactly one check, which
-  cannot both be true. `security.yml` also gains the `merge_group:` trigger
-  `ci.yml` already had, without which a required check never reports inside a
-  merge queue and blocks it rather than gating it. `docs/CI.md` now carries
-  the exact `gh api` payload, and states plainly that **no branch protection
-  is enabled today**, so every gate in this repository is currently advisory.
-  `.github/CODEOWNERS` no longer claims to gate merges; it assigns reviewers.
+- `docs/RELEASE_NOTES_TEMPLATE.md` no longer carries a copyable
+  `pip install pysouxmar==<version>` line, which 404s — it relied on a comment
+  asking the release manager to delete it. The gate now enforces this.
+- The README now links <https://celikgo.github.io/souxmar/>; the docs site was
+  live but unreachable from the repository's front page.
 
 ### Changed
 
@@ -152,29 +216,6 @@ catalogue stands at **24 tools**, most recently
   a new package must be declared either as shipping with souxmar (and carry
   `VERSION`) or as independently versioned (with the reason). `release.yml`
   now runs the same gate instead of its own narrower inline tag check.
-
-### Added
-
-- **`scripts/check-live-references.py`**, wired into `ci.yml`. The existing
-  `check-doc-links.py` is offline and cannot see two defects this repository
-  has shipped: an install command for a package that is not on the registry,
-  and a documentation site that stopped deploying. This one resolves every
-  documented `pip`/`npm`/`cargo install` of a first-party package against its
-  registry, and every promised URL over the network. An unpublished package
-  may still be *named* — saying `pip install pysouxmar` does not work is the
-  honest thing to write — but only in prose that says so, or behind an
-  explicit `<!-- unpublished-ok: NAME -->` marker; inside a fenced code block
-  it is always an error. It also asserts that the README links the docs site
-  and that the repository `homepage` field points at it. A definite 404 fails
-  the build; an unreachable network warns and skips (`--strict` to fail).
-
-### Fixed
-
-- `docs/RELEASE_NOTES_TEMPLATE.md` no longer carries a copyable
-  `pip install pysouxmar==<version>` line, which 404s — it relied on a comment
-  asking the release manager to delete it. The gate now enforces this.
-- The README now links <https://celikgo.github.io/souxmar/>; the docs site was
-  live but unreachable from the repository's front page.
 
 ## [0.9.0] - 2026-08-19
 

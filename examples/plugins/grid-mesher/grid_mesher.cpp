@@ -3,9 +3,9 @@
 // grid-mesher — Sprint 6 push 5 reference tetrahedral mesher.
 //
 // Reads the input geometry's bounding box, lays an N×N×N structured
-// grid of nodes inside it, and emits 5 tetrahedra per cube using the
-// standard "5-tet hex" decomposition (the same one the bulk-mesh
-// benchmark uses, see benchmarks/bench_mesh_construction.cpp).
+// grid of nodes inside it, and emits 6 tetrahedra per cube using
+// Kuhn's decomposition — see the kHexToTets table below for why six
+// and not the five this used to emit.
 //
 // Why this exists: it's the second always-on mesher. Hello-mesher
 // produces a trivial 1-tet placeholder; grid-mesher actually consumes
@@ -45,9 +45,47 @@
 
 namespace {
 
-constexpr std::array<std::array<std::uint64_t, 4>, 5> kHexToTets = {{
-    {0, 1, 2, 5}, {0, 2, 3, 7}, {0, 5, 6, 7},
-    {2, 5, 6, 7}, {0, 2, 5, 7},
+// Kuhn's six-tetrahedron subdivision of one hex, in this file's *binary*
+// corner indexing: bit 0 is +x, bit 1 is +y, bit 2 is +z, so corner 5 is
+// (1,0,1). This is NOT the VTK / souxmar Hex8 vertex order — `corner_offsets`
+// below builds the eight corners in binary order and these indices address
+// that array.
+//
+// The six tetrahedra are the six monotone paths from corner 0 to corner 7,
+// one per ordering of the three axis steps. Each has volume 1/6, they tile
+// the hex exactly, and every row is ordered so its signed volume is positive
+// under souxmar's Tet4 convention, det[v1−v0, v2−v0, v3−v0] > 0 — which is
+// what makes the outward face normals in
+// souxmar::core::face_node_table() actually point outward.
+//
+// **Why six and not five.** This used to be a five-tetrahedron table,
+// {0,1,2,5}, {0,2,3,7}, {0,5,6,7}, {2,5,6,7}, {0,2,5,7}, and it was wrong
+// twice over. Three of those five are inverted, and the last is degenerate:
+// corners 0, 2, 5 and 7 are coplanar, because (1,1,1) is exactly
+// (0,1,0) + (1,0,1). Signed volumes summed to −2/6 rather than +6/6, so the
+// mesh did not fill the box it claimed to mesh.
+//
+// A *correct* five-tet subdivision exists — a central tet on {1,2,4,7} plus
+// four corner tets — but it splits each hex face along one diagonal, so
+// neighbouring hexes have to mirror it on a checkerboard or the shared faces
+// do not match and the mesh is non-conforming. Kuhn's six use the same main
+// diagonal in every hex, so conformity is automatic and there is no parity
+// rule to get wrong. One extra cell per hex is a cheap price for a
+// decomposition whose correctness does not depend on an invariant nothing
+// checks. This is a reference mesher: the file's own header says quality is
+// irrelevant and correctness mandatory.
+//
+// Nothing caught the old table because until `solver.elasticity.fem` no
+// consumer in the tree formed a Jacobian. The writers pass coordinates
+// through, and postproc.mesh_quality reports a signed volume without
+// judging its sign.
+constexpr std::array<std::array<std::uint64_t, 4>, 6> kHexToTets = {{
+    {0, 1, 3, 7},  // x → y → z
+    {0, 1, 7, 5},  // x → z → y
+    {0, 2, 7, 3},  // y → x → z
+    {0, 2, 6, 7},  // y → z → x
+    {0, 4, 5, 7},  // z → x → y
+    {0, 4, 7, 6},  // z → y → x
 }};
 
 souxmar_status_t grid_mesh(const souxmar_geometry_t*       geometry,
