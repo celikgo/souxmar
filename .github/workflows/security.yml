@@ -29,7 +29,7 @@ concurrency:
 jobs:
   codeql:
     name: CodeQL (${{ matrix.language }})
-    runs-on: ${{ matrix.language == 'c-cpp' && 'ubuntu-22.04' || 'ubuntu-latest' }}
+    runs-on: ${{ matrix.language == 'c-cpp' && 'ubuntu-24.04' || 'ubuntu-latest' }}
     timeout-minutes: 90
     permissions:
       security-events: write

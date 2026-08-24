@@ -9,7 +9,7 @@
 #
 # The artifact names below are load-bearing: docs/INFRA_STATUS.md §
 # "The bootstrap PR" tells a maintainer to download
-# `visual-regression-{ubuntu-22.04,macos-14,windows-2022}` by name.
+# `visual-regression-{ubuntu-24.04,macos-14,windows-2022}` by name.
 
 name: Visual regression
 
@@ -47,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-14, windows-2022]
+        os: [ubuntu-24.04, macos-14, windows-2022]
     steps:
       - uses: actions/checkout@v7
 
