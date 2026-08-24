@@ -81,12 +81,12 @@ can be fixed by a PR:
 
 ## Branch protection
 
-> **Not enabled today.** `gh api repos/celikgo/souxmar/branches/master/protection` returns 404 and
-> `gh api repos/celikgo/souxmar/rulesets` returns `[]`. Every gate described in this document is
-> therefore advisory by omission, and a direct push to `master` bypasses all of them. The two
-> aggregator jobs below exist and report; nothing requires them yet.
+> **Enabled 2026-08-24.** `master` requires `CI` and `Security`, with `enforce_admins` on. Until
+> that date it required nothing at all — `.../branches/master/protection` returned 404 and
+> `.../rulesets` returned `[]` — so every gate described in this document was advisory by
+> omission and a direct push to `master` bypassed all of them.
 
-Require exactly two checks: **`CI`** (the `ci-ok` job at the end of `ci.yml`) and **`Security`**
+Two checks are required: **`CI`** (the `ci-ok` job at the end of `ci.yml`) and **`Security`**
 (the `security-ok` job at the end of `security.yml`).
 
 Two, not one, because `needs:` cannot cross workflows: `ci-ok` can only aggregate jobs declared in
@@ -104,7 +104,7 @@ silently satisfy a requirement it never ran.
 Both workflows carry a `merge_group:` trigger, without which a required check never reports inside
 a merge queue and the queue blocks rather than gates.
 
-Enabling it, once the aggregators have been observed reporting on a real PR:
+The settings, for reference and for re-applying them if they are ever cleared:
 
 ```sh
 gh api -X PUT repos/celikgo/souxmar/branches/master/protection --input - <<'JSON'
