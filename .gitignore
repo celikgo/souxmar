@@ -86,6 +86,14 @@ project.ai.toml
 # cwd, so a dev following the README leaves artefacts at the top level.
 /*.vtu
 /*.pvd
+# The AM and marine examples write more than VTU. These became reachable from
+# the repo root when reader paths started resolving against the pipeline file
+# — before that the four examples producing them could only run after cd'ing
+# into their own directory, where examples/**/ below already covered them.
+/*.gcode
+/*.cli
+/*-report.md
+/*-dossier.md
 
 examples/**/*.vtu
 examples/**/*.pvd

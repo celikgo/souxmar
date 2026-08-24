@@ -182,9 +182,12 @@ cd examples/am-submarine-pressure-hull
 souxmar run pipeline.yaml --plugin-path ../../build/dev/examples/plugins
 ```
 
-`path:` values resolve against your **working directory**, not the YAML's
-directory, so run it from here. One `--plugin-path` is enough; discovery scans
-one level of subdirectories under it.
+Reader `path:` values resolve against the YAML's own directory, so both of
+this example's inputs — `hull-ring.obj` and `buoyancy-core.lattice` — are
+found beside the pipeline and it runs from anywhere. Output paths still
+resolve against your **working directory**, hence `$PWD` below. One
+`--plugin-path` is enough; discovery scans one level of subdirectories under
+it.
 
 Four files land in `$PWD`:
 

@@ -28,8 +28,12 @@
 # Temperatures are degrees Celsius; everything else is SI.
 #
 # Run:
-#   cd examples/am-polymer-auv-fairing
-#   souxmar run pipeline.yaml --plugin-path ../../build/dev/examples/plugins
+#   souxmar run examples/am-polymer-auv-fairing/pipeline.yaml \
+#     --plugin-path build/dev/examples/plugins
+#
+# From the repository root, or from anywhere: this pipeline's input file
+# is named relatively and resolves against this file's own directory.
+# Outputs are written to the working directory you run from.
 #
 # Outputs in $PWD: fairing.gcode, fairing-printability.vtu,
 # fairing-buildtime.vtu, fairing-build-report.md.

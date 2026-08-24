@@ -47,8 +47,10 @@ with the engine artifact and diffed against each other in a downstream job.
 
 **There is no golden file** — the platforms are each other's reference, so nothing can drift by
 having an expected value quietly updated. A pipeline that fails identically everywhere is still
-deterministic, so its exit code is part of the fingerprint rather than an abort; what fails the gate
-is one platform disagreeing with another.
+deterministic, so its exit code is recorded as an `EXIT-<rc>` line rather than aborting the run;
+one platform disagreeing with another is what the cross-platform diff catches. The job also passes
+`--require-all`, which fails that platform's own run if any pipeline produced no hash at all — an
+`EXIT-*` line compares equal everywhere for free, so without it a broken example is invisible.
 
 The failure is a unified diff of two manifests:
 

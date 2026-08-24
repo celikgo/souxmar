@@ -519,10 +519,31 @@ PYBIND11_MODULE(_pysouxmar, m) {
   py::class_<pipeline::IDispatcher>(m, "IDispatcher");
 
   py::class_<pipeline::RegistryDispatcher, pipeline::IDispatcher>(
-      m, "RegistryDispatcher",
+      m,
+      "RegistryDispatcher",
       "IDispatcher implementation that routes capability ids to their\n"
-      "registered C ABI vtables. Pass to `run_pipeline`.")
-      .def(py::init<plugin::Registry&>(), py::arg("registry"),
+      "registered C ABI vtables. Pass to `run_pipeline`.\n"
+      "\n"
+      "`base_dir` is the directory a pipeline file was loaded from. A\n"
+      "reader's relative `path` input resolves against it; writer output\n"
+      "paths are unaffected and stay relative to the working directory.\n"
+      "Omit it and both resolve against the working directory, which is\n"
+      "the behaviour from before this argument existed.\n"
+      "\n"
+      "Pass it whenever you pair this with `parse_pipeline_file`:\n"
+      "    p = parse_pipeline_file(yaml)\n"
+      "    d = RegistryDispatcher(registry, os.path.dirname(yaml))\n"
+      "Without it, a pipeline that names its input relatively only runs\n"
+      "when the interpreter's working directory happens to be that\n"
+      "pipeline's own directory.")
+      // A C++ default argument does not surface through pybind11, so this
+      // needs its own py::arg default or Python could not reach the
+      // parameter at all — and `parse_pipeline_file` is bound right here in
+      // this module, so Python is the one caller that always *has* a
+      // pipeline file.
+      .def(py::init<plugin::Registry&, std::filesystem::path>(),
+           py::arg("registry"),
+           py::arg("base_dir") = std::filesystem::path{},
            py::keep_alive<1, 2>());
 
   m.def("run_pipeline",

@@ -131,9 +131,11 @@ cd examples/am-polymer-auv-fairing
 souxmar run pipeline.yaml --plugin-path ../../build/dev/examples/plugins
 ```
 
-`path:` values resolve against your **working directory**, not the YAML's
-directory, so run it from here. One `--plugin-path` is enough; discovery scans
-one level of subdirectories under it.
+A reader's `path:` resolves against the YAML's own directory, so `fairing.obj`
+is found beside the pipeline and this runs from anywhere. Output paths still
+resolve against your **working directory** — hence `$PWD` below. One
+`--plugin-path` is enough; discovery scans one level of subdirectories under
+it.
 
 Four files land in `$PWD`:
 

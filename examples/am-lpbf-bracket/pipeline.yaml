@@ -31,8 +31,10 @@
 # exception to souxmar's strict-SI rule. Everything else is SI: metres,
 # seconds, watts, pascals, kg/m^3.
 #
-# Run (from the repo root; `path:` values resolve against your working
-# directory, so cd into this directory if you prefer short output paths):
+# Run (from the repo root, or anywhere — a reader's `path:` resolves against
+# this file's own directory. Output paths still resolve against your working
+# directory, so cd somewhere scratch if you would rather not leave five files
+# where you are standing):
 #   souxmar run examples/am-lpbf-bracket/pipeline.yaml \
 #     --plugin-path build/dev/examples/plugins
 #
