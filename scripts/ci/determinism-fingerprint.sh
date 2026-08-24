@@ -30,10 +30,11 @@
 # Usage:
 #   scripts/ci/determinism-fingerprint.sh --engine <path> [--out <file>]
 #                                         [--plugin-path <dir>]...
-#                                         [--min-hashed <n>]
+#                                         [--min-hashed <n>] [--require-all]
 #
 # Exit status: 0 on success, 2 on a usage error, 1 when fewer than
-# --min-hashed pipelines produced a hash.
+# --min-hashed pipelines produced a hash or --require-all is set and any
+# pipeline did not.
 
 set -uo pipefail
 
@@ -45,12 +46,21 @@ ENGINE=""
 OUT="-"
 PLUGIN_ARGS=""
 MIN_HASHED=""
+REQUIRE_ALL=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --engine)      ENGINE="$2"; shift 2 ;;
     --out)         OUT="$2"; shift 2 ;;
     --plugin-path) PLUGIN_ARGS="$PLUGIN_ARGS --plugin-path $2"; shift 2 ;;
+    --require-all)
+      # Stronger than --min-hashed and self-maintaining: every pipeline in
+      # the corpus must hash. A floor cannot notice an *eleventh* example
+      # landing broken — HASHED stays at the floor and the gate passes — which
+      # is the same blind spot that let five broken examples sit in the corpus
+      # for months. Once coverage is total, assert totality and there is no
+      # number to keep updating.
+      REQUIRE_ALL=1; shift ;;
     --min-hashed)
       MIN_HASHED="$2"; shift 2
       # Rejected here rather than at the comparison, where a typo'd
@@ -152,6 +162,21 @@ emit < "$MANIFEST"
 log "determinism: $HASHED of $TOTAL pipelines hashed, $FAILED reported EXIT-*."
 if [ "$OUT" != "-" ]; then
   log "determinism: wrote $TOTAL fingerprints to $OUT"
+fi
+
+if [ "$REQUIRE_ALL" -eq 1 ] && [ "$FAILED" -ne 0 ]; then
+  log "determinism: $FAILED of $TOTAL pipelines did not produce a hash, and"
+  log "--require-all says every one of them must."
+  log ""
+  log "An EXIT-* line compares equal across platforms for free, so it"
+  log "contributes nothing to the cross-platform check — a pipeline that fails"
+  log "identically everywhere is invisible to this gate unless it is counted."
+  grep -E '  EXIT-[0-9]+$' "$MANIFEST" | sed 's/^/  /' >&2
+  log ""
+  log "Either an example regressed, or a newly added example has never run."
+  log "Run it by hand from an empty directory — that is how the last five"
+  log "broke: they resolved their input paths against the working directory."
+  exit 1
 fi
 
 if [ -n "$MIN_HASHED" ] && [ "$HASHED" -lt "$MIN_HASHED" ]; then

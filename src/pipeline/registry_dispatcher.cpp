@@ -307,7 +307,42 @@ DispatchResult dispatch_postproc(plugin::Registry& registry, const DispatchConte
   return std::static_pointer_cast<void>(out);
 }
 
-DispatchResult dispatch_reader(plugin::Registry& registry, const DispatchContext& ctx) {
+// Resolve a reader's `path` input against the directory its pipeline file
+// came from.
+//
+// Why readers and not writers: a reader's path names an input that ships with
+// the pipeline — examples/stl-cube/cube.stl sits beside
+// examples/stl-cube/pipeline.yaml and is meaningless anywhere else. A
+// writer's path names an output, and rebasing that onto the pipeline's
+// directory would write build products into the source tree on every run and
+// would defeat the determinism harness, which deliberately runs each pipeline
+// from a scratch directory so its outputs land there. Routing on the
+// namespace rather than on a list of capability ids means a new reader gets
+// this for free and no list can rot.
+//
+// Why here and not in the parser: runner.cpp:62 hashes the stage's input tree
+// to build the content-addressed cache key *before* dispatch, and the CLI
+// prints that hash on every stage line. Rewriting the Value at parse time
+// would put an absolute, machine-specific path inside the hash, so the same
+// pipeline would fingerprint differently on a laptop, a Linux runner and a
+// Windows runner — turning five obviously-broken examples into five
+// mysteriously non-deterministic ones. Resolving at the point of use keeps
+// the hash over the path as written.
+//
+// An absolute path is returned unchanged, so nothing that works today breaks.
+std::string resolve_reader_path(const std::filesystem::path& base_dir,
+                                const std::string& path_str) {
+  if (base_dir.empty())
+    return path_str;
+  std::filesystem::path p(path_str);
+  if (p.is_absolute())
+    return path_str;
+  return (base_dir / p).lexically_normal().string();
+}
+
+DispatchResult dispatch_reader(plugin::Registry& registry,
+                               const DispatchContext& ctx,
+                               const std::filesystem::path& base_dir) {
   const auto* entry = registry.find_reader(ctx.capability_id);
   if (!entry) {
     return DispatchError{fmt::format("no reader capability registered as '{}'", ctx.capability_id)};
@@ -319,7 +354,7 @@ DispatchResult dispatch_reader(plugin::Registry& registry, const DispatchContext
     return DispatchError{
         fmt::format("reader '{}' input is missing required string `path`", ctx.capability_id)};
   }
-  const std::string path_str(path_v->as_string());
+  const std::string path_str = resolve_reader_path(base_dir, std::string(path_v->as_string()));
 
   const auto* c_inputs = reinterpret_cast<const souxmar_value_t*>(&ctx.inputs);
 
@@ -385,7 +420,8 @@ DispatchResult dispatch_reader(plugin::Registry& registry, const DispatchContext
 
 }  // namespace
 
-RegistryDispatcher::RegistryDispatcher(plugin::Registry& registry) : registry_(registry) {}
+RegistryDispatcher::RegistryDispatcher(plugin::Registry& registry, std::filesystem::path base_dir)
+    : registry_(registry), base_dir_(std::move(base_dir)) {}
 
 std::string RegistryDispatcher::plugin_version(std::string_view capability_id) {
   if (const auto* e = registry_.find(capability_id); e) {
@@ -427,7 +463,7 @@ DispatchResult RegistryDispatcher::dispatch(const DispatchContext& ctx) {
     return dispatch_postproc(registry_, ctx);
   }
   if (ctx.capability_id.starts_with("reader.")) {
-    return dispatch_reader(registry_, ctx);
+    return dispatch_reader(registry_, ctx, base_dir_);
   }
   return DispatchError{
       fmt::format("unsupported capability namespace for '{}' "

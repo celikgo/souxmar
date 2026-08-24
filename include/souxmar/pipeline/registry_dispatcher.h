@@ -25,6 +25,7 @@
 #include "souxmar/plugin/registry.h"
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <span>
@@ -55,7 +56,18 @@ struct StageOutput {
 
 class RegistryDispatcher : public IDispatcher {
  public:
-  explicit RegistryDispatcher(plugin::Registry& registry);
+  // `base_dir` is the directory the pipeline file was loaded from. A reader's
+  // relative `path` input resolves against it, so an example works from any
+  // working directory rather than only from its own — see the note on
+  // resolve_reader_path in the .cpp for why readers and not writers, and why
+  // this cannot be done where the path is parsed.
+  //
+  // Defaults to empty, which means "resolve against the process working
+  // directory", i.e. exactly the behaviour before this parameter existed.
+  // Every caller that does not have a pipeline file — the agent tool
+  // dispatcher, every integration test — keeps that behaviour by saying
+  // nothing.
+  explicit RegistryDispatcher(plugin::Registry& registry, std::filesystem::path base_dir = {});
 
   DispatchResult dispatch(const DispatchContext& ctx) override;
 
@@ -72,6 +84,7 @@ class RegistryDispatcher : public IDispatcher {
 
  private:
   plugin::Registry& registry_;
+  std::filesystem::path base_dir_;
 };
 
 // ---- StageOutput on-disk serialization -----------------------------------

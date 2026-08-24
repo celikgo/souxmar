@@ -72,6 +72,47 @@ catalogue stands at **24 tools**, most recently
 
 ### Fixed
 
+- **Five of the ten shipped examples could not run, and it was one bug.**
+  `am-marine-propeller`, `am-polymer-auv-fairing`,
+  `am-submarine-pressure-hull`, `pipe-bend` and `stl-cube` each name an input
+  file relatively (`path: cube.stl`), and the engine resolved that against the
+  process working directory rather than against the pipeline file. Every one
+  of those files sits beside its own `pipeline.yaml`, so each example worked
+  only after `cd`-ing into its directory — while the repo-root invocation that
+  `docs/MARINE.md` and `examples/pipe-bend/README.md` document could never
+  work. The determinism gate runs each pipeline from a scratch directory,
+  which is why all five fingerprinted as `EXIT-70` on all three platforms.
+
+  A **reader's** relative `path` now resolves against the directory its
+  pipeline file came from. A **writer's** does not, and the asymmetry is the
+  point: rebasing output paths would write build products into the source tree
+  on every run, would defeat the determinism harness's scratch-cwd isolation,
+  and would falsify the `export_results` agent tool's frozen documented
+  behaviour ("relative resolves to CWD"). Absolute paths are untouched.
+  Resolution happens at dispatch, not at parse — `runner.cpp:62` hashes the
+  stage input tree for the content-addressed cache *before* dispatch and the
+  CLI prints that hash, so rewriting the value earlier would have embedded a
+  machine-specific absolute path in every fingerprint and turned five
+  obviously-broken examples into ten mysteriously non-deterministic ones.
+  Verified: the same pipeline copied to three different absolute locations
+  produces byte-identical stage hashes.
+
+  The determinism corpus goes from **5 of 10 hashing to 10 of 10**, and the
+  gate switches from `--min-hashed <n>` to a new `--require-all`, which
+  asserts every pipeline hashes. A numeric floor could not notice an
+  *eleventh* example landing broken — the same blind spot that let these five
+  survive. The old floor's committed comment blamed `reader.step` and
+  OpenCASCADE; no example in the corpus uses either, and that misattribution
+  is plausibly why five one-line bugs read as an unfixable dependency problem.
+
+  `tests/integration/test_cli_smoke.cpp` gains a corpus-wide regression test
+  that runs every `examples/*/pipeline.yaml` from a foreign working directory.
+  It fails on exactly those five before the fix. Nothing caught this before
+  because every reader test builds its YAML with an absolute path interpolated
+  in, making the relative-path branch unreachable from any test, and the one
+  test that ran a real example copied it into the working directory first —
+  collapsing the very distinction the bug lived in.
+
 - **`writer.vtu` discarded every field.** The writer vtable's `field`
   parameter was unnamed and never read, so no solver's results ever reached a
   `.vtu` file, and `ROADMAP.md` Phase 2's definition of done — "a `.vtu` that

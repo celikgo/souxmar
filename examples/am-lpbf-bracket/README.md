@@ -73,10 +73,11 @@ One `--plugin-path` is enough: plugin discovery scans one level of
 subdirectories under each search path, and every in-tree plugin builds into
 `build/dev/examples/plugins/<plugin-dir>/` alongside a copy of its manifest.
 
-This example needs no input file, so it runs from anywhere. Note for the other
-three AM examples: `path:` values resolve against your **working directory**,
-not against the directory the YAML lives in, so those have to be run from
-their own directory (or have their paths edited).
+This example needs no input file, so it runs from anywhere — and since reader
+`path:` values now resolve against the directory the pipeline file lives in,
+so do the other three AM examples. Output paths are unchanged: they still
+resolve against your **working directory**, which is why the files below land
+in `$PWD` rather than in the source tree.
 
 Expected shape of the output:
 

@@ -388,28 +388,38 @@ jobs:
           # the `determinism` job. Windows ships the binary with .exe.
           engine="build/${{ matrix.preset }}/src/cli/souxmar"
           [ -x "$engine" ] || engine="$engine.exe"
-          # --min-hashed is a coverage floor, not a target. A pipeline that
-          # exits non-zero identically everywhere is still deterministic, so
-          # the manifest records it as EXIT-<rc> rather than aborting — but
-          # nothing bounded how much of the corpus could be EXIT-* while the
-          # gate still announced "3 platforms agree on every pipeline".
+          # --require-all, not --min-hashed. A pipeline that exits non-zero
+          # identically everywhere is still deterministic, so the manifest
+          # records it as EXIT-<rc> rather than aborting — but that makes a
+          # broken example invisible to this gate unless something counts it,
+          # and for months nothing did: five of the ten were EXIT-70 on all
+          # three platforms while the gate announced "3 platforms agree on
+          # every pipeline".
           #
-          # 5 is what the corpus actually hashes today: am-lpbf-bracket,
-          # cantilever-beam, modal-beam and thermal-fin, read off run
-          # 32355873858 (Engine (linux-gcc), 2026-08-20), plus
-          # fem-cantilever, which landed with solver.elasticity.fem.
-          # am-marine-propeller, am-polymer-auv-fairing,
-          # am-submarine-pressure-hull, pipe-bend and stl-cube are all
-          # EXIT-70. Those five are genuinely broken examples, not a gate
-          # problem — the first four of them and mesh-comparison/swap-mesher
-          # all reach for reader.step, which is behind SOUXMAR_WITH_OPENCASCADE
-          # and no workflow sets it. This is a ratchet: raise it by one each
-          # time one of them is fixed, so the coverage cannot silently fall
-          # back.
+          # A numeric floor fixed that only until the corpus grew. At
+          # --min-hashed 10 with ten examples, an eleventh landing broken
+          # leaves the count at ten and the gate green — the same blind spot
+          # one level up. --require-all asserts every pipeline in the corpus
+          # hashes, so there is no number to keep in sync with the directory.
+          #
+          # The five that were broken all failed for one reason, and it was
+          # not an opt-in dependency: they named their input file relatively
+          # (`path: cube.stl`) and the engine resolved it against the process
+          # working directory, which this job deliberately makes a scratch
+          # dir. Reader paths now resolve against the pipeline file. An
+          # earlier revision of this comment blamed reader.step and
+          # OpenCASCADE; no example in the corpus uses either, and that
+          # misattribution is plausibly why the defect survived — it made five
+          # one-line bugs look like an unfixable dependency problem.
+          #
+          # Note that examples/mesh-comparison/ and examples/swap-mesher/ are
+          # NOT in the corpus: their files are pipeline-grid.yaml, grid.yaml
+          # and gmsh.yaml, and the harness globs for pipeline.yaml. Those two
+          # genuinely do use reader.step and could not run here anyway.
           scripts/ci/determinism-fingerprint.sh \
             --engine "$engine" \
             --plugin-path "$PWD/build/${{ matrix.preset }}/examples/plugins" \
-            --min-hashed 5 \
+            --require-all \
             --out "build/${{ matrix.preset }}/determinism.txt"
           cat "build/${{ matrix.preset }}/determinism.txt"
 

@@ -529,7 +529,14 @@ int cmd_run(const fs::path& pipeline_path,
              pipeline.stages.size(),
              registry.size());
 
-  souxmar::pipeline::RegistryDispatcher dispatcher(registry);
+  // A reader's relative `path` resolves against the pipeline file's own
+  // directory, not the process working directory. Without this,
+  // `souxmar run examples/stl-cube/pipeline.yaml` — the invocation every
+  // example's header documents — looks for cube.stl in whatever directory the
+  // user happens to be standing in, and five of the ten shipped examples
+  // could only ever run after cd'ing into their own folder.
+  souxmar::pipeline::RegistryDispatcher dispatcher(registry,
+                                                   fs::absolute(pipeline_path).parent_path());
   souxmar::pipeline::Cache cache;
   souxmar::pipeline::RunOptions opts;
   opts.use_cache = use_cache;

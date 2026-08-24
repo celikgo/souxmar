@@ -18,6 +18,7 @@
 #include "test_config.h"
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -168,6 +169,62 @@ TEST_F(CliSmokeTest, RunCantileverExampleProducesVtuOutput) {
   EXPECT_NE(vtu_contents.find("NumberOfCells=\"1\""), std::string::npos)
       << "expected 1 cell (unit tet); got:\n"
       << vtu_contents.substr(0, 512);
+}
+
+// Every shipped example must run from a working directory that is not its
+// own. This is the user story the examples' own headers document — `souxmar
+// run examples/<name>/pipeline.yaml` from the repo root — and until reader
+// paths became pipeline-relative it was the one invocation that could not
+// work: five of the ten resolved `path: cube.stl` against the process cwd and
+// exited 70.
+//
+// Nothing caught that, and the reason is worth recording. Every other reader
+// test builds its YAML in a string with an absolute path interpolated in, so
+// the relative-path branch was unreachable from any test. The one test above
+// that runs a real example copies pipeline.yaml into the workdir first —
+// which makes the pipeline directory and the cwd the same directory, and
+// collapses the exact distinction the bug lived in.
+//
+// Asserting over the whole corpus rather than one example is deliberate: it
+// also fails for a *newly added* broken example, which a count-based gate
+// cannot.
+TEST_F(CliSmokeTest, EveryShippedExampleRunsFromAForeignWorkingDirectory) {
+  const fs::path examples_dir = fs::path(SOUXMAR_TEST_SOURCE_ROOT) / "examples";
+  ASSERT_TRUE(fs::exists(examples_dir)) << examples_dir;
+
+  // Only examples/<name>/pipeline.yaml. mesh-comparison and swap-mesher name
+  // their files differently and need OpenCASCADE, which no default build has.
+  std::vector<fs::path> pipelines;
+  for (const auto& entry : fs::directory_iterator(examples_dir)) {
+    if (!entry.is_directory())
+      continue;
+    const auto candidate = entry.path() / "pipeline.yaml";
+    if (fs::exists(candidate))
+      pipelines.push_back(candidate);
+  }
+  std::sort(pipelines.begin(), pipelines.end());
+  ASSERT_FALSE(pipelines.empty()) << "no examples/*/pipeline.yaml found under " << examples_dir;
+
+  for (const auto& pipeline : pipelines) {
+    const std::string name = pipeline.parent_path().filename().string();
+
+    // A fresh directory per example: outputs are cwd-relative by design, and
+    // one example's artifacts must not satisfy another's assertions.
+    const auto rundir = workdir_ / name;
+    fs::create_directories(rundir);
+
+    std::ostringstream cmd;
+    cmd << cd_to(rundir) << " && " << shell_quote(SOUXMAR_TEST_CLI_BINARY) << " run "
+        << shell_quote(pipeline) << " --plugin-path " << shell_quote(plugins_root())
+        << " --cache-dir " << shell_quote(cachedir_ / name) << " > run.log 2>&1";
+    const int rc = run_cli(cmd.str());
+
+    std::ifstream log(rundir / "run.log");
+    const std::string log_contents((std::istreambuf_iterator<char>(log)), {});
+    EXPECT_EQ(rc, 0) << "example '" << name << "' failed from a foreign working directory.\n"
+                     << "Pipeline: " << pipeline << "\nOutput:\n"
+                     << log_contents;
+  }
 }
 
 TEST_F(CliSmokeTest, ReRunHitsDiskCacheForWriterStage) {

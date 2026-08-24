@@ -28,8 +28,12 @@
 # strict SI); everything else is SI.
 #
 # Run:
-#   cd examples/am-marine-propeller
-#   souxmar run pipeline.yaml --plugin-path ../../build/dev/examples/plugins
+#   souxmar run examples/am-marine-propeller/pipeline.yaml \
+#     --plugin-path build/dev/examples/plugins
+#
+# From the repository root, or from anywhere: this pipeline's input file
+# is named relatively and resolves against this file's own directory.
+# Outputs are written to the working directory you run from.
 #
 # Outputs in $PWD: propeller-distortion.vtu, propeller-overhang.vtu,
 # propeller-build-report.md, propeller-qualification-dossier.md.

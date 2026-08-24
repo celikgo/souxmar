@@ -124,9 +124,11 @@ cd examples/am-marine-propeller
 souxmar run pipeline.yaml --plugin-path ../../build/dev/examples/plugins
 ```
 
-`path:` values in a pipeline resolve against your **working directory**, not
-against the directory the YAML lives in, so this example has to be run from
-here (or you edit `path: propeller-blade.obj` to something absolute). One
+A reader's `path:` resolves against the directory the pipeline file lives in,
+so `path: propeller-blade.obj` finds the file beside the YAML and this example
+runs from anywhere. Output paths are the other way round — they resolve
+against your **working directory**, which is why the files below land in
+`$PWD` and not in the source tree. One
 `--plugin-path` is enough — discovery scans one level of subdirectories under
 it, and every in-tree plugin builds into
 `build/dev/examples/plugins/<plugin-dir>/` next to a copy of its manifest.
