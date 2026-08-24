@@ -15,6 +15,10 @@ on:
     branches: [main, master]
   push:
     branches: [main, master]
+  # ci.yml has this and security.yml did not. A required status check that
+  # never reports inside a merge queue blocks the queue forever rather than
+  # gating it, so this has to land before `Security` is made required.
+  merge_group:
   schedule:
     - cron: '0 5 * * 1'   # Monday, after the weekend's dependency churn
   workflow_dispatch:
@@ -176,3 +180,45 @@ jobs:
             exit 1
           fi
           echo "license inventory: every vcpkg dependency is accounted for."
+
+  # ---------------------------------------------------------------------
+  # The single required status check for this workflow.
+  #
+  # `needs:` cannot cross workflows, so ci.yml's `ci-ok` aggregator can only
+  # ever cover ci.yml. That left every job in this file structurally outside
+  # the gate — while docs/CI.md marks four of them "Blocking: Yes" and also
+  # says to require exactly one check, which cannot both be true. Branch
+  # protection should require two contexts, `CI` and `Security`.
+  #
+  # Deliberately no `paths:` filter on this workflow and no `if:` guards on
+  # the jobs it aggregates, so this always reports on a pull request. A
+  # required check that sometimes does not run is a queue deadlock.
+  # ---------------------------------------------------------------------
+  security-ok:
+    name: Security
+    timeout-minutes: 5
+    if: always()
+    needs:
+      - codeql
+      - dependency-review
+      - cargo-audit
+      - npm-audit
+      - license-inventory
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify no required security job failed
+        env:
+          # Through the environment, not interpolated — same reasoning as
+          # ci.yml's `ci-ok`.
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          # `skipped` is a pass: `dependency-review` is guarded by
+          # `if: github.event_name == 'pull_request'` and legitimately
+          # skips on push, schedule and workflow_dispatch.
+          echo "$NEEDS_JSON"
+          bad="$(printf '%s' "$NEEDS_JSON" | python3 -c 'import json,sys; print(" ".join(k for k,v in json.load(sys.stdin).items() if v["result"] not in ("success","skipped")))')"
+          if [ -n "$bad" ]; then
+            echo "::error::failing security jobs: $bad"
+            exit 1
+          fi
+          echo "All security jobs passed or were legitimately skipped."

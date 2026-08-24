@@ -44,8 +44,20 @@ struct GridSpec {
   }
 };
 
+// The linear node id has to come out as std::uint64_t because that is what
+// the C ABI's connectivity arrays carry, but the index arithmetic is
+// std::size_t. This used to spell the widening as
+// `static_cast<std::uint64_t>(...)`, which on any LP64 target casts the
+// expression to the type it already has: GCC's -Wuseless-cast (enabled for
+// GNU in cmake/SouxmarWarnings.cmake:32, hard error via -Werror) rejected it
+// and the "Benchmarks (advisory)" job never got past compiling this file.
+// Copy-initialising a std::uint64_t local instead means the conversion is
+// implicit — a no-op on LP64, a real and lossless widening on an ILP32 target
+// where std::size_t is 32-bit — and there is no same-type cast left to warn
+// about.
 std::uint64_t node_at(const GridSpec& g, std::size_t i, std::size_t j, std::size_t k) {
-  return static_cast<std::uint64_t>((k * g.ny + j) * g.nx + i);
+  const std::uint64_t id = (k * g.ny + j) * g.nx + i;
+  return id;
 }
 
 // ============================================================================

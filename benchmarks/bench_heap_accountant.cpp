@@ -46,7 +46,13 @@ BENCHMARK(BM_HeapAccountant_Snapshot)->Unit(benchmark::kNanosecond);
 
 static void BM_HeapAccountant_DeltaPair(benchmark::State& state) {
   for (auto _ : state) {
-    const auto before = HeapAccountant::snapshot();
+    // Non-const so the barrier binds DoNotOptimize(Tp&) rather than the
+    // const-ref overload google-benchmark 1.8 deprecated (a const-ref barrier
+    // permits the compiler to drop the snapshot() call this benchmark exists
+    // to time). Under -Werror in the Linux "Benchmarks (advisory)" job the
+    // deprecation was a build failure, not a warning. `delta_since` takes the
+    // Sample by const reference, so dropping const here costs nothing.
+    auto before = HeapAccountant::snapshot();
     benchmark::DoNotOptimize(before);
     auto delta = HeapAccountant::delta_since(before);
     benchmark::DoNotOptimize(delta);

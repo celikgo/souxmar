@@ -21,8 +21,9 @@ set -u  # strict on undef vars; we handle errors explicitly
 #   $REPO_ROOT/scripts/synth-load/run.sh         (this script)
 #   $REPO_ROOT/scripts/synth-load/golden/        (corpus)
 #   $REPO_ROOT/scripts/synth-load/golden/normalize.py
-#   $REPO_ROOT/build/dev/tools/souxmar/souxmar   (engine binary)
+#   $REPO_ROOT/build/dev/src/cli/souxmar         (engine binary)
 #   $REPO_ROOT/build/dev/tools/eval/souxmar-eval (eval binary)
+#   $REPO_ROOT/build/dev/examples/plugins/       (plugin search root)
 #
 # Resolve via the script's own location so it works from anywhere.
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -109,13 +110,23 @@ done
 # Pre-flight
 # ---------------------------------------------------------------------
 
-# Find engine + eval binaries if not overridden.
+# Find engine + eval binaries if not overridden. The CLI target lives under
+# src/cli/, not tools/souxmar/ — the latter path has never existed in any
+# preset, so an unqualified run of this harness always died at the sanity
+# check below with "engine binary not found".
 if [ -z "$ENGINE_BIN" ]; then
-  ENGINE_BIN="$REPO_ROOT/build/dev/tools/souxmar/souxmar"
+  ENGINE_BIN="$REPO_ROOT/build/dev/src/cli/souxmar"
 fi
 if [ -z "$EVAL_BIN" ]; then
   EVAL_BIN="$REPO_ROOT/build/dev/tools/eval/souxmar-eval"
 fi
+
+# The example loop pushd's into a mktemp workdir before invoking the engine,
+# so a relative --engine/--eval (which is what nightly.yml passes) stops
+# resolving the moment we change directory and the run dies with rc=127.
+# Canonicalise once, here, while $PWD is still the caller's directory.
+case "$ENGINE_BIN" in /*) ;; *) ENGINE_BIN="$PWD/$ENGINE_BIN" ;; esac
+case "$EVAL_BIN"   in /*) ;; *) EVAL_BIN="$PWD/$EVAL_BIN"     ;; esac
 
 # Sanity-check.
 need_exit_misconfig=0
@@ -144,6 +155,15 @@ fi
 if [ "$need_exit_misconfig" -eq 1 ]; then
   exit "$EXIT_MISCONFIG"
 fi
+
+# A --plugin-path entry is a search *root*: discover_plugins() scans its
+# immediate subdirectories for souxmar-plugin.toml
+# (include/souxmar/plugin/discovery.h:83-85). Handing it the leaf
+# .../examples/plugins/hello-mesher therefore discovers nothing — it looks
+# one level too deep — which is why every example run reported "no plugins
+# found". Pass the parent, and derive it from $ENGINE_BIN so the harness
+# follows whichever preset built the binary instead of pinning build/dev.
+PLUGIN_DIR="$( cd "$( dirname "$ENGINE_BIN" )/../.." && pwd )/examples/plugins"
 
 # Refresh-golden gate: never overwrite a dirty corpus.
 if [ "$REFRESH_GOLDEN" -eq 1 ]; then
@@ -176,17 +196,22 @@ corpus_lookup() {
   #   id   = "cantilever-beam"
   #   sha256 = "..."
   awk -v kind="$kind" -v id="$id" '
-    BEGIN { in_g = 0; cur_kind=""; cur_id=""; cur_sha=""; }
+    BEGIN { in_g = 0; found = 0; cur_kind=""; cur_id=""; cur_sha=""; }
     /^\[\[golden\]\]/ { in_g=1; cur_kind=""; cur_id=""; cur_sha=""; next }
     in_g && /^kind/    { gsub(/[" =]+/, " ", $0); split($0, a, " "); cur_kind=a[2] }
     in_g && /^id/      { gsub(/[" =]+/, " ", $0); split($0, a, " "); cur_id=a[2] }
     in_g && /^sha256/  { gsub(/[" =]+/, " ", $0); split($0, a, " "); cur_sha=a[2] }
     in_g && /^$/ {
-      if (cur_kind == kind && cur_id == id) { print cur_sha; exit 0 }
+      # awk runs the END rule even on exit, and in_g is still 1 with the
+      # matching cur_* fields loaded, so without this sentinel every hit
+      # was printed twice and $golden became "<sha> <sha>". Harmless only
+      # while every corpus hash is empty; the moment the corpus is seeded
+      # it makes every comparison in the caller fail as "diverged".
+      if (cur_kind == kind && cur_id == id) { print cur_sha; found=1; exit 0 }
       in_g=0
     }
     END {
-      if (in_g && cur_kind == kind && cur_id == id) print cur_sha
+      if (!found && in_g && cur_kind == kind && cur_id == id) print cur_sha
     }
   ' "$CORPUS_FILE"
 }
@@ -222,13 +247,22 @@ if [ "$SKIP_EXAMPLES" -eq 0 ]; then
 
     out="$workdir/$ex.out"
     err="$workdir/$ex.err"
-    pushd "$workdir" >/dev/null
+    # `|| exit` on both pushd and popd (SC2164): a failed cd here would
+    # otherwise run the engine in the previous directory and quietly
+    # fingerprint the wrong thing.
+    pushd "$workdir" >/dev/null || exit 1
+    # --no-cache: with a warm per-user disk cache (~/Library/Caches/souxmar,
+    # $XDG_CACHE_HOME/souxmar) `run` prints "[CACHED  ]" where a cold machine
+    # prints "[OK      ]" (src/cli/main.cpp:458), so the fingerprint would
+    # encode whether this runner had executed the pipeline before rather than
+    # what the pipeline does. The harness must measure behaviour, not machine
+    # history.
     "$ENGINE_BIN" run "$pipeline" \
-      --plugin-path "$REPO_ROOT/build/dev/examples/plugins/hello-mesher" \
-      --plugin-path "$REPO_ROOT/build/dev/examples/plugins/vtu-writer" \
+      --plugin-path "$PLUGIN_DIR" \
+      --no-cache \
       >"$out" 2>"$err"
     rc=$?
-    popd >/dev/null
+    popd >/dev/null || exit 1
 
     if [ $rc -ne 0 ]; then
       EXAMPLE_RESULTS+=( "$ex|engine-exit-$rc||" )
@@ -305,7 +339,15 @@ if [ "$SKIP_EVALS" -eq 0 ]; then
     fi
 
     out="$(mktemp -t souxmar-synth-eval.XXXXXX)"
-    "$EVAL_BIN" "$task_file" >"$out" 2>&1
+    # souxmar-eval takes the evals *directory* as its positional and rejects
+    # a single file outright with kExitUsage=2 (tools/eval/main.cpp:563); the
+    # one-task selector is --only, matched against the task YAML's `id:`
+    # field (tools/eval/main.cpp:620). Passing "$task_file" here is what made
+    # all three evals report eval-exit-2 every night.
+    "$EVAL_BIN" "$REPO_ROOT/evals/v1" \
+      --only "$ev" \
+      --plugin-path "$PLUGIN_DIR" \
+      >"$out" 2>&1
     rc=$?
 
     if [ $rc -ne 0 ]; then

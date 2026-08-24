@@ -49,6 +49,21 @@ NORMALISERS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\(elapsed: \d+(?:\.\d+)? ?ms\)"), "(elapsed: <T>ms)"),
     (re.compile(r"\bin \d+(?:\.\d+)? ?(?:ms|µs|us|s)\b"), "in <T>"),
 
+    # souxmar-eval closes every run with the "--- step latency (ms) ---"
+    # aggregate (tools/eval/main.cpp:663-665), one line of raw wall clock:
+    #   "  n=1       p50=   0.30  p95=   0.30  p99=   0.30  mean=   0.30  max=   0.30"
+    # None of the patterns above touch it, so two back-to-back runs of the
+    # same eval fingerprinted differently and the nightly synthetic-load job
+    # could never report anything but divergence. n= survives the scrub: how
+    # many steps a task dispatches is behaviour we want the golden to gate.
+    # The five timings, and the column padding that shifts with their widths,
+    # are machine noise.
+    (re.compile(
+        r"^(\s*n=\d+)\s+p50=\s*[\d.]+\s+p95=\s*[\d.]+\s+p99=\s*[\d.]+"
+        r"\s+mean=\s*[\d.]+\s+max=\s*[\d.]+\s*$",
+        re.MULTILINE),
+     r"\1  p50=<T>  p95=<T>  p99=<T>  mean=<T>  max=<T>"),
+
     # Build-id / git-sha fragments ("a1b2c3d-dirty" 7-12 chars).
     (re.compile(r"\bbuild [0-9a-f]{7,12}(?:-dirty)?\b"), "build <SHA>"),
     (re.compile(r"\bgit-sha: [0-9a-f]{7,40}\b"), "git-sha: <SHA>"),

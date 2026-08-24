@@ -13,7 +13,7 @@ seeing empty sha256s should land here, not file an issue.
 | Surface                                | State (2026-05-14)                                                 | Unblock                                                                                       | Stale-for-N-sprints |
 | -------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- | ------------------- |
 | synth-load golden corpus               | Wired; placeholder hashes; `--bootstrap` mechanism ready           | One green eval-nightly post-v0.9.3 → maintainer runs bootstrap locally → reviews → commits     | 3 sprints (S13-S15)  |
-| Per-platform VR baselines (linux)      | Wired (matrix workflow); zero PNGs in tree                          | One green visual-regression run on the linux runner → maintainer downloads artefact → commits  | 2 sprints (S14-S15)  |
+| Per-platform VR baselines (linux)      | Wired (matrix workflow); zero PNGs in tree                          | One linux-runner run where every spec reaches its screenshot assertion (not a *green* run — see "The bootstrap PR") → maintainer downloads artefact → commits | 2 sprints (S14-S15)  |
 | Per-platform VR baselines (darwin)     | Same as linux                                                       | Same as linux, macos-14 runner                                                                | 2 sprints (S14-S15)  |
 | Per-platform VR baselines (win32)      | Same as linux                                                       | Same as linux, windows-2022 runner                                                            | 2 sprints (S14-S15)  |
 | docs-site `/agents/tools` content      | Wired (placeholder); generator + `--check-only` gate live          | Same PR as the synth-load bootstrap; the maintainer's first run of `gen-agent-tools.py` against the v0.9.3 binary replaces the placeholder | 3 sprints (S13-S15) |
@@ -45,15 +45,36 @@ keep"); future sprints reference it inline.
 
 When a maintainer is ready to land the first real data:
 
-1. Wait for a green eval-nightly run *and* a green visual-
-   regression matrix run on master post-v0.9.2.
+1. Wait for a green eval-nightly run on master post-v0.9.2, and
+   for a visual-regression matrix run in which **every spec
+   reaches its `toHaveScreenshot` assertion**.
+
+   That second condition used to read "a green visual-regression
+   matrix run", which no run could ever satisfy. With zero PNGs
+   in the tree Playwright fails every spec with `A snapshot
+   doesn't exist at …, writing actual` *by definition* — so
+   waiting for green was waiting for the state this very PR
+   exists to create, and the baselines sat unharvested for two
+   sprints behind a gate that could not open.
+
+   What is achievable, and what actually gates the harvest, is a
+   run whose *only* failures are that message. A spec that dies
+   earlier — `element(s) not found` from a selector the app
+   outgrew, or `mock: unknown command` from the Tauri shim in
+   `tests/visual/mocks/tauri.ts` — rendered nothing, so there is
+   nothing to harvest for it. Fix the spec first; a partial
+   harvest bakes in a hole that only shows up as a missing
+   baseline months later.
 2. Download the relevant artefacts:
    - `synth-load-report` (eval-nightly run) → contains the
      JSON report with computed fingerprints in `bootstrap`
      status.
    - `visual-regression-{ubuntu-24.04,macos-14,windows-2022}`
      (visual-regression workflow) → contains three sets of
-     reference PNGs.
+     `*-actual.png` renders, one set per platform. They are
+     "actual", not "reference", precisely because the run that
+     produced them had no reference to compare against — that is
+     what makes them harvestable.
 3. Locally:
 
    ```sh
@@ -89,6 +110,14 @@ When a maintainer is ready to land the first real data:
    `eval-nightly.yml` before `c7f6214` removed it)
    and `visual-regression.yml` (Playwright step). Gates go
    live.
+
+   The bootstrap PR's own visual-regression run is the first one
+   with baselines in the tree, and therefore the first that can
+   come back green — the harvest run before it could not. Read
+   that run as the verification of step 4: if it is still red
+   with real pixel diffs, the harvested PNGs are wrong for their
+   runner and the flip comes back out rather than the diffs being
+   re-blessed.
 
 ## What this document is NOT
 

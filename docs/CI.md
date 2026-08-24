@@ -81,13 +81,49 @@ can be fixed by a PR:
 
 ## Branch protection
 
-Require exactly one check: **`CI`** — the `ci-ok` job at the end of `ci.yml`.
+> **Not enabled today.** `gh api repos/celikgo/souxmar/branches/master/protection` returns 404 and
+> `gh api repos/celikgo/souxmar/rulesets` returns `[]`. Every gate described in this document is
+> therefore advisory by omission, and a direct push to `master` bypasses all of them. The two
+> aggregator jobs below exist and report; nothing requires them yet.
 
-It aggregates every required job, so adding, renaming or splitting a job never means editing
-branch-protection settings. It treats `skipped` as a pass (the `changes` filter legitimately skips
-whole areas on a docs-only PR) and everything else as a failure, which is the distinction a raw
-"required checks" list gets wrong: a skipped job reports success to GitHub, so listing jobs
-individually lets a filtered-out job silently satisfy a requirement it never ran.
+Require exactly two checks: **`CI`** (the `ci-ok` job at the end of `ci.yml`) and **`Security`**
+(the `security-ok` job at the end of `security.yml`).
+
+Two, not one, because `needs:` cannot cross workflows: `ci-ok` can only aggregate jobs declared in
+`ci.yml`, so CodeQL, the SCA scans, dependency review and the licence inventory sit structurally
+outside it. Requiring only `CI` would mean none of them can ever block a merge no matter what they
+report — which contradicts the "Blocking: Yes" rows earlier in this file.
+
+Each aggregator covers every job in its own workflow, so adding, renaming or splitting a job never
+means editing branch-protection settings. Both treat `skipped` as a pass (the `changes` filter
+legitimately skips whole areas on a docs-only PR; `dependency-review` only runs on pull requests)
+and everything else as a failure, which is the distinction a raw "required checks" list gets wrong:
+a skipped job reports success to GitHub, so listing jobs individually lets a filtered-out job
+silently satisfy a requirement it never ran.
+
+Both workflows carry a `merge_group:` trigger, without which a required check never reports inside
+a merge queue and the queue blocks rather than gates.
+
+Enabling it, once the aggregators have been observed reporting on a real PR:
+
+```sh
+gh api -X PUT repos/celikgo/souxmar/branches/master/protection --input - <<'JSON'
+{
+  "required_status_checks": { "strict": false,
+    "checks": [ { "context": "CI" }, { "context": "Security" } ] },
+  "enforce_admins": true,
+  "required_pull_request_reviews": null,
+  "restrictions": null
+}
+JSON
+```
+
+`required_pull_request_reviews` is null deliberately — the repository has one maintainer, and a
+review requirement nobody can satisfy is a gate that gets disabled the first time it is
+inconvenient. `enforce_admins` is the load-bearing field for a solo repository. `strict` stays
+false so a merge does not require every PR to be rebased onto the tip. `required_linear_history`
+is deliberately absent: `allow_merge_commit` is on and the last six merges to `master` are all
+two-parent merge commits, so requiring linear history would reject the project's own workflow.
 
 ## Determinism
 
