@@ -32,7 +32,7 @@ note  = "Two-line text summary of a mesh. Reference writer for the ABI."
 # ---------------------------------------------------------------------------
 [capability."mesher.tetra.grid"]
 state = "implemented and tested"
-note  = "Structured NxNxN grid over the geometry's bounding box, 5 tetrahedra per hex. Does not conform to the geometry — it meshes the box, not the shape."
+note  = "Structured NxNxN grid over the geometry's bounding box, Kuhn-decomposed into 6 positively-oriented tetrahedra per hex. Does not conform to the geometry — it meshes the box, not the shape."
 
 [capability."mesher.tetra.gmsh"]
 state = "implemented, untested"
@@ -82,7 +82,11 @@ note  = "Closed-form T = T_steady(1 - exp(-t/tau)) times a cosine profile over t
 
 [capability."solver.elasticity.linear"]
 state = "stub"
-note  = "Closed-form uniaxial tension along x — the analytical bar solution a real solver should converge to. **Not FEM**: ignores boundary conditions, mesh stiffness and cell tags."
+note  = "Closed-form uniaxial tension along x — the analytical bar solution a real solver should converge to. **Not FEM**: ignores boundary conditions, mesh stiffness and cell tags. `solver.elasticity.fem` is the real one, and is tested against this closed form."
+
+[capability."solver.elasticity.fem"]
+state = "implemented and tested"
+note  = "Genuine small-strain linear isotropic FEM: isoparametric Tet4 (one-point) and Hex8 (2x2x2 Gauss), assembled to CSR, Dirichlet by symmetric elimination, consistent Neumann tractions, Jacobi-preconditioned CG. Passes the constant-strain patch test exactly on both elements. Trilinear hexes shear-lock in bending and both elements lock as nu approaches 0.5; no stress output yet."
 
 [capability."solver.modal.linear"]
 state = "stub"

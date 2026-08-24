@@ -13,21 +13,24 @@
 // Format reference: VTK File Formats, "UnstructuredGrid" section.
 //   https://docs.vtk.org/en/latest/design_documents/VTKFileFormats.html
 
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <fstream>
-#include <sstream>
-#include <string>
-#include <vector>
-
 #include "souxmar-c/abi.h"
+#include "souxmar-c/field.h"
 #include "souxmar-c/mesh.h"
 #include "souxmar-c/plugin.h"
 #include "souxmar-c/registry.h"
 #include "souxmar-c/status.h"
 #include "souxmar-c/value.h"
 #include "souxmar-c/writer.h"
+
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <fstream>
+#include <iomanip>
+#include <limits>
+#include <sstream>
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -58,10 +61,52 @@ int souxmar_to_vtk_cell_type(uint16_t et) {
   }
 }
 
-souxmar_status_t vtu_write(const souxmar_mesh_t*  mesh,
-                           const souxmar_field_t* /*field*/,
+// Emit one <DataArray> per time step of `field` into an already-open
+// <PointData> / <CellData> element.
+//
+// Precision: max_digits10 (17 for double) so a value survives the round trip
+// through text. The default ostream precision is 6 significant digits, which
+// is fine for coordinates a human reads and quietly destructive for a solved
+// field — a 1e-9 displacement printed as "1.23457e-09" has lost three digits
+// the solver worked to produce, and a convergence study run against the
+// written file would measure the writer instead of the mesh.
+void emit_field_arrays(std::ostringstream& out, const souxmar_field_t* field) {
+  const char* name = souxmar_field_name(field);
+  const std::size_t count = souxmar_field_count(field);
+  const std::size_t steps = souxmar_field_num_time_steps(field);
+  const std::uint8_t components = souxmar_field_components(field);
+  const double* data = souxmar_field_data_const(field);
+
+  const auto saved_precision = out.precision();
+  out << std::setprecision(std::numeric_limits<double>::max_digits10);
+
+  for (std::size_t t = 0; t < steps; ++t) {
+    // VTK has no notion of time inside a single .vtu, so a multi-step field
+    // becomes one suffixed array per step. Step 0 keeps the bare name: the
+    // overwhelmingly common single-step case then reads in ParaView as the
+    // field the pipeline actually named, not as "displacement_t0".
+    out << "        <DataArray type=\"Float64\" Name=\"" << name;
+    if (t > 0)
+      out << "_t" << t;
+    out << "\" NumberOfComponents=\"" << static_cast<int>(components) << "\" format=\"ascii\">\n"
+        << "          ";
+    const std::size_t base = t * count * components;
+    for (std::size_t i = 0; i < count * components; ++i) {
+      out << data[base + i];
+      out << ((i + 1) % 6 == 0 ? "\n          " : " ");
+    }
+    if (count * components == 0)
+      out << "\n          ";
+    out << "\n        </DataArray>\n";
+  }
+
+  out << std::setprecision(saved_precision);
+}
+
+souxmar_status_t vtu_write(const souxmar_mesh_t* mesh,
+                           const souxmar_field_t* field,
                            const souxmar_value_t* inputs,
-                           void*                  /*user_data*/) {
+                           void* /*user_data*/) {
   if (mesh == nullptr) {
     return souxmar_status_error(SOUXMAR_E_INVALID_ARGUMENT, "mesh is NULL");
   }
@@ -151,6 +196,49 @@ souxmar_status_t vtu_write(const souxmar_mesh_t*  mesh,
   }
   out << "\n        </DataArray>\n"
       << "      </Cells>\n";
+
+  // ---- PointData / CellData ----------------------------------------------
+  // The writer vtable's `field` is documented as "may be NULL (mesh-only
+  // writers)", and until now this writer treated every field as if it were
+  // NULL: the parameter was unnamed and nothing downstream of a solver ever
+  // reached the file. ROADMAP Phase 2's definition of done — "a .vtu that
+  // opens in ParaView and shows a recognisably correct stress field" — was
+  // unreachable for that reason alone, independently of whether any solver
+  // computed one.
+  if (field != nullptr) {
+    const std::uint8_t location = souxmar_field_location(field);
+    const std::size_t count = souxmar_field_count(field);
+
+    // A field whose count does not match the thing it claims to be attached
+    // to is a pipeline wiring bug. Writing it anyway produces a file ParaView
+    // opens and renders wrong, which is far worse than refusing.
+    if (location == SOUXMAR_FL_NODAL) {
+      if (count != num_nodes) {
+        return souxmar_status_error(
+            SOUXMAR_E_INVALID_ARGUMENT,
+            "writer.vtu: nodal field length does not match the mesh node count");
+      }
+      out << "      <PointData>\n";
+      emit_field_arrays(out, field);
+      out << "      </PointData>\n";
+    } else if (location == SOUXMAR_FL_CELL) {
+      if (count != num_cells) {
+        return souxmar_status_error(
+            SOUXMAR_E_INVALID_ARGUMENT,
+            "writer.vtu: cell field length does not match the mesh cell count");
+      }
+      out << "      <CellData>\n";
+      emit_field_arrays(out, field);
+      out << "      </CellData>\n";
+    }
+    // SOUXMAR_FL_FACE and SOUXMAR_FL_GAUSS_POINT are dropped deliberately.
+    // Neither has a VTU equivalent: face data would need the faces emitted as
+    // their own cells, and Gauss-point data needs a per-cell quadrature rule
+    // the format cannot carry. Silently omitting them is the honest option —
+    // failing would make writer.vtu unusable as a general sink, and
+    // interpolating them to nodes here would invent numbers the solver never
+    // produced. A future postproc stage does that projection explicitly.
+  }
 
   out << "    </Piece>\n"
       << "  </UnstructuredGrid>\n"
