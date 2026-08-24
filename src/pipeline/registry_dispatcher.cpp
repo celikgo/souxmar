@@ -334,9 +334,23 @@ std::string resolve_reader_path(const std::filesystem::path& base_dir,
                                 const std::string& path_str) {
   if (base_dir.empty())
     return path_str;
-  std::filesystem::path p(path_str);
-  if (p.is_absolute())
+  const std::filesystem::path p(path_str);
+  // Not just is_absolute(). On Windows that is false for a root-directory
+  // path like /data/mesh.obj (it has no root *name*), which POSIX would pass
+  // through untouched, and false for a drive-relative C:mesh.obj — appending
+  // either to base_dir is the one answer that is simply wrong. Anything
+  // carrying a root name or a root directory is the caller's own anchor and
+  // is left alone.
+  if (p.is_absolute() || p.has_root_name() || p.has_root_directory())
     return path_str;
+  // lexically_normal, not weakly_canonical: `..` is collapsed textually and
+  // symlinks are not resolved, so a pipeline reached through a symlinked
+  // directory whose reader path escapes it with `../` resolves against the
+  // link rather than its target. Deliberate — it keeps this function pure and
+  // free of filesystem probing, and every reader path in the in-tree corpus
+  // is a bare filename. The resolved string is never hashed (see above), so
+  // switching to the error_code overload of weakly_canonical would cost
+  // nothing in determinism if a real pipeline ever needs it.
   return (base_dir / p).lexically_normal().string();
 }
 

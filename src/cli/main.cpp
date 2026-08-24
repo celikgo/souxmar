@@ -535,8 +535,15 @@ int cmd_run(const fs::path& pipeline_path,
   // example's header documents — looks for cube.stl in whatever directory the
   // user happens to be standing in, and five of the ten shipped examples
   // could only ever run after cd'ing into their own folder.
-  souxmar::pipeline::RegistryDispatcher dispatcher(registry,
-                                                   fs::absolute(pipeline_path).parent_path());
+  //
+  // error_code overload: the throwing fs::absolute sits outside the try below
+  // and main() has no top-level handler, so an unreadable or deleted working
+  // directory would terminate instead of reporting. An empty parent means
+  // "the working directory", which is exactly the prior behaviour.
+  std::error_code abs_ec;
+  const fs::path pipeline_abs = fs::absolute(pipeline_path, abs_ec);
+  const fs::path base_dir = abs_ec ? pipeline_path.parent_path() : pipeline_abs.parent_path();
+  souxmar::pipeline::RegistryDispatcher dispatcher(registry, base_dir);
   souxmar::pipeline::Cache cache;
   souxmar::pipeline::RunOptions opts;
   opts.use_cache = use_cache;

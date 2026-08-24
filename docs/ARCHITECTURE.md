@@ -148,7 +148,7 @@ Fitting that block inside the existing kinds surfaced two **structural constrain
 
 1. **`postproc.*` hard-requires an input field.** A `postproc` stage's `field: {from: <stage>}` input is resolved by the dispatcher before the plugin is called; a missing field is a dispatch error, not a NULL handed to the plugin. So a *field → field* derivation is a `postproc.*`, but an analysis that reads only the mesh has nothing to declare and cannot be one. This is why the mesh-only manufacturability checks — `solver.am.overhang`, `solver.am.printability`, `solver.am.buildtime` — register as `solver.*` despite being post-design checks rather than physics solves. The naming is slightly counter-intuitive; the alternative was a spurious upstream field, which is worse.
 
-2. **Meshers get no value bag.** The mesher entry point receives only `souxmar_mesher_options_t` — `target_size`, `optimize`, `element_order`, `random_seed` — filled from the YAML keys of the same names. A mesher cannot read custom input keys at all. Readers, by contrast, are passed the full value bag alongside their path. So *fully-parametric geometry generation goes through `reader.*`*: `reader.lattice` takes a unit-cell type, cell size, relative density and grid counts, which no mesher could have read. `mesher.am.layered` stays a mesher precisely because everything it needs already maps onto those four fields — the simulation layer thickness arrives as `target_size`, and `element_order` gates its linear-only path — and it *documents* the choices it therefore cannot accept, namely the build direction and the default build box used when no geometry is supplied, rather than pretending to read them.
+2. **Meshers get no value bag.** The mesher entry point receives only `souxmar_mesher_options_t` — `target_size`, `optimize`, `element_order`, `random_seed` — filled from the YAML keys of the same names. A mesher cannot read custom input keys at all. Readers, by contrast, are passed the full value bag alongside their path — which is the host-resolved one; see `PLUGIN_SDK.md` on why a reader must use the argument rather than the bag's unresolved `path`. So *fully-parametric geometry generation goes through `reader.*`*: `reader.lattice` takes a unit-cell type, cell size, relative density and grid counts, which no mesher could have read. `mesher.am.layered` stays a mesher precisely because everything it needs already maps onto those four fields — the simulation layer thickness arrives as `target_size`, and `element_order` gates its linear-only path — and it *documents* the choices it therefore cannot accept, namely the build direction and the default build box used when no geometry is supplied, rather than pretending to read them.
 
 Neither constraint is a defect to be fixed in v2 by widening the mesher signature; both are the ABI being narrow on purpose. The rule they imply is worth stating directly: **the capability kind is chosen by what data the stage consumes, not by what the engineer would call the activity.**
 
@@ -186,6 +186,15 @@ stages:
       fields: { from: solve }
       path:   results/cantilever.vtu
 ```
+
+**Path resolution.** A `path` on a `reader.*` stage resolves against the
+directory the pipeline file itself was loaded from, so an input that ships
+beside its pipeline is found wherever the command is run from. Every other
+relative path — a writer's output above all — resolves against the process
+working directory, so build products land where the operator is standing and
+not in the source tree. Absolute paths are used unchanged in both cases. The
+split is deliberate: inputs belong to the pipeline, outputs belong to the run.
+The engine tells them apart by capability namespace, not by a list of ids.
 
 The orchestrator:
 

@@ -135,6 +135,8 @@ souxmar follows semantic versioning **for the ABI**, decoupled from the release 
 
 Reader plugins consume a path on disk + a value-bag of options and produce **either** a Mesh (tessellated formats — STL / OBJ / PLY) **or** a Geometry (CAD formats — STEP / IGES / BREP). The vtable has two output slots; the plugin fills exactly one, and the host's dispatcher routes the result to the matching `StageOutput` kind. See `souxmar-c/reader.h` for the full contract and `examples/plugins/stl-reader/` for the reference implementation.
 
+**Use the `path` argument, not `inputs["path"]`.** A reader is handed both, and they are not the same string. The argument is authoritative: the host has already resolved it, and a relative path in a pipeline resolves against the directory the *pipeline file* came from, not the process working directory. The value bag still carries the path exactly as written in the YAML, because that unresolved string is what the content-addressed cache hashes — resolving it before hashing would put a machine-specific absolute path into every stage fingerprint. A reader that pulls its path out of the bag will therefore resolve against the working directory and behave differently from every in-tree reader, on the one axis users notice.
+
 The `reader.*` surface landed as the **first additive minor ratchet event** during the v1 freeze-candidate soak — `SOUXMAR_ABI_VERSION_MINOR` bumped 0 → 1. A v1.0 plugin keeps loading on a v1.1 host (every new symbol is opt-in); a v1.1 plugin attempting to register a reader against a v1.0 host fails at symbol resolution time, which conformance check C004 catches.
 
 ## Current freeze status: **frozen FINAL at v1.1** (since Sprint 7 push 1, 2026-05-11)

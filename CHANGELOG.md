@@ -105,6 +105,20 @@ catalogue stands at **24 tools**, most recently
   OpenCASCADE; no example in the corpus uses either, and that misattribution
   is plausibly why five one-line bugs read as an unfixable dependency problem.
 
+  Adjacent corrections the fix forced, each of which was independently wrong
+  before it: the Python binding exposed `parse_pipeline_file` but bound
+  `RegistryDispatcher(registry)` only, so Python — the one caller that always
+  *has* a pipeline file — could not reach the new behaviour at all; the
+  determinism harness ran with the engine's default per-user persistent cache,
+  so a local run fingerprinted how warm that machine's cache was (`[CACHED  ]`
+  and `[OK      ]` sit on the same line as the hash it digests) and now passes
+  `--no-cache`; `fs::absolute` in the CLI is the throwing overload sitting
+  outside the surrounding `try` with no top-level handler; the resolver now
+  leaves Windows root-directory and drive-relative paths alone, where a plain
+  `is_absolute()` test would have rebased them onto the wrong drive; and the
+  repo-root invocation that newly works drops `.gcode`, `.cli` and report
+  files the root `.gitignore` did not cover.
+
   `tests/integration/test_cli_smoke.cpp` gains a corpus-wide regression test
   that runs every `examples/*/pipeline.yaml` from a foreign working directory.
   It fails on exactly those five before the fix. Nothing caught this before

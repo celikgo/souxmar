@@ -139,8 +139,16 @@ What happens under the hood:
 ## Re-running
 
 The pipeline cache is keyed on inputs + plugin version + transitive
-upstream hashes. A second `souxmar run` with no source changes marks
-all three stages `[CACHED]` and skips dispatch entirely.
+upstream hashes. A second `souxmar run` against the same cache marks the
+`write` stage `[CACHED]` and re-dispatches the other two: only
+`Kind::Path` stage outputs are persistable today, so Mesh and Field
+results are recomputed every run.
+
+Two caveats worth knowing. "No source changes" is not what the key
+measures — the reader's `path` string is hashed, not the bytes of the
+file it names, so editing `pipe-bend.obj` in place does **not** invalidate
+the entry. And the cache directory is per-user and persistent unless you
+pass `--cache-dir` or `--no-cache`.
 
 `--no-cache` forces re-execution.
 

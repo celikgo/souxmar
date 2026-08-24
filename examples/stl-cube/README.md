@@ -23,9 +23,13 @@ What you get when you run it:
 cmake --preset dev -DSOUXMAR_BUILD_EXAMPLES=ON
 cmake --build --preset dev
 
-cd examples/stl-cube
-souxmar --plugin-path <build>/examples/plugins run pipeline.yaml
+souxmar --plugin-path <build>/examples/plugins \
+    run examples/stl-cube/pipeline.yaml
 ```
+
+`cube.stl` is found beside the pipeline file regardless of where you run
+from. The output is the other way round — it lands in your working
+directory.
 
 You should see:
 
@@ -35,7 +39,7 @@ You should see:
 [OK     ] write    hash=<hex>
 ```
 
-and a `cube.vtu` file next to `pipeline.yaml`.
+and a `cube.vtu` file in the directory you ran from.
 
 ## What's next
 

@@ -129,9 +129,18 @@ MANIFEST="$WORK/manifest.txt"
     # and with a fixed TZ + locale: both leak into formatted output and
     # would otherwise show up as a platform difference that is really a
     # runner-configuration difference.
+    #
+    # --no-cache for the same reason, and it is not theoretical. The engine
+    # caches by default into a persistent per-user directory (~/Library/Caches
+    # /souxmar, $XDG_CACHE_HOME/souxmar, %LOCALAPPDATA%), so without this a
+    # developer running the gate locally reuses whatever their previous runs
+    # left behind, and the printed per-stage tag flips from [OK      ] to
+    # [CACHED  ] on the same line as the hash this script fingerprints. The
+    # manifest would then encode how warm that machine's cache was rather
+    # than what the pipeline does. CI is cold and never noticed.
     (
       cd "$WORK" || exit 1
-      TZ=UTC LC_ALL=C "$ENGINE" run "$pipeline" $PLUGIN_ARGS
+      TZ=UTC LC_ALL=C "$ENGINE" run "$pipeline" --no-cache $PLUGIN_ARGS
     ) >"$out" 2>"$WORK/$name.err"
     rc=$?
 

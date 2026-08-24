@@ -133,8 +133,14 @@ The manifests are then diffed against each other.
 
 There is no golden file. **The platforms are each other's reference**, so nothing can drift by
 having its expected value quietly updated. A pipeline that fails identically everywhere is still
-deterministic, so the exit code is part of the fingerprint rather than an abort — what fails the
-gate is one platform disagreeing with another.
+deterministic, so the exit code is recorded as an `EXIT-<rc>` line in the manifest rather than
+aborting the run — one platform disagreeing with another is what the cross-platform diff catches.
+
+That alone let five of ten examples sit broken for months while the gate announced "3 platforms
+agree on every pipeline": an `EXIT-*` line compares equal everywhere for free, so it contributes
+nothing. The job therefore also passes `--require-all`, which fails that platform's own run if
+**any** pipeline in the corpus did not produce a hash. It is deliberately not a numeric floor —
+a floor cannot notice an *eleventh* example landing broken.
 
 ## Why the performance gate is advisory
 
