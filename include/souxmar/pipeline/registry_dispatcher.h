@@ -71,6 +71,11 @@ class RegistryDispatcher : public IDispatcher {
 
   DispatchResult dispatch(const DispatchContext& ctx) override;
 
+  // For a reader.* stage, a digest of the bytes its `path` points at. Empty
+  // for every other capability, whose declared inputs already describe the
+  // work. See IDispatcher::cache_key_extra for why this is not optional.
+  std::string cache_key_extra(std::string_view capability_id, const Value& inputs) override;
+
   // Returned in the cache-key context string. Sprint 3 push 2 returns the
   // capability's ABI-version integer as a stand-in for plugin version;
   // real per-plugin version strings come with the plugin manifest in

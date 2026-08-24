@@ -72,6 +72,37 @@ catalogue stands at **24 tools**, most recently
 
 ### Fixed
 
+- **The pipeline cache could serve one pipeline's output to another.** A
+  stage's key was built from the capability id, plugin version, declared
+  inputs and upstream hashes — and a reader's declared input is a *path*,
+  which is not what a reader reads. Two pipelines naming the same relative
+  input file produced identical keys, so the second was handed the first's
+  result and reported it as `[CACHED]`. Not a crash and not a diff: a
+  plausible, wrong answer. Reproduced end to end, then fixed by folding a
+  streamed SHA-256 of the reader's input bytes into the key, through a new
+  `IDispatcher::cache_key_extra` hook applied identically in both the
+  sequential and parallel runners (they share one cache, so a key computed
+  differently in each would silently halve it).
+
+  This also makes an in-place edit of an input invalidate the stages that
+  read it, which it previously did not.
+
+  Digesting is streamed in 64 KiB chunks rather than slurping, because it
+  runs on every stage evaluation including cache hits — the digest is what
+  decides whether a hit is legitimate, so it cannot be skipped on the fast
+  path, and a reader's input can be a very large mesh. Cross-platform safety
+  rests on `.gitattributes`: `*.stl` is `binary` and everything else falls
+  under `* text=auto eol=lf`, so every corpus input is byte-identical on all
+  three runners and the digest cannot itself become a determinism failure.
+
+  Reachable in this form only since reader paths began resolving against
+  their pipeline file — before that, two pipelines could not share a working
+  directory, and a `Kind::Path` output is rehydrated only when the file it
+  names still exists. That accident is also what made it hard to test: the
+  regression test needs a shared working directory *and* a shared cache, and
+  asserts on the `[CACHED]` tag rather than on file contents, because in a
+  shared directory the two runs overwrite each other's output regardless.
+
 - **Five of the ten shipped examples could not run, and it was one bug.**
   `am-marine-propeller`, `am-polymer-auv-fairing`,
   `am-submarine-pressure-hull`, `pipe-bend` and `stl-cube` each name an input
