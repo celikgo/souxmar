@@ -19,9 +19,16 @@ current are reported as "(removed)" and do not fail the gate either
 
 Exit code 0 if every benchmark is within `threshold` (default 5%, per
 docs/ENGINEERING_PRACTICES.md § Performance budgets, lowered from the
-Sprint 5 nightly's 10% by Sprint 9 push 6) of the baseline; non-zero
-otherwise. Prints a per-benchmark table to stdout in either case so
-the GitHub Actions log carries the diff regardless.
+Sprint 5 nightly's 10% by Sprint 9 push 6) of the baseline; 1 if any
+benchmark regressed past it; 2 if the comparison could not be run at
+all. Prints a per-benchmark table to stdout in either case so the
+GitHub Actions log carries the diff regardless.
+
+"Could not be run at all" includes the case that hid the Benchmarks
+job's build failure for months: `--current-dir` contains no reports
+while `--baseline-dir` holds committed baselines, i.e. the suite never
+produced a single JSON. That is distinct from the benign new-benchmark
+skip above, and unlike it, it fails.
 
 Google Benchmark's JSON format records `cpu_time` + `real_time` per
 benchmark. We compare `real_time` (wall clock) since that's what users
@@ -213,6 +220,7 @@ def main(argv: list[str]) -> int:
         print(table)
 
     # Files in baseline that aren't in current (removed benchmarks).
+    baseline_names: set[str] = set()
     if args.baseline_dir.is_dir():
         baseline_names = {p.name for p in args.baseline_dir.glob("*.json")}
         current_names  = {p.name for p in current_files}
@@ -221,11 +229,30 @@ def main(argv: list[str]) -> int:
 
     if not any_compared:
         if skipped:
+            # Genuinely-skipped: every current report is a benchmark whose
+            # baseline hasn't been rotated in yet. Nothing to gate on.
             print(f"\nNOTE: no comparisons ran — {len(skipped)} new "
                   "benchmark(s) without a baseline. The first run after a "
                   "baseline rotation always lands in this state.")
-        else:
-            print("\nNOTE: no current reports found.")
+            return 0
+        if baseline_names:
+            # Nothing skipped and nothing compared means --current-dir held no
+            # reports at all, while committed baselines say the suite is
+            # supposed to produce some. That is not "no baseline yet" — it is
+            # "the suite never ran", which is exactly how the Benchmarks job
+            # spent months reporting success: it failed to *build* the
+            # bench_* binaries, emitted zero JSON, and this branch returned 0.
+            # Exit 2 (tool/usage failure) rather than 1 so the log
+            # distinguishes "the suite is broken" from "perf regressed".
+            print(f"\nERROR: no reports in {args.current_dir}, but "
+                  f"{len(baseline_names)} baseline(s) in {args.baseline_dir} "
+                  "expect them — the benchmark suite did not run.",
+                  file=sys.stderr)
+            return 2
+        # No baselines and no current reports: there is no suite to speak of,
+        # so there is nothing to fail on either.
+        print("\nNOTE: no current reports found, and no baselines to "
+              "compare against.")
         return 0
     if any_regression:
         print(f"\nERROR: at least one benchmark regressed beyond "

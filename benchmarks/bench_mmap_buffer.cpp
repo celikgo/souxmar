@@ -88,8 +88,17 @@ void BM_MmapReopenReadOnly(benchmark::State& state) {
     // pays when it reads the buffer through souxmar_buffer_data_const.
     auto* p = static_cast<const std::uint8_t*>(souxmar_buffer_data_const(b));
     if (p) {
-      benchmark::DoNotOptimize(p[0]);
-      benchmark::DoNotOptimize(p[bytes - 1]);
+      // `p` points to const, so `p[i]` is a const lvalue and used to bind
+      // benchmark::DoNotOptimize(Tp const&) — deprecated since
+      // google-benchmark 1.8 precisely because a const-ref barrier lets the
+      // compiler drop the load we are here to measure, and a hard error under
+      // the -Werror the Linux "Benchmarks (advisory)" job builds with.
+      // Reading each byte into a mutable sink picks the non-const overload
+      // and forces the page fault this benchmark exists to time.
+      std::uint8_t first = p[0];
+      benchmark::DoNotOptimize(first);
+      std::uint8_t last = p[bytes - 1];
+      benchmark::DoNotOptimize(last);
     }
     souxmar_buffer_free(b);
   }

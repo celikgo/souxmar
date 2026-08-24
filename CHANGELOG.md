@@ -21,6 +21,88 @@ catalogue stands at **24 tools**, most recently
 
 ## [Unreleased]
 
+### Fixed
+
+- **The `Benchmarks (advisory)` job has never compiled, so the perf
+  comparison it exists for has never run once.** One
+  `-Werror=useless-cast` (`bench_mesh_construction.cpp:48`, which fires only
+  on Linux, where `size_t` *is* `uint64_t`) and five
+  `-Werror=deprecated-declarations` from google-benchmark's const-ref
+  `DoNotOptimize` overloads, across four files — two of which CI had never
+  reached, because ninja stopped at the first. Fixed in the sources; no
+  warning was silenced, and the const-ref deprecation is real (the barrier
+  lets the optimiser elide the work being measured). `compare.py` no longer
+  returns 0 when *nothing* was compared: the "new benchmark, no baseline yet"
+  escape hatch is kept, but a non-empty baseline directory with zero current
+  reports is now exit 2. The job stays advisory — the committed baselines
+  were recorded on reference hardware that `gh api .../actions/runners` shows
+  has never existed.
+- **The synthetic-load harness could not run a single target.** A relative
+  `--engine` stopped resolving once the example loop `pushd`'d into its
+  scratch directory (`rc=127`); `souxmar-eval` was handed a single YAML where
+  it requires a directory plus `--only <id>` (exit 2); `--plugin-path` was
+  given leaf plugin directories where discovery scans a search path's
+  *immediate subdirectories*, so zero plugins loaded; and the eval leg passed
+  no plugin path at all. Two further defects would have surfaced the moment
+  the corpus was seeded: `corpus_lookup`'s awk called `exit` without clearing
+  its state, so the END rule fired again and every fingerprint came back
+  twice, and neither fingerprint source was deterministic — `souxmar-eval`
+  prints an unnormalised wall-clock latency block, and `souxmar run` prints
+  `[CACHED  ]` instead of `[OK      ]` on a machine with a warm disk cache.
+  All four targets now produce stable, byte-identical fingerprints across
+  repeat runs, which is the state `docs/INFRA_STATUS.md`'s bootstrap PR needs
+  and has never had.
+- **Three visual-regression specs selected UI the app stopped rendering
+  months ago.** The earlier diagnosis that the app renders nothing was wrong:
+  the Vite build succeeds and Playwright drives a fully-rendered React app.
+  A renamed BYOK heading, a redesigned workbench empty state and a
+  `chat_send` mock still returning a bare string where `Chat.tsx` has
+  expected a typed `ChatSummary` since Sprint 14. The mock table is extended
+  to the commands the visual surfaces actually reach and typed against
+  `bridge.ts`, so the next contract change breaks at `tsc` time rather than
+  as a missing element. `docs/INFRA_STATUS.md`'s bootstrap precondition is
+  rewritten: it waited for a *green* run, and a baseline-less Playwright
+  suite is red by definition on its first one.
+- **The ABI-freeze gate had drifted past five of the twenty frozen headers.**
+  `check-frozen-headers.sh` carried a hand-maintained list of 15 paths;
+  `brep.h`, `field_stream.h`, `sketch.h`, `surface_stream.h` and
+  `timeseries.h` could be edited with no ratchet marker, so the gate answered
+  "no v1 ABI surface touched" for a real v1 ABI change — worse than no gate,
+  because it is a positive assertion of safety. The list is now derived from
+  the tree.
+- **`ci-ok` could report green with zero compilation.** `skipped` counts as a
+  pass, and the `changes` paths-filter job — whose failure skips every
+  downstream job — was not in its `needs`. Added. The filter also had no
+  `scripts/**` entry, so a PR editing a CI-critical script skipped every job
+  that runs it, including the determinism gate's own fingerprint script.
+- **The nightly had no gate at all.** Its `report` job was `if: always()` and
+  wrote a markdown table, so the workflow's conclusion was decoupled from its
+  jobs: a sanitizer could report a use-after-free and the run still finished
+  green. It now runs the same `NEEDS_JSON` check `ci-ok` does, exempting
+  `synth-load`, `agent-eval-llm` and `fuzz` **by name** with a stated end
+  condition for each — never by reading `continue-on-error:`, which means
+  "do not fail the run" and is exactly the decision this step exists to make.
+  The `fuzz` job's crash-artifact upload was also unreachable: `|| true` on
+  the run step meant `if: failure()` could never fire, so a libFuzzer
+  reproducer would have been thrown away with the runner.
+- **The determinism gate was vacuous on more than half its corpus.** Five of
+  nine example pipelines fingerprinted as `EXIT-70` on all three platforms
+  while the gate announced "3 platforms agree on every pipeline". Both counts
+  are now reported and `--min-hashed` makes the floor a committed ratchet.
+
+### Added
+
+- **`security-ok`, the second required status check.** `needs:` cannot cross
+  workflows, so `ci-ok` structurally cannot cover CodeQL, the SCA scans,
+  dependency review or the licence inventory — while `docs/CI.md` marked four
+  of them "Blocking: Yes" *and* said to require exactly one check, which
+  cannot both be true. `security.yml` also gains the `merge_group:` trigger
+  `ci.yml` already had, without which a required check never reports inside a
+  merge queue and blocks it rather than gating it. `docs/CI.md` now carries
+  the exact `gh api` payload, and states plainly that **no branch protection
+  is enabled today**, so every gate in this repository is currently advisory.
+  `.github/CODEOWNERS` no longer claims to gate merges; it assigns reviewers.
+
 ### Changed
 
 - **Linux CI runners move to `ubuntu-24.04`, and nothing in this repository

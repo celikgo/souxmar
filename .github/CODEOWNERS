@@ -1,8 +1,15 @@
 # souxmar code ownership.
 #
-# CODEOWNERS gates merges: changes in an owned path require approval from at
-# least one named owner. souxmar has one maintainer, so one entry says all of
-# it. Adding per-area teams before those teams exist would make this file
-# inert — GitHub silently ignores owners it cannot resolve.
+# CODEOWNERS assigns reviewers: an owned path puts its owner on the PR
+# automatically. souxmar has one maintainer, so one entry says all of it.
+# Adding per-area teams before those teams exist would make this file inert —
+# GitHub silently ignores owners it cannot resolve.
+#
+# It does NOT gate merges. This file used to claim it did. Ownership only
+# blocks a merge when branch protection sets `require_code_owner_reviews`,
+# and `master` has no branch protection at all — see docs/CI.md § Branch
+# protection. Even once protection is enabled, a single-maintainer repository
+# cannot require code-owner review of its only author, so the merge gate is
+# the two status checks named there, not this file.
 
 *   @celikgo

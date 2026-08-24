@@ -24,7 +24,18 @@ test("Welcome step matches baseline", async ({ page }) => {
 test("BYOK step matches baseline", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /get started/i }).click();
-  await expect(page.getByRole("heading", { name: /configure your ai provider/i })).toBeVisible();
+  // 381c09f (2026-08-18) retitled this step from "Configure your AI
+  // provider" to "Connect a model". Nothing failed at review time — the
+  // heading is only ever named here — so the spec went stale and every
+  // run since died on "element(s) not found" before reaching the
+  // screenshot, on all three runners at once.
+  //
+  // The durable fix is a `data-testid="byok-heading"` on the <h1> at
+  // src/desktop/src/onboarding/BYOKStep.tsx:131 and a getByTestId here;
+  // src/desktop is out of scope for this change, so the selector stays
+  // coupled to the rendered copy and will break again the next time the
+  // wording moves. Whoever renames it next should land the testid.
+  await expect(page.getByRole("heading", { name: /connect a model/i })).toBeVisible();
   await expect(page).toHaveScreenshot("byok.png", { fullPage: true });
 });
 

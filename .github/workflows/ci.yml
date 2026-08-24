@@ -67,6 +67,23 @@ jobs:
               - 'CMakePresets.json'
               - 'vcpkg.json'
               - '.github/**'
+              # A PR that only edits a CI-critical script used to match no
+              # filter at all, so every job that runs the script it changed
+              # was skipped and the change landed unexercised — the
+              # determinism gate's own fingerprint script and the
+              # normaliser it calls both live here.
+              #
+              # Only `engine` gets it, deliberately. Everything else that
+              # runs a script is already covered: governance, format,
+              # docs-truth and version-consistency have no `if:` guard and
+              # run on every PR, and conformance, agent-evals,
+              # docs-generated, determinism and benchmarks are all reached
+              # through this filter. The one non-obvious case is `rust`,
+              # whose sole script dependency is scripts/ci/apt-install.sh
+              # — which the unguarded `format` job runs first, so breaking
+              # it cannot reach master unnoticed. python-bindings and
+              # frontend call no script at all.
+              - 'scripts/**'
             python:
               - 'bindings/python/**'
               - 'src/**'
@@ -371,9 +388,27 @@ jobs:
           # the `determinism` job. Windows ships the binary with .exe.
           engine="build/${{ matrix.preset }}/src/cli/souxmar"
           [ -x "$engine" ] || engine="$engine.exe"
+          # --min-hashed is a coverage floor, not a target. A pipeline that
+          # exits non-zero identically everywhere is still deterministic, so
+          # the manifest records it as EXIT-<rc> rather than aborting — but
+          # nothing bounded how much of the corpus could be EXIT-* while the
+          # gate still announced "3 platforms agree on every pipeline".
+          #
+          # 4 is what the corpus actually hashes today, read off run
+          # 32355873858 (Engine (linux-gcc), 2026-08-20): am-lpbf-bracket,
+          # cantilever-beam, modal-beam and thermal-fin hash.
+          # am-marine-propeller, am-polymer-auv-fairing,
+          # am-submarine-pressure-hull, pipe-bend and stl-cube are all
+          # EXIT-70. Those five are genuinely broken examples, not a gate
+          # problem — the first four of them and mesh-comparison/swap-mesher
+          # all reach for reader.step, which is behind SOUXMAR_WITH_OPENCASCADE
+          # and no workflow sets it. This is a ratchet: raise it by one each
+          # time one of them is fixed, so the coverage cannot silently fall
+          # back.
           scripts/ci/determinism-fingerprint.sh \
             --engine "$engine" \
             --plugin-path "$PWD/build/${{ matrix.preset }}/examples/plugins" \
+            --min-hashed 4 \
             --out "build/${{ matrix.preset }}/determinism.txt"
           cat "build/${{ matrix.preset }}/determinism.txt"
 
@@ -744,6 +779,13 @@ jobs:
     timeout-minutes: 5
     if: always()
     needs:
+      # `changes` is here because `skipped` counts as a pass below, and
+      # `changes` is the one job whose failure skips every other job in
+      # the graph. Left out, a paths-filter that errored produced a run
+      # where nothing compiled and this check still reported green. It
+      # carries no `if:` guard and finishes in seconds, so requiring it
+      # costs nothing.
+      - changes
       - governance
       - format
       - version-consistency

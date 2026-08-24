@@ -9,8 +9,13 @@
 #
 # Run:
 #   souxmar run examples/cantilever-beam/pipeline.yaml \
-#     --plugin-path build/dev/examples/plugins/hello-mesher \
-#     --plugin-path build/dev/examples/plugins/vtu-writer
+#     --plugin-path build/dev/examples/plugins
+#
+# --plugin-path wants the search *root*, not a leaf plugin directory: its
+# immediate subdirectories are what get scanned for souxmar-plugin.toml
+# (include/souxmar/plugin/discovery.h:83-85). The two leaf paths this block
+# used to recommend discover nothing and the run aborts with "no plugins
+# found"; scripts/synth-load/run.sh copied them verbatim and failed nightly.
 #
 # Output: cantilever.vtu in $PWD, openable in ParaView.
 

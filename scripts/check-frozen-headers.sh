@@ -52,24 +52,47 @@ for ref in "$BASE_REF" "$HEAD_REF"; do
   fi
 done
 
-# The inventory under freeze. Keep in sync with ADR-0008's table.
-FROZEN_HEADERS=(
-  "include/souxmar-c/abi.h"
-  "include/souxmar-c/status.h"
-  "include/souxmar-c/types.h"
-  "include/souxmar-c/plugin.h"
-  "include/souxmar-c/registry.h"
-  "include/souxmar-c/mesher.h"
-  "include/souxmar-c/solver.h"
-  "include/souxmar-c/writer.h"
-  "include/souxmar-c/postproc.h"
-  "include/souxmar-c/reader.h"
-  "include/souxmar-c/mesh.h"
-  "include/souxmar-c/geometry.h"
-  "include/souxmar-c/field.h"
-  "include/souxmar-c/value.h"
-  "include/souxmar-c/buffer.h"
+# The inventory under freeze, derived from the tree rather than restated
+# here. The hand-maintained list this replaces said "Keep in sync with
+# ADR-0008's table" and listed 15 headers while include/souxmar-c/ had
+# grown to 20: brep.h, field_stream.h, sketch.h, surface_stream.h and
+# timeseries.h were all editable with no ratchet marker. A gate that
+# prints "no v1 ABI surface touched" while a quarter of that surface is
+# outside its own list is worse than no gate, because it positively
+# asserts the safety it is not checking. ADR-0008 freezes the directory,
+# so the directory is the source of truth.
+#
+# Both refs are consulted, not just the worktree: a PR whose only change
+# is `git rm include/souxmar-c/sketch.h` leaves `git ls-files` nothing to
+# find, and removing a frozen header is the most breaking change the ABI
+# admits. `ls-tree` takes no `glob` pathspec magic, so the base side is
+# scoped to the directory and filtered to `.h` here.
+#
+# Every pathspec carries `:(top)`, which anchors it to the repository
+# root. Without it the plain relative paths matched nothing whenever the
+# script ran from anywhere but the checkout root — from scripts/, the
+# diff came back empty and the gate exited 0 on a PR that rewrote abi.h.
+FROZEN_HEADERS=()
+while IFS= read -r header; do
+  [ -n "$header" ] && FROZEN_HEADERS+=(":(top)$header")
+done < <(
+  {
+    git ls-files --full-name -- ':(top,glob)include/souxmar-c/*.h'
+    git ls-tree -r --full-name --name-only "$BASE_REF" \
+      -- ':(top)include/souxmar-c/' | grep -E '\.h$'
+  } | LC_ALL=C sort -u
 )
+
+# Fail closed for the same reason the ref check above does: an empty
+# inventory would make the diff below match nothing and report "no v1 ABI
+# surface touched", which is the exact false green this gate exists to
+# prevent.
+if [ "${#FROZEN_HEADERS[@]}" -eq 0 ]; then
+  echo "frozen-headers: found no headers under include/souxmar-c/." >&2
+  echo "  Either the checkout is not a souxmar tree or the ABI surface was deleted wholesale." >&2
+  exit 1
+fi
+echo "frozen-headers: ${#FROZEN_HEADERS[@]} headers under ADR-0008 freeze."
 
 ADDITIVE_MARKER="Ratchet: additive minor surface (ADR-0008)"
 BUGFIX_MARKER_PREFIX="Ratchet: bug-fix (ADR-0008)"

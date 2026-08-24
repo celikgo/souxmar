@@ -102,7 +102,13 @@ static void BM_FaceTag_GetHit(benchmark::State& state) {
   }
   std::size_t i = 0;
   for (auto _ : state) {
-    const auto t = m.face_tag(CellIndex{i % n_tets}, 0);
+    // `t` is deliberately non-const: google-benchmark 1.8 deprecated
+    // DoNotOptimize(Tp const&) because a const-ref barrier lets the compiler
+    // elide the lookup being timed, and the Linux "Benchmarks (advisory)" job
+    // builds with -Werror, so a `const auto t` here failed the whole binary at
+    // compile time. It is already a by-value copy of the returned tag — the
+    // mutable sink is what routes it to the non-const overload.
+    auto t = m.face_tag(CellIndex{i % n_tets}, 0);
     benchmark::DoNotOptimize(t);
     ++i;
   }
@@ -117,7 +123,10 @@ static void BM_FaceTag_GetMiss(benchmark::State& state) {
   Mesh m = build_tet_mesh(n_tets);
   std::size_t i = 0;
   for (auto _ : state) {
-    const auto t = m.face_tag(CellIndex{i % n_tets}, 0);
+    // Non-const for the same reason as BM_FaceTag_GetHit above: the const-ref
+    // DoNotOptimize overload is deprecated and -Werror turns that into a
+    // build failure.
+    auto t = m.face_tag(CellIndex{i % n_tets}, 0);
     benchmark::DoNotOptimize(t);
     ++i;
   }

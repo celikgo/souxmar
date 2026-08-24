@@ -135,6 +135,13 @@ jobs:
     name: Fuzz ${{ matrix.target }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # tests/fuzz/ does not exist yet, so both steps below no-op out and the
+    # job is green by construction — this flag is not holding anything up
+    # today. It stays only until the targets ENGINEERING_PRACTICES names
+    # land; the no-op guards already make the job safe against their
+    # absence, so the moment tests/fuzz/ appears this line comes off and a
+    # libFuzzer crash fails the nightly. It was the only continue-on-error
+    # in .github/ with no note saying when it ends.
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -157,14 +164,24 @@ jobs:
           cmake --preset dev -DSOUXMAR_BUILD_FUZZERS=ON
           cmake --build --preset dev
       - name: Run
+        # No `|| true`. It made the step succeed unconditionally, which in
+        # turn made the `if: failure()` that used to guard the upload below
+        # unreachable: libFuzzer writes its reproducer to crash-<sha1> in
+        # the cwd and exits non-zero, so the one run that finds a bug was
+        # also the one that threw the input away with the runner. A
+        # non-zero exit here is the finding.
         run: |
           [ -d tests/fuzz ] || exit 0
           budget=$(( ${{ github.event.inputs.fuzz_minutes || 30 }} * 60 ))
           build/dev/tests/fuzz/fuzz_${{ matrix.target }} \
             -max_total_time="$budget" -print_final_stats=1 \
-            tests/fuzz/corpus/${{ matrix.target }} || true
+            tests/fuzz/corpus/${{ matrix.target }}
       - uses: actions/upload-artifact@v7
-        if: failure()
+        # always(), not failure(): a reproducer is worth keeping however
+        # the step ended, and a timed-out or cancelled run can still have
+        # written one. if-no-files-found: ignore keeps the ordinary
+        # found-nothing night quiet.
+        if: always()
         with:
           name: fuzz-crashes-${{ matrix.target }}
           path: crash-*
@@ -192,3 +209,41 @@ jobs:
               result = data["result"]
               print(f"| {name} | {icons.get(result, result)} |")
           PY
+
+      - name: Verify no blocking nightly job failed
+        # This job used to be `if: always()` plus a markdown table and
+        # nothing else, so the workflow's own conclusion was decoupled from
+        # its jobs: a sanitizer could report a use-after-free and the
+        # nightly still finished green. Same NEEDS_JSON check `ci-ok` runs
+        # in ci.yml, for the same reason.
+        env:
+          # Through the environment rather than interpolated into the
+          # script, matching ci.yml's `ci-ok`: inlining JSON into shell is
+          # how job names stop being merely theoretically hostile.
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          # Exempt BY NAME, never by reading `continue-on-error:`. A job
+          # carrying that flag still reports `failure` in the needs context
+          # — ci.yml's "Benchmarks (advisory)" does exactly that on master
+          # today — so the flag is not visible here anyway, and it would be
+          # the wrong rule if it were: it means "do not fail the run", and
+          # deciding what fails the run is this step's entire job. Each
+          # name below is exempt for a stated condition that will end:
+          #   synth-load     — the committed corpus is still placeholder
+          #                    hashes, so every target reports no-golden
+          #                    (ADR-0017; docs/INFRA_STATUS.md tracks the
+          #                    bootstrap PR that seeds it).
+          #   agent-eval-llm — SOUXMAR_EVAL_ANTHROPIC_KEY is not configured
+          #                    on this repository; a missing credential is
+          #                    an infrastructure state, not a regression.
+          #   fuzz           — tests/fuzz/ does not exist yet.
+          # `sanitizers` is deliberately not on the list. An ASan or TSan
+          # report is the reason this workflow runs at 03:00 at all.
+          EXEMPT: synth-load agent-eval-llm fuzz
+        run: |
+          echo "$NEEDS_JSON"
+          bad="$(printf '%s' "$NEEDS_JSON" | python3 -c 'import json,os,sys; exempt=set(os.environ["EXEMPT"].split()); print(" ".join(k for k,v in json.load(sys.stdin).items() if k not in exempt and v["result"] not in ("success","skipped")))')"
+          if [ -n "$bad" ]; then
+            echo "::error::failing nightly jobs: $bad"
+            exit 1
+          fi
+          echo "No blocking nightly job failed."

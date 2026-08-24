@@ -17,9 +17,23 @@
 # non-determinism. Anything the normaliser does not strip is either a
 # real behavioural difference or a normaliser gap — both worth failing.
 #
+# A pipeline that exits non-zero is recorded as `<target>  EXIT-<rc>`
+# rather than aborting the run, on the grounds that failing identically
+# everywhere is still deterministic. That holds only while most of the
+# corpus is actually hashing, and nothing bounded the EXIT-* share: on
+# 2026-08-20 (run 32355873858) five of the nine examples were EXIT-70 on
+# all three platforms and the gate still announced "3 platforms agree on
+# every pipeline" — 56% of the corpus contributing zero coverage while
+# reading as green. So both counts are always reported, and --min-hashed
+# turns the floor into a committed number CI enforces.
+#
 # Usage:
 #   scripts/ci/determinism-fingerprint.sh --engine <path> [--out <file>]
 #                                         [--plugin-path <dir>]...
+#                                         [--min-hashed <n>]
+#
+# Exit status: 0 on success, 2 on a usage error, 1 when fewer than
+# --min-hashed pipelines produced a hash.
 
 set -uo pipefail
 
@@ -30,14 +44,27 @@ NORMALISE="$REPO_ROOT/scripts/synth-load/golden/normalize.py"
 ENGINE=""
 OUT="-"
 PLUGIN_ARGS=""
+MIN_HASHED=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --engine)      ENGINE="$2"; shift 2 ;;
     --out)         OUT="$2"; shift 2 ;;
     --plugin-path) PLUGIN_ARGS="$PLUGIN_ARGS --plugin-path $2"; shift 2 ;;
+    --min-hashed)
+      MIN_HASHED="$2"; shift 2
+      # Rejected here rather than at the comparison, where a typo'd
+      # `--min-hashed four` would make `[ "$HASHED" -lt four ]` an error
+      # the shell reports and then carries on past, leaving the floor
+      # silently unenforced.
+      case "$MIN_HASHED" in
+        ''|*[!0-9]*)
+          echo "determinism: --min-hashed wants a non-negative integer (got '$MIN_HASHED')" >&2
+          exit 2 ;;
+      esac
+      ;;
     -h|--help)
-      sed -n '2,26p' "$0"; exit 0 ;;
+      sed -n '2,36p' "$0"; exit 0 ;;
     *) echo "determinism: unknown flag '$1'" >&2; exit 2 ;;
   esac
 done
@@ -72,6 +99,15 @@ trap 'rm -rf "$WORK"' EXIT
 
 emit() { if [ "$OUT" = "-" ]; then cat; else cat > "$OUT"; fi; }
 
+# Every diagnostic goes to stderr, including the "wrote N fingerprints"
+# line that used to print on stdout. With `--out -` stdout *is* the
+# manifest, and the `determinism` job in ci.yml diffs those manifests
+# byte for byte — a summary line inside one would read as a platform
+# difference and fail the gate for the gate's own output.
+log() { echo "$@" >&2; }
+
+MANIFEST="$WORK/manifest.txt"
+
 {
   # Deterministic iteration order: the shell's glob is locale-sensitive,
   # so sort explicitly rather than trusting it to match across platforms.
@@ -101,8 +137,33 @@ emit() { if [ "$OUT" = "-" ]; then cat; else cat > "$OUT"; fi; }
     fp="$("$PYTHON" "$NORMALISE" "$out" | sha256_of)"
     echo "$name  $fp"
   done
-} | LC_ALL=C sort | emit
+} | LC_ALL=C sort > "$MANIFEST"
 
+# Counted off the finished manifest rather than tallied inside the loop,
+# so the numbers describe exactly the bytes the `determinism` job will
+# diff. grep exits 1 when it matches nothing, which is a legitimate count
+# of zero here, so the status is discarded.
+HASHED="$(grep -cE '  [0-9a-f]{64}$' "$MANIFEST")" || true
+FAILED="$(grep -cE '  EXIT-[0-9]+$' "$MANIFEST")" || true
+TOTAL="$(wc -l < "$MANIFEST" | tr -d ' ')"
+
+emit < "$MANIFEST"
+
+log "determinism: $HASHED of $TOTAL pipelines hashed, $FAILED reported EXIT-*."
 if [ "$OUT" != "-" ]; then
-  echo "determinism: wrote $(wc -l < "$OUT" | tr -d ' ') fingerprints to $OUT"
+  log "determinism: wrote $TOTAL fingerprints to $OUT"
+fi
+
+if [ -n "$MIN_HASHED" ] && [ "$HASHED" -lt "$MIN_HASHED" ]; then
+  log "determinism: only $HASHED pipelines produced a hash; the floor is $MIN_HASHED."
+  log ""
+  log "This is a coverage failure, not a determinism failure. An EXIT-* line"
+  log "compares equal across platforms for free, so it contributes nothing to"
+  log "the cross-platform check. These pipelines produced no hash:"
+  grep -E '  EXIT-[0-9]+$' "$MANIFEST" | sed 's/^/  /' >&2
+  log ""
+  log "Either an example that used to run has regressed on this platform, or"
+  log "--min-hashed in .github/workflows/ci.yml was raised past what the"
+  log "corpus can currently meet."
+  exit 1
 fi
