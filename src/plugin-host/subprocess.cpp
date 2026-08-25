@@ -105,6 +105,11 @@ SubprocessResult run_posix(const SubprocessOptions& opts) {
   ::fcntl(err_pipe[0], F_SETFL, O_NONBLOCK);
 
   // Build argv as a NULL-terminated C array.
+  //
+  // Safe to take c_str() inline here, unlike the envp loop below: these point
+  // into opts.argv, which this function never modifies, so nothing reallocates
+  // underneath them. The envp case differs because it *builds* its strings as
+  // it goes.
   std::vector<char*> argv_c;
   argv_c.reserve(opts.argv.size() + 1);
   for (const auto& a : opts.argv)
@@ -129,10 +134,32 @@ SubprocessResult run_posix(const SubprocessOptions& opts) {
     else
       merged[k] = v;
   }
-  for (const auto& [k, v] : merged) {
+  // Two passes, and the second one is not optional.
+  //
+  // Taking env_storage.back().data() inside the fill loop is a
+  // use-after-free. push_back reallocates: it moves every std::string into a
+  // new buffer and frees the old one. For a *long* value that is harmless —
+  // the string object owns a separate heap buffer, and moving it steals the
+  // pointer, so the characters never move. For a *short* one it is fatal,
+  // because small-string optimisation keeps the characters inside the
+  // std::string object itself, which lives in the vector's buffer and is
+  // exactly what just got freed.
+  //
+  // So the corruption is selective, which is why it survived: PATH and
+  // LD_LIBRARY_PATH are long and stayed valid, while CI=1 or TZ=UTC turned
+  // into freed memory that posix_spawnp then read. ASan caught it the first
+  // night the sanitizers ever reached ctest (heap-use-after-free in
+  // PosixSpawnImpl, freed at this line, read at the posix_spawnp below).
+  //
+  // Filling first and taking pointers afterwards is immune to someone adding
+  // another entry later, which a reserve() call sitting above the loop is not.
+  env_storage.reserve(merged.size());
+  for (const auto& [k, v] : merged)
     env_storage.push_back(k + "=" + v);
-    envp_c.push_back(env_storage.back().data());
-  }
+
+  envp_c.reserve(env_storage.size() + 1);
+  for (auto& entry : env_storage)
+    envp_c.push_back(entry.data());
   envp_c.push_back(nullptr);
 
   // posix_spawn handles fork/exec atomically and avoids the
