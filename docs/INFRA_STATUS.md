@@ -10,9 +10,9 @@ seeing empty sha256s should land here, not file an issue.
 
 ## Status overview
 
-| Surface                                | State (2026-05-14)                                                 | Unblock                                                                                       | Stale-for-N-sprints |
+| Surface                                | State (2026-08-25)                                                 | Unblock                                                                                       | Stale-for-N-sprints |
 | -------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- | ------------------- |
-| synth-load golden corpus               | Wired; placeholder hashes; `--bootstrap` mechanism ready           | One green eval-nightly post-v0.9.3 → maintainer runs bootstrap locally → reviews → commits     | 3 sprints (S13-S15)  |
+| synth-load golden corpus               | Wired; placeholder hashes; harness now produces real, run-to-run-stable fingerprints for all four targets (it produced none until 2026-08-24 — see below) | The harness no longer blocks it: download `synth-load-report` from any nightly, review, commit | 3 sprints (S13-S15)  |
 | Per-platform VR baselines (linux)      | Wired (matrix workflow); zero PNGs in tree                          | One linux-runner run where every spec reaches its screenshot assertion (not a *green* run — see "The bootstrap PR") → maintainer downloads artefact → commits | 2 sprints (S14-S15)  |
 | Per-platform VR baselines (darwin)     | Same as linux                                                       | Same as linux, macos-14 runner                                                                | 2 sprints (S14-S15)  |
 | Per-platform VR baselines (win32)      | Same as linux                                                       | Same as linux, windows-2022 runner                                                            | 2 sprints (S14-S15)  |
@@ -20,6 +20,52 @@ seeing empty sha256s should land here, not file an issue.
 | Custom domain for the docs site        | Not needed — the site is live at the default GitHub Pages URL, https://celikgo.github.io/souxmar/ | Would only matter if a domain is ever registered | n/a |
 | Discord server                         | Dropped — never created, and the references to it have been removed | n/a | n/a |
 | On-call rotation table (COMMUNITY.md)  | Placeholder ("TBA")                                                 | Team grows past N=1; rotation can be filled in then                                            | 4 sprints (S12-S15) |
+
+## The nightly (resolved 2026-08-25)
+
+This section exists because for three months this document did not mention
+the nightly at all, while the repository's docs cited it as evidence of
+rigour. It had **never had a green run** — every scheduled run from at least
+2026-05-11 concluded `failure`.
+
+It is green now. Verified, not assumed: run
+[32814521723](https://github.com/celikgo/souxmar/actions/runs/32814521723),
+dispatched deliberately rather than waited for, concluded `success` with
+`asan`, `tsan`, both fuzz targets and the LLM-driven agent evals all passing.
+
+Three independent causes, fixed in that order:
+
+1. **The toolchain.** `gcc-13` is not in jammy's archive, so every Linux job
+   in every workflow got its compiler from `add-apt-repository
+   ppa:ubuntu-toolchain-r/test` — a Launchpad REST call on the critical path,
+   with no cache and no retry. It answered HTTP 500 on 2026-08-24 and took the
+   whole run out. Fixed by moving to `ubuntu-24.04`, which preinstalls GCC
+   13.3.0 and Clang 17.0.6.
+2. **The sanitizer presets named no compiler**, so `asan` and `tsan` built
+   with `/usr/bin/c++` (GCC 11) while every other job used gcc-13, and died on
+   `-Werror=useless-cast` diagnostics GCC 13 does not emit. Fixed by
+   `ci-linux-asan` / `ci-linux-tsan`, which pin the compiler.
+3. **Then the sanitizers found real bugs**, which is the entire point and had
+   never happened before: a use-after-free in `src/plugin-host/subprocess.cpp`
+   (the child's environment array pointed at a reallocated vector's freed
+   buffer), and two `HeapAccountant` tests measuring a glibc arena counter that
+   a sanitizer's replacement allocator no longer moves.
+
+**`synth-load` is the one job still reporting `failure`**, and that is the
+ADR-0017 bootstrap state rather than a defect. It runs all four targets, each
+reports `no-golden` because `golden/corpus.toml` still carries placeholder
+hashes, and the harness exits 3. The job is `continue-on-error: true` and is
+exempted **by name** in `nightly.yml`'s summary aggregator, with the exemption's
+end condition stated there — so the run's conclusion is honest either way.
+
+What changed on 2026-08-24 is that the harness now works at all. It previously
+produced *no* fingerprints: a relative `--engine` path stopped resolving after
+the example loop `pushd`'d into its scratch directory (rc=127), `souxmar-eval`
+was handed a file where it requires a directory, `--plugin-path` was given leaf
+plugin directories where discovery scans a search path's subdirectories, and
+`corpus_lookup`'s awk returned every hash twice. The fingerprints are now real
+and byte-identical across repeat runs, so the bootstrap this document has
+described since Sprint 13 is finally possible.
 
 When the stale-for counter passes 5 sprints, the line escalates
 in the next sprint's retro under "what to fix" — at that point

@@ -13,8 +13,32 @@
 // to `int`, which silently misreports anything above ~2 GiB — we
 // explicitly avoid that and treat older / non-glibc Linux as
 // "unsupported" rather than report wrong numbers.
-#if defined(__linux__) && defined(__GLIBC__) \
-    && ((__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 33))
+//
+// A sanitizer build is excluded, and that is a correctness statement rather
+// than a convenience. ASan and TSan replace the allocator wholesale, so
+// mallinfo2() goes on reporting a glibc arena that nothing allocates from any
+// more: uordblks sits still while the program allocates megabytes. Reporting
+// supported=true there would mean handing callers a number that is confidently
+// wrong, which is the one thing this file's glibc-version check already exists
+// to avoid.
+//
+// Found the first night the sanitizers ever reached ctest —
+// HeapAccountantLinux.DeliberateAllocationShowsAsPositiveDelta and
+// .VectorGrowthShowsAsPositiveDelta failed under tsan. They guard on
+// is_supported(), so making that honest is what makes them skip; the
+// alternative, a skip written into the tests, would have left the library
+// still claiming an accounting it cannot perform.
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+#define SOUXMAR_HEAP_ACCOUNTANT_SANITIZED 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+#define SOUXMAR_HEAP_ACCOUNTANT_SANITIZED 1
+#endif
+#endif
+
+#if defined(__linux__) && defined(__GLIBC__)                          \
+    && ((__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 33)) \
+    && !defined(SOUXMAR_HEAP_ACCOUNTANT_SANITIZED)
 #include <malloc.h>
 #define SOUXMAR_HEAP_ACCOUNTANT_LINUX_MALLINFO2 1
 #endif
