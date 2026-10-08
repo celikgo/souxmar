@@ -277,6 +277,32 @@ ContentHash hash_inputs(std::string_view context,
   return ContentHash{sh.finalize()};
 }
 
+std::optional<ContentHash> hash_file(const std::filesystem::path& path) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in)
+    return std::nullopt;
+
+  Sha256 sh;
+  // 64 KiB at a time. The point of streaming rather than slurping is that a
+  // reader's input can be a multi-gigabyte mesh, and this runs on every stage
+  // evaluation including cache hits — the digest is precisely what decides
+  // whether a hit is legitimate, so it cannot be skipped on the fast path.
+  std::array<char, 65536> buf{};
+  while (in) {
+    in.read(buf.data(), static_cast<std::streamsize>(buf.size()));
+    const auto got = static_cast<std::size_t>(in.gcount());
+    if (got == 0)
+      break;
+    sh.update(buf.data(), got);
+  }
+  // A read error partway through would otherwise yield a digest of a prefix,
+  // which is worse than no digest: it is a plausible-looking key for content
+  // nobody has seen.
+  if (in.bad())
+    return std::nullopt;
+  return ContentHash{sh.finalize()};
+}
+
 // ============================================================================
 // In-memory Cache
 // ============================================================================

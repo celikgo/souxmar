@@ -144,11 +144,11 @@ upstream hashes. A second `souxmar run` against the same cache marks the
 `Kind::Path` stage outputs are persistable today, so Mesh and Field
 results are recomputed every run.
 
-Two caveats worth knowing. "No source changes" is not what the key
-measures — the reader's `path` string is hashed, not the bytes of the
-file it names, so editing `pipe-bend.obj` in place does **not** invalidate
-the entry. And the cache directory is per-user and persistent unless you
-pass `--cache-dir` or `--no-cache`.
+The key includes a digest of the reader's input file, so editing
+`pipe-bend.obj` in place does invalidate the stages that depend on it —
+the key follows the bytes, not the filename. One caveat remains: the cache
+directory is per-user and persistent unless you pass `--cache-dir` or
+`--no-cache`.
 
 `--no-cache` forces re-execution.
 

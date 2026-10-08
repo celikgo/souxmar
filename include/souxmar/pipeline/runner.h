@@ -50,6 +50,25 @@ class IDispatcher {
   virtual ~IDispatcher() = default;
   virtual DispatchResult dispatch(const DispatchContext& ctx) = 0;
 
+  // Optional: extra bytes folded into a stage's cache-key context, derived
+  // from the stage's declared inputs.
+  //
+  // It exists for one case, and the case is a correctness bug without it. A
+  // reader's declared input is a *path*, and a path is not what the reader
+  // reads. Two different files reachable under the same relative name — the
+  // ordinary situation once a relative path resolves against its own pipeline
+  // file — produce identical stage keys, so the second pipeline is served the
+  // first one's output from the cache and reports it as `[CACHED]`.
+  //
+  // Called on every stage evaluation, before the cache is consulted, because
+  // its result is what decides whether a hit is legitimate.
+  //
+  // Default is empty: a dispatcher whose inputs fully describe the work has
+  // nothing to add.
+  virtual std::string cache_key_extra(std::string_view /*capability_id*/, const Value& /*inputs*/) {
+    return {};
+  }
+
   // Optional: provide a "plugin version" string used in cache-key context.
   // Default is empty (cache will treat "unknown version" as a single bucket).
   virtual std::string plugin_version(std::string_view /*capability_id*/) {

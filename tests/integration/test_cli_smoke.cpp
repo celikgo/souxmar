@@ -26,6 +26,7 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <utility>
 
 namespace fs = std::filesystem;
 
@@ -188,6 +189,102 @@ TEST_F(CliSmokeTest, RunCantileverExampleProducesVtuOutput) {
 // Asserting over the whole corpus rather than one example is deliberate: it
 // also fails for a *newly added* broken example, which a count-based gate
 // cannot.
+// Two pipelines, the same relative input filename, different bytes behind it,
+// one shared cache. Each must get its own answer.
+//
+// The stage key is built from the capability id, the plugin version, the
+// declared input tree and the upstream hashes. A reader's declared input is a
+// *path*, and a path is not what a reader reads — so before the key folded in
+// a digest of the file's contents, these two runs produced identical hashes
+// and the second was served the first one's output, reported as `[CACHED]`.
+// Not a crash and not a diff: a plausible, wrong answer.
+//
+// The same key change makes an in-place edit of an input invalidate its
+// stage, which it previously did not.
+TEST_F(CliSmokeTest, ReaderStageKeyFollowsFileContentsNotTheFileName) {
+  const auto src = fs::path(SOUXMAR_TEST_SOURCE_ROOT) / "examples/stl-cube";
+  ASSERT_TRUE(fs::exists(src / "pipeline.yaml")) << src;
+
+  // Same pipeline and same input *name* in both, different geometry.
+  const auto a = workdir_ / "a";
+  const auto b = workdir_ / "b";
+  for (const auto& d : {a, b}) {
+    fs::create_directories(d);
+    fs::copy_file(src / "pipeline.yaml", d / "pipeline.yaml");
+    fs::copy_file(src / "cube.stl", d / "cube.stl");
+  }
+  {
+    // Perturb b's geometry. Any real byte difference will do; this keeps the
+    // file a valid ASCII STL so the reader still succeeds and the test is
+    // about the cache rather than about error handling.
+    std::ifstream in(b / "cube.stl");
+    std::string text((std::istreambuf_iterator<char>(in)), {});
+    in.close();
+    const auto pos = text.find("vertex 1");
+    ASSERT_NE(pos, std::string::npos) << "fixture changed shape; update this test";
+    text.replace(pos, std::string("vertex 1").size(), "vertex 2");
+    std::ofstream out(b / "cube.stl", std::ios::trunc);
+    out << text;
+  }
+
+  // ONE working directory and one cache for both runs. Both matter, and the
+  // reason is the whole shape of the defect:
+  //
+  //   * shared cache  — otherwise there is nothing to collide in;
+  //   * shared cwd    — a writer's output is cached as a *path*, and a Path
+  //                     entry is only rehydrated if the file it names still
+  //                     exists. Run the two pipelines in separate
+  //                     directories and B's write stage misses on
+  //                     `fs::exists` and re-runs, producing the right answer
+  //                     by accident and hiding the bug completely. That
+  //                     accident is exactly why this survived: before reader
+  //                     paths resolved against their pipeline file, these two
+  //                     pipelines *could not* share a working directory.
+  const auto rundir = workdir_ / "shared-cwd";
+  const auto shared_cache = cachedir_ / "shared";
+
+  const auto run = [&](const fs::path& pipeline_dir) {
+    fs::create_directories(rundir);
+    std::ostringstream cmd;
+    cmd << cd_to(rundir) << " && " << shell_quote(SOUXMAR_TEST_CLI_BINARY) << " run "
+        << shell_quote(pipeline_dir / "pipeline.yaml") << " --plugin-path "
+        << shell_quote(plugins_root()) << " --cache-dir " << shell_quote(shared_cache)
+        << " > run.log 2>&1";
+    const int rc = run_cli(cmd.str());
+    std::ifstream log(rundir / "run.log");
+    const std::string log_text((std::istreambuf_iterator<char>(log)), {});
+    EXPECT_EQ(rc, 0) << log_text;
+    std::ifstream vtu(rundir / "cube.vtu");
+    const std::string vtu_text((std::istreambuf_iterator<char>(vtu)), {});
+    return std::pair<std::string, std::string>{vtu_text, log_text};
+  };
+
+  const auto [from_a, log_a] = run(a);
+  ASSERT_FALSE(from_a.empty()) << log_a;
+
+  const auto [from_b, log_b] = run(b);
+  ASSERT_FALSE(from_b.empty()) << log_b;
+
+  // The load-bearing assertion. With the key built from the path string
+  // alone, B's stages are indistinguishable from A's and the writer is
+  // served A's entry — the run prints `[CACHED  ] write` and leaves A's file
+  // in place.
+  EXPECT_EQ(log_b.find("[CACHED"), std::string::npos)
+      << "a pipeline reading different bytes was served the previous run's "
+         "cached output — the stage key saw only the shared filename "
+         "'cube.stl':\n"
+      << log_b;
+  EXPECT_NE(from_a, from_b) << "B's output is byte-identical to A's:\n" << log_b;
+
+  // ...and the cache must still work, or this would pass with caching off.
+  // Same directory, same bytes, so this one is a legitimate hit.
+  const auto [from_a_again, log_a2] = run(a);
+  EXPECT_NE(log_a2.find("[CACHED"), std::string::npos)
+      << "an unchanged re-run should hit the cache:\n"
+      << log_a2;
+  (void)from_a_again;  // a Path entry names a file B has since overwritten
+}
+
 TEST_F(CliSmokeTest, EveryShippedExampleRunsFromAForeignWorkingDirectory) {
   const fs::path examples_dir = fs::path(SOUXMAR_TEST_SOURCE_ROOT) / "examples";
   ASSERT_TRUE(fs::exists(examples_dir)) << examples_dir;

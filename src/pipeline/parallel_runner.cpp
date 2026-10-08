@@ -141,6 +141,13 @@ void process_stage(ParallelState& state,
   // time we reach this stage every upstream we'll consult is visible.
   auto version = state.dispatcher->plugin_version(stage.plugin);
   auto context = version.empty() ? stage.plugin : fmt::format("{}@{}", stage.plugin, version);
+  // Must match the sequential runner exactly — the two share one cache, so a
+  // key computed differently here would silently partition it in half.
+  if (const auto extra = state.dispatcher->cache_key_extra(stage.plugin, stage.input);
+      !extra.empty()) {
+    context += "|";
+    context += extra;
+  }
   const auto upstream_hashes = upstream_hashes_for(state, state.upstream_ids[idx], id_to_index);
   sr.content_hash = hash_inputs(context, stage.input, upstream_hashes);
 

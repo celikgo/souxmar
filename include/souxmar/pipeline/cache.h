@@ -65,6 +65,16 @@ class ContentHash {
     const Value& inputs,
     std::span<const std::pair<std::string, ContentHash>> upstream);
 
+// SHA-256 of a file's bytes, read in chunks so a large mesh is never held in
+// memory just to be digested. std::nullopt if the file cannot be opened.
+//
+// This exists because a reader's *declared* input is a path, and a path is
+// not what the reader reads. Keying a reader stage on the path string alone
+// means two different files reachable under the same relative name collide,
+// and the second pipeline silently receives the first one's output. See
+// RegistryDispatcher::cache_key_extra.
+[[nodiscard]] std::optional<ContentHash> hash_file(const std::filesystem::path& path);
+
 // In-process content-addressed store. Type-erased payloads — the dispatcher
 // knows how to interpret them (Mesh / Field / Path StageOutput).
 class Cache {

@@ -2,6 +2,7 @@
 
 #include "souxmar/pipeline/registry_dispatcher.h"
 
+#include "souxmar/pipeline/cache.h"
 #include "souxmar/plugin/guard.h"
 
 #include "souxmar-c/field.h"     // souxmar_field_free
@@ -436,6 +437,30 @@ DispatchResult dispatch_reader(plugin::Registry& registry,
 
 RegistryDispatcher::RegistryDispatcher(plugin::Registry& registry, std::filesystem::path base_dir)
     : registry_(registry), base_dir_(std::move(base_dir)) {}
+
+std::string RegistryDispatcher::cache_key_extra(std::string_view capability_id,
+                                                const Value& inputs) {
+  // Readers only. A mesher, solver or postproc is fully described by its
+  // declared inputs plus its upstream hashes; a writer produces rather than
+  // consumes, and its output path is not an input to anything.
+  if (!capability_id.starts_with("reader."))
+    return {};
+
+  const auto* path_v = inputs.find("path");
+  if (path_v == nullptr || path_v->kind() != Value::Kind::String)
+    return {};
+
+  const std::string resolved = resolve_reader_path(base_dir_, std::string(path_v->as_string()));
+  if (const auto digest = hash_file(resolved); digest)
+    return digest->hex();
+
+  // Unreadable, or not there yet. Return a marker rather than an empty
+  // string: empty would mean "nothing to add", which would key this stage
+  // exactly as it was keyed before and reintroduce the collision. A single
+  // shared marker is correct — every unreadable input is equally unknown, and
+  // dispatch is about to fail with the real diagnostic anyway.
+  return "unreadable";
+}
 
 std::string RegistryDispatcher::plugin_version(std::string_view capability_id) {
   if (const auto* e = registry_.find(capability_id); e) {
