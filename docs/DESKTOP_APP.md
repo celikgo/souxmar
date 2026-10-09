@@ -30,7 +30,7 @@ Auto-update is built in, signed, opt-in. No telemetry beyond optional crash repo
 | --------------------------- | ----------------------------------- | ------------------------------------------------------------------------- |
 | Shell                       | **Tauri 2.x (Rust)**                | ~10 MB bundles vs Electron's 100+ MB; OS-level webview; strong sandboxing.|
 | Frontend                    | **React 18 + TypeScript + Vite**    | Mainstream, large component ecosystem, fast HMR for plugin authors.       |
-| UI primitives               | **Radix UI + Tailwind CSS**         | Accessible by default; design tokens drive the dim theme (see UI_DESIGN). |
+| UI primitives               | **Radix UI + CSS custom properties** | Accessible by default; design tokens drive the dim theme (see UI_DESIGN). |
 | 3D viewport                 | **Three.js + VTK.js**               | WebGPU when present, WebGL2 fallback; VTK.js for native VTU/XDMF reading. |
 | State                       | **Zustand**                         | Small, no boilerplate; nothing fancier needed.                            |
 | Backend bridge              | **Tauri commands (Rust ⇄ C++ FFI)** | Rust shell calls into `libsouxmar-core`/`libsouxmar-pipeline` via FFI.    |

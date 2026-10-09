@@ -88,7 +88,7 @@ souxmar/
     desktop/               # Tauri shell + React frontend
       src-tauri/           # Rust shell, FFI to libsouxmar-*, IPC handlers
       src/                 # React + TypeScript frontend
-        ui/                # tokens, primitives (Radix + Tailwind, dim theme)
+        ui/                # CSS custom-property tokens, Radix primitives, dim theme
         viewport/          # Three.js + VTK.js scene
         chat/              # chat panel UI
         pipeline-editor/

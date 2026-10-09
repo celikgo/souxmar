@@ -2,7 +2,7 @@
 
 souxmar's desktop app uses a dense, dark, calm visual language inspired by Twitter's "dim" theme. This document is the design contract: design tokens, component patterns, accessibility rules, and the reasoning behind them.
 
-The system is implemented in Tailwind CSS via design tokens in `src/desktop/src/ui/tokens.css`, consumed by Radix-based primitives in `src/desktop/ui/`.
+The desktop frontend uses CSS custom properties from `src/desktop/src/ui/tokens.css`, consumed by React components and Radix-based primitives. Vite processes the CSS; no Tailwind or custom PostCSS configuration is required.
 
 ## Principles
 
@@ -111,7 +111,7 @@ Numerical values in inspector tables and pipeline-stage outputs use `font-featur
 
 ## Spacing & layout grid
 
-4-px base. Tailwind spacing aliases:
+4-px base. Design spacing scale:
 
 | Token | px | Use                              |
 | ----- | -- | -------------------------------- |
