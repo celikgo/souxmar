@@ -56,7 +56,6 @@ The desktop app additionally bundles:
 | Three.js          | MIT                | 3D viewport.                                                |
 | VTK.js            | BSD-3-Clause       | `.vtu` reader and field rendering.                          |
 | Radix UI          | MIT                | Accessible component primitives.                            |
-| Tailwind CSS      | MIT                | Styling utility framework.                                  |
 | Lucide icons      | ISC                | Icon set.                                                   |
 | Inter             | OFL-1.1            | UI typeface.                                                |
 | JetBrains Mono    | OFL-1.1            | Code / console typeface.                                    |
